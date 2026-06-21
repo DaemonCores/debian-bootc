@@ -41,7 +41,6 @@ RUN apt update \
         intel-microcode \
         amd64-microcode \
         dkms \
-        libostree-1-1 \
     && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
     && apt update
 
