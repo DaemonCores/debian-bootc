@@ -10,7 +10,7 @@ jobs:
     container: debian:trixie
 
     steps:
-      - name: Install build deps
+      - name: Install clone deps
         shell: bash
         run: |
           apt update
