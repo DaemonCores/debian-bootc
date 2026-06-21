@@ -93,7 +93,7 @@ RUN mkdir -p /{build,debs} /usr/lib/ostree \
         --requires="$(cat /tmp/ostree-deps)" \
         --nodoc \
         --default \
-        make install
+        make -j$(nproc) install
 
 # Bootc build and install
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -117,7 +117,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         --requires="$(cat /tmp/bootc-deps)" \
         --nodoc \
         --default \
-        make -C /build/bootc install-all \
+        make -j$(nproc) -C /build/bootc install-all \
     && cd / \
     && rm -rf /build
 
