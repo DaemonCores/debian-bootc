@@ -16,7 +16,7 @@ jobs:
           apt update
           apt install -y \
             ca-certificates \
-            openssl
+            openssl \
             git \
             curl \
             wget
