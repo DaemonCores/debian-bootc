@@ -14,9 +14,10 @@ SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 # Bootc filesystem migrations
 RUN rm -rf /{home,root,mnt,srv,opt}  \
-    && mkdir -p /var/{home,roothome,mnt,srv,opt} \
+    && mkdir -p /var/{home,roothome,mnt,srv,opt} /sysroot \
     && ln -s /var/{home,mnt,srv,opt} / \
-    && ln -s  /var/roothome /root
+    && ln -s  /var/roothome /root \
+    && ln -sf sysroot/ostree /ostree
 
 # Prepare package
 COPY ./src/debianpreinstall /
@@ -56,8 +57,12 @@ RUN apt autoremove -y \
     && apt clean \
     && rm -rf \
         /var/lib/apt/lists/* \
+        /var/log/apt/* \
+        /var/log/dpkg.log \
+        /var/log/alternatives.log \
         /tmp/* \
         /var/tmp/* \
+        /run/* \
         /usr/sbin/policy-rc.d
 
 RUN KVER=$(ls -1v /usr/lib/modules | tail -1) \
