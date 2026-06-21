@@ -1,3 +1,5 @@
+Source: libostree
+
 Package: libostree
 Version: {{ VER }}
 Architecture: amd64
