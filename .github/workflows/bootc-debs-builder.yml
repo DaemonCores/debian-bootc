@@ -23,7 +23,7 @@ jobs:
             git \
             curl \
             wget \
-            node \
+            nodejs \
             npm \
             make \
             build-essential \
