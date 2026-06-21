@@ -36,6 +36,7 @@ jobs:
         run: |
           apt update
           apt install -y \
+            zstd \
             make \
             build-essential \
             go-md2man \
