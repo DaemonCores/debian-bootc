@@ -89,7 +89,7 @@ jobs:
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
 
-          dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
+          dpkg-shlibdeps -O $(find / -name "libostree-1.so*" ! -name "*.la" | head -1) \
             2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
           DEPS=$(cat /tmp/ostree-deps)
 
