@@ -80,7 +80,7 @@ jobs:
           dpkg-shlibdeps -O \
             $(find /build/libostree-${OSTREE_VER} -name "libostree-1.so*" ! -name "*.la" | head -1) \
             $(find /output/ostree                 -name "libostree-1.so*" ! -name "*.la" | head -1) \
-            $(find /usr/lib -name "libostree-1.so*" ! -name "*.la" | head -1) \
+            $(find /usr/lib                       -name "libostree-1.so*" ! -name "*.la" | head -1) \
             2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
           DEPS=$(cat /tmp/ostree-deps)
 
