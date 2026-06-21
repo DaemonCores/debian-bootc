@@ -45,7 +45,7 @@ RUN wget \
         intel-microcode \
         amd64-microcode \
         dkms \
-        bootc
+        bootc || (cat /var/log/dpkg.log | tail -50; false)
 
 # Clean and purge image
 RUN apt autoremove -y \
