@@ -117,7 +117,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         --requires="$(cat /tmp/bootc-deps)" \
         --nodoc \
         --default \
-        make install-all \
+        make -C /build/bootc install-all \
     && cd / \
     && rm -rf /build
 
