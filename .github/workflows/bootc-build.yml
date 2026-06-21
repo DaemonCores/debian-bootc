@@ -19,9 +19,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    outputs:
-      tags: ${{ steps.meta.outputs.tags }}
-      digest: ${{ steps.build.outputs.digest }}
+
     steps:
       - name: Free disk space
         run: |
@@ -74,6 +72,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
 
   test:
     name: Test Container
