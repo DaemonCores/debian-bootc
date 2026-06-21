@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-SHELL ["/bin/bash", "-c"]
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 # Bootc filesystem migrations
 RUN rm -rf /{home,root,mnt,srv,opt}  \
