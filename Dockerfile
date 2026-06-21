@@ -34,6 +34,7 @@ RUN apt update \
         dracut \
         iproute2 \
         linux-image-amd64 \
+        linux-headers-amd64 \
         firmware-linux-free \
         firmware-linux \
         firmware-misc-nonfree \
