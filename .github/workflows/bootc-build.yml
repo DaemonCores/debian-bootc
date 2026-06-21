@@ -52,12 +52,28 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
           push: true
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: |
+          docker run --rm \
+            ghcr.io/${{ github.repository }}:latest \
+            bootc container lint
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image
+        run: |
+          cosign sign --yes \
+            ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
