@@ -127,10 +127,20 @@ jobs:
           
           dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
 
-      - name: Publish to APT repo
-        uses: morph027/apt-repository-action@v1
+      - name: Create APT repo
+        id: create-apt-repo
+        uses: morph027/apt-repo-action@v3
         with:
-          repo-name: bootc-debs
+          repo-name: debian-bootc
           signing-key: ${{ secrets.APT_GPG_KEY }}
-          artifacts: /debs/*.deb
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          codename: trixie
+          components: main
+          architectures: amd64
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.create-apt-repo.outputs.dir }}
+
+      - name: Deploy to GitHub Pages
+        uses: acti
