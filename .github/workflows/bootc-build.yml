@@ -58,19 +58,27 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
-      - name: Build and push
+      - name: Build only (no push)
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: false
           load: true
           no-cache: ${{ github.event_name == 'schedule' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  test:
+    name: Test Container
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Check runtime deps
         run: |
@@ -84,10 +92,38 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest \
             bootc container lint
 
+  push:
+    name: Push & Sign
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PAT_PKG }}
+
+      - name: Push image
+        uses: docker/build-push-action@v7
+        id: push
+        with:
+          context: .
+          push: true
+          tags: ${{ needs.build.outputs.tags }}
+          cache-from: type=gha
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
       - name: Sign image
         run: |
           cosign sign --yes \
-            ghcr.io/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+            ghcr.io/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.digest }}
