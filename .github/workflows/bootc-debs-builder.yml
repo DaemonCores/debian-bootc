@@ -65,7 +65,7 @@ jobs:
           echo "export RUSTUP_HOME=${RUSTUP_HOME}" > ~/.bashrc
           echo "export OSTREE_VER=${OSTREE_VER}" > ~/.bashrc
           echo "export BOOTC_VER=${BOOTC_VER}" > ~/.bashrc
-          cp -r ./workflows/bootc-debs-builder/src/preinstall/* /
+          cp -r ./workflows/bootc-debs-builder/preinstall/* /
 
       - name: Build ostree
         shell: bash
