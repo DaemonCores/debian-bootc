@@ -9,7 +9,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install xorriso and isolinux
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xorriso isolinux
