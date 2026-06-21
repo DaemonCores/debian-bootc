@@ -55,7 +55,6 @@ RUN apt install -y \
         make \
         build-essential \
         go-md2man \
-        checkinstall \
         libzstd-dev \
         pkgconf \
         autoconf \
@@ -75,7 +74,7 @@ RUN apt install -y \
         bison
 
 # Ostree build and install
-RUN mkdir -p /{build,debs,output} /usr/lib/ostree \
+RUN mkdir -p /{build,debs} \
     && curl -fsSL \
         https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
         | tar -xJ -C /build \
@@ -83,18 +82,16 @@ RUN mkdir -p /{build,debs,output} /usr/lib/ostree \
     && ./configure --prefix=/usr --sysconfdir=/etc \
         --disable-gtk-doc --disable-man \
     && make -j$(nproc) \
+    && make -j$(nproc) install DESTDIR=/output/ostree \
     && dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps \
-    && checkinstall \
-        --install=no \
-        --pkgname=libostree \
-        --pkgversion=${OSTREE_VER} \
-        --pakdir=/debs \
-        --requires="$(cat /tmp/ostree-deps)" \
-        --nodoc \
-        --default \
-        make install DESTDIR=/output \
-    && apt install -y /debs/*.deb
+    && DEPS=$(cat /tmp/ostree-deps) \
+    && sed -i \
+        -e "s|{{ VER }}|${OSTREE_VER}|g" \
+        -e "s|{{ DEPS }}|${DEPS}|g" \
+        /output/ostree/DEBIAN/control \
+    && dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb \
+    && apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
 
 # Bootc build and install
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -106,19 +103,18 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | tar --zstd -x -C /build/bootc \
     && . ${RUSTUP_HOME}/env \
     && cargo build --release --manifest-path /build/bootc/Cargo.toml \
-    && make -j$(nproc) -C /build/bootc manpages DESTDIR=/output \
-    && make -j$(nproc) -C /build/bootc install-all DESTDIR=/output \
+    && make -j$(nproc) -C /build/bootc manpages DESTDIR=/output/bootc \
+    && make -C /build/bootc install-all DESTDIR=/output/bootc \
     && dpkg-shlibdeps -O /build/bootc/target/release/bootc \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps \
-    && checkinstall \
-        --install=no \
-        --pkgname=bootc \
-        --pkgversion=${BOOTC_VER#v} \
-        --pakdir=/debs \
-        --requires="$(cat /tmp/bootc-deps)" \
-        --default \
-        make -C /build/bootc install-all DESTDIR=/output \
-    && rm -rf /build
+    && DEPS=$(cat /tmp/bootc-deps) \
+    && sed -i \
+        -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
+        -e "s|{{ DEPS }}|${DEPS}|g"  \
+        /output/bootc/DEBIAN/control \
+    && dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
+
+RUN && -rf /{build,output}
 
 #####################################################################################
 # Final image
