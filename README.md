@@ -1,0 +1,2 @@
+# AlmaBuilder
+AlmaLinux atomic template
