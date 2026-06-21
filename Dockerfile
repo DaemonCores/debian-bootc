@@ -26,6 +26,8 @@ RUN rm -rf /{home,root,mnt,srv,opt}  \
 COPY ./src/debianpreinstall /
 RUN apt update \
     && apt install -y \
+        ca-certificates \
+        openssl \
         git \
         curl \
         wget \
@@ -38,7 +40,6 @@ RUN apt update \
         intel-microcode \
         amd64-microcode \
         dkms \
-        apt-transport-https \
     && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
     && apt update
 
