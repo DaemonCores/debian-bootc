@@ -1,9 +1,9 @@
 name: Docker Image CI
 
 on:
-  # schedule:
-    # 1st of every month at 04:00 UTC
-    # - cron: '0 4 1 * *'
+  schedule:
+    1st of every month at 04:00 UTC
+    - cron: '0 4 1 * *'
   push:
     paths:
       - Dockerfile
