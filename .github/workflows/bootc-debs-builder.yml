@@ -77,6 +77,9 @@ jobs:
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
 
+          mkdir -p /build/libostree-${OSTREE_VER}/debian \
+          echo "Source: libostree" > /build/libostree-${OSTREE_VER}/debian/control
+
           dpkg-shlibdeps \
             -l /output/ostree/usr/lib \
             -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
@@ -114,6 +117,9 @@ jobs:
 
           make -j$(nproc) -C /build/bootc manpages DESTDIR=/output/bootc
           make -C /build/bootc install-all DESTDIR=/output/bootc
+
+          mkdir -p /build/bootc/debian
+          echo "Source: bootc" > /build/bootc/debian/control
 
           dpkg-shlibdeps \
             -l /output/ostree/usr/lib \
