@@ -4,7 +4,7 @@
 network --hostname=alma-builder
 
 # Pull the bootc image from the registry
-ostreecontainer --url=ghcr.io/daemoncores/almabuilder:latest --no-signature-verification
+ostreecontainer --url=ghcr.io/daemoncores/debian-bootc:latest --no-signature-verification
 
 # Reboot after install
 reboot
