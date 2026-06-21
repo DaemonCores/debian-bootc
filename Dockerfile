@@ -45,8 +45,11 @@ RUN wget \
         firmware-misc-nonfree \
         intel-microcode \
         amd64-microcode \
-        dkms \
-        bootc 2>&1 || (dpkg --debug=7 -i /var/cache/apt/archives/bootc_*.deb; false)
+        dkms
+        
+RUN apt-get download bootc \
+    && dpkg -i ./bootc_*.deb 2>&1; true \
+    && dpkg --debug=7 -i ./bootc_*.deb
 
 # Clean and purge image
 RUN apt autoremove -y \
