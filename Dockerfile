@@ -8,11 +8,7 @@ LABEL org.opencontainers.image.title="Debian Trixie"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootc"
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    CARGO_HOME=/build/rust \
-    RUSTUP_HOME=/build/rust \
-    OSTREE_VER=2026.1 \
-    BOOTC_VER=v1.16.1
+ENV DEBIAN_FRONTEND=noninteractive
 
 SHELL ["/bin/bash", "-c"]
 
@@ -48,6 +44,10 @@ RUN apt update \
 # Bootc build image
 #####################################################################################
 FROM base AS bootc-builder
+ENV CARGO_HOME=/build/rust \
+    RUSTUP_HOME=/build/rust \
+    OSTREE_VER=2026.1 \
+    BOOTC_VER=v1.16.1
 
 # Prepare package
 COPY ./src/bootcpreinstall /
@@ -83,7 +83,6 @@ RUN mkdir -p /{build,debs,output} /usr/lib/ostree \
     && ./configure --prefix=/usr --sysconfdir=/etc \
         --disable-gtk-doc --disable-man \
     && make -j$(nproc) \
-    && make -j$(nproc) install DESTDIR=/output \
     && dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps \
     && checkinstall \
@@ -139,7 +138,7 @@ RUN apt autoremove -y \
         /usr/sbin/policy-rc.d
 
 COPY ./src/bootcpostinstall /
-RUN KVER=$(ls /usr/lib/modules | head -1) \
+RUN KVER=$(ls -1v /usr/lib/modules | tail -1) \
     && rm -f \
         /boot/initrd.img* \
         /boot/initrd*.img \
