@@ -36,6 +36,15 @@ jobs:
         run: |
           apt update
           apt install -y \
+            dracut \
+            iproute2 \
+            linux-image-amd64 \
+            linux-headers-amd64 \
+            firmware-linux-free \
+            firmware-linux \
+            firmware-misc-nonfree \
+            intel-microcode \
+            amd64-microcode \
             make \
             build-essential \
             go-md2man \
@@ -57,9 +66,11 @@ jobs:
             libsoup-3.0-dev \
             bison
 
-      - name: Clone ostree
+      - name: Build ostree
         shell: bash
         env:
+          CARGO_HOME: "/build/rust"
+          RUSTUP_HOME: "/build/rust"
           OSTREE_VER: "2026.1"
         run: |
           mkdir -p /{build,debs}
@@ -67,20 +78,14 @@ jobs:
           curl -fsSL \
             https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
             | tar -xJ -C /build
+          cd /build/libostree-${OSTREE_VER}
 
-      - name: Build ostree
-        shell: bash
-        env:
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
-          OSTREE_VER: "2026.1"
-        working-directory: /build/libostree-2026.1
-        run: |
           ./configure --prefix=/usr --sysconfdir=/etc \
             --disable-gtk-doc --disable-man
           
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
+          cp -r /output/ostree/* /
 
           dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
             2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
