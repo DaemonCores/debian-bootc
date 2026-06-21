@@ -9,7 +9,6 @@ LABEL org.opencontainers.image.description="Debian 13 Trixie bootc"
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
 
 ENV DEBIAN_FRONTEND=noninteractive
-# ENV DPKG_DEBUG=7370
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
@@ -45,11 +44,8 @@ RUN wget \
         firmware-misc-nonfree \
         intel-microcode \
         amd64-microcode \
-        dkms
-        
-RUN apt-get download bootc \
-    && dpkg -i ./bootc_*.deb 2>&1; true \
-    && dpkg --debug=7 -i ./bootc_*.deb
+        dkms \
+        bootc
 
 # Clean and purge image
 RUN apt autoremove -y \
