@@ -10,6 +10,17 @@ jobs:
     container: debian:trixie
 
     steps:
+      - name: Install build deps
+        shell: bash
+        run: |
+          apt update
+          apt install -y \
+            ca-certificates \
+            openssl
+            git \
+            curl \
+            wget
+
       - name: Checkout
         uses: actions/checkout@v7 
         with:
@@ -23,11 +34,6 @@ jobs:
       - name: Install build deps
         shell: bash
         run: |
-          apt update
-          apt install -y \
-            ca-certificates \
-            openssl
-          sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources
           apt update
           apt install -y \
             git \
