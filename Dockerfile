@@ -46,7 +46,7 @@ RUN apt update \
         libgpgme11t64 \
         libarchive13t64 \
         libmount1 \
-        libfuse3-3 \
+        fuse3 \
         libzstd1 \
         libssl3t64 \
         libsystemd0 \
