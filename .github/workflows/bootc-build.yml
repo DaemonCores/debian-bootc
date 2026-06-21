@@ -103,13 +103,13 @@ jobs:
       - name: Check runtime deps
         run: |
           docker run --rm \
-            ${{ env.IMAGE_NAME }}:latest \
+            ghcr.io/${{ env.IMAGE_NAME }}:latest \
             sh -c "ldd /usr/bin/bootc && ldd /usr/lib/libostree-1.so*"
 
       - name: Smoke test
         run: |
           docker run --rm \
-            ${{ env.IMAGE_NAME }}:latest \
+            ghcr.io/${{ env.IMAGE_NAME }}:latest \
             bootc container lint
 
   push:
