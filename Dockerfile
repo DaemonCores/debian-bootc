@@ -106,17 +106,19 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     && . ${RUSTUP_HOME}/env \
     && cargo build --release --manifest-path /build/bootc/Cargo.toml \
     && make -j$(nproc) -C /build/bootc manpages \
-    && dpkg-shlibdeps -O /build/bootc/target/release/bootc \
+    && cd /build/bootc \
+    && dpkg-shlibdeps -O target/release/bootc \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps \
     && checkinstall \
         --install=yes \
-        --pkgname=bootc \
+        --pkgname=bootc-local \
         --pkgversion=${BOOTC_VER#v} \
         --pakdir=/debs \
         --requires="$(cat /tmp/bootc-deps)" \
         --nodoc \
         --default \
-        make -C /build/bootc install-all \
+        make install-all \
+    && cd / \
     && rm -rf /build
 
 #####################################################################################
