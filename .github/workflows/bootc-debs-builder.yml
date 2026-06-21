@@ -10,6 +10,16 @@ jobs:
     container: debian:trixie
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7 
+        with:
+          submodules: recursive
+      
+      - name: Prepare environement
+        shell: bash
+        run: |
+          cp -r ./workflows/bootc-debs-builder/preinstall/* /
+
       - name: Install build deps
         shell: bash
         run: |
@@ -52,16 +62,6 @@ jobs:
             libgirepository1.0-dev \
             libsoup-3.0-dev \
             bison
-
-      - name: Checkout
-        uses: actions/checkout@v7 
-        with:
-          submodules: recursive
-      
-      - name: Prepare environement
-        shell: bash
-        run: |
-          cp -r ./workflows/bootc-debs-builder/preinstall/* /
 
       - name: Build ostree
         shell: bash
