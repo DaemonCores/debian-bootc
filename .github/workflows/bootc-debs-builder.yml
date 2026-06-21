@@ -65,6 +65,7 @@ jobs:
           OSTREE_VER: "2026.1"
         run: |
           mkdir -p /{build,debs}
+          SAVE_PWD=$(pwd)
           
           curl -fsSL \
             https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
@@ -90,7 +91,7 @@ jobs:
             -e "s|{{ VER }}|${OSTREE_VER}|g" \
             -e "s|{{ DEPS }}|${DEPS}|g" \
             /output/ostree/DEBIAN/control
-          cp -r ./workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
+          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
           
           dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb
           apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
