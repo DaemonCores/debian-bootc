@@ -23,7 +23,7 @@ RUN rm -rf /{home,root,mnt,srv,opt}  \
     && ln -s  /var/roothome /root
 
 # Prepare package
-COPY ./src/debiancpreinstall /
+COPY ./src/debianpreinstall /
 RUN apt update \
     && apt install -y \
         git \
