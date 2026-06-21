@@ -40,17 +40,8 @@ RUN apt update \
         firmware-misc-nonfree \
         intel-microcode \
         amd64-microcode \
-        dkms \ \
-        libglib2.0-0t64 \
-        libcurl4t64 \
-        libgpgme11t64 \
-        libarchive13t64 \
-        libmount1 \
-        fuse3 \
-        libzstd1 \
-        libssl3t64 \
-        libsystemd0 \
-        libsoup-3.0-0 \
+        dkms \
+        libostree-1-1 \
     && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
     && apt update
 
