@@ -57,11 +57,9 @@ jobs:
             libsoup-3.0-dev \
             bison
 
-      - name: Build ostree
+      - name: Clone ostree
         shell: bash
         env:
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
           OSTREE_VER: "2026.1"
         run: |
           mkdir -p /{build,debs}
@@ -69,18 +67,22 @@ jobs:
           curl -fsSL \
             https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
             | tar -xJ -C /build
-          cd /build/libostree-${OSTREE_VER}
 
+      - name: Build ostree
+        shell: bash
+        env:
+          CARGO_HOME: "/build/rust"
+          RUSTUP_HOME: "/build/rust"
+          OSTREE_VER: "2026.1"
+        working-directory: /build/libostree-2026.1
+        run: |
           ./configure --prefix=/usr --sysconfdir=/etc \
             --disable-gtk-doc --disable-man
           
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
 
-          dpkg-shlibdeps -O \
-            $(find /build/libostree-${OSTREE_VER} -name "libostree-1.so*" ! -name "*.la" | head -1) \
-            $(find /output/ostree                 -name "libostree-1.so*" ! -name "*.la" | head -1) \
-            $(find /usr/lib                       -name "libostree-1.so*" ! -name "*.la" | head -1) \
+          dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
             2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
           DEPS=$(cat /tmp/ostree-deps)
 
