@@ -112,9 +112,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
         -e "s|{{ DEPS }}|${DEPS}|g"  \
         /output/bootc/DEBIAN/control \
-    && dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
-
-RUN -rf /{build,output}
+    && dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb \
+    && rm -rf /{build,output}
 
 #####################################################################################
 # Final image
