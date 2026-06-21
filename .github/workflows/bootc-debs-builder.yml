@@ -77,15 +77,15 @@ jobs:
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
 
-          mkdir -p /build/libostree-${OSTREE_VER}/debian \
-          echo "Source: libostree" > /build/libostree-${OSTREE_VER}/debian/control
+          cd /output/ostree/
+          ln -sf DEBIAN debian
 
           dpkg-shlibdeps \
             -l /output/ostree/usr/lib \
             -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
             | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
-          DEPS=$(cat /tmp/ostree-deps)
 
+          DEPS=$(cat /tmp/ostree-deps)
           sed -i \
             -e "s|{{ VER }}|${OSTREE_VER}|g" \
             -e "s|{{ DEPS }}|${DEPS}|g" \
@@ -118,16 +118,16 @@ jobs:
           make -j$(nproc) -C /build/bootc manpages DESTDIR=/output/bootc
           make -C /build/bootc install-all DESTDIR=/output/bootc
 
-          mkdir -p /build/bootc/debian
-          echo "Source: bootc" > /build/bootc/debian/control
+          cd /output/bootc/
+          ln -sf DEBIAN debian
 
           dpkg-shlibdeps \
             -l /output/ostree/usr/lib \
             -l /output/bootc/usr/lib \
             -O /build/bootc/target/release/bootc \
-            2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
+            | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
+          
           DEPS=$(cat /tmp/bootc-deps)
-
           sed -i \
             -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
             -e "s|{{ DEPS }}|${DEPS}|g"  \
