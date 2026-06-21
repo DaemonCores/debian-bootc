@@ -87,6 +87,12 @@ jobs:
             -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
             | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
 
+          SO=$(find /output/ostree/usr/lib -name "libostree-1.so.*" ! -name "*.la" ! -type l | head -1)
+          SONAME=$(objdump -p $SO | awk '/SONAME/{print $2}')
+          LIBBASE=$(echo $SONAME | sed 's/\.so\..*//')
+          SOVERSION=$(echo $SONAME | sed 's/.*\.so\.//')
+          echo "${LIBBASE} ${SOVERSION} libostree" > /output/ostree/DEBIAN/shlibs
+
           DEPS=$(cat /tmp/ostree-deps)
           sed -i \
             -e "s|{{ VER }}|${OSTREE_VER}|g" \
@@ -104,6 +110,8 @@ jobs:
           RUSTUP_HOME: "/build/rust"
           BOOTC_VER: "v1.16.1"
         run: |
+          SAVE_PWD=$(pwd)
+
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
           
@@ -126,6 +134,7 @@ jobs:
           dpkg-shlibdeps \
             -l/output/ostree/usr/lib \
             -l/output/bootc/usr/lib \
+            -S/output/ostree \
             -O /build/bootc/target/release/bootc \
             | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
           
@@ -134,7 +143,7 @@ jobs:
             -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
             -e "s|{{ DEPS }}|${DEPS}|g"  \
             /output/bootc/DEBIAN/control
-          cp -r ./workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
+          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
           
           dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
 
