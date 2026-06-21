@@ -100,6 +100,7 @@ jobs:
             /output/ostree/DEBIAN/control
           cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
           
+          rm -f /output/ostree/debian
           dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb
           apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
 
@@ -145,6 +146,7 @@ jobs:
             /output/bootc/DEBIAN/control
           cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
           
+          rm -f /output/bootc/debian
           dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
 
       
