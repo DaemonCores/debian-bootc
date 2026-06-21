@@ -81,7 +81,7 @@ jobs:
           ln -sf DEBIAN debian
 
           dpkg-shlibdeps \
-            -l /output/ostree/usr/lib \
+            -l/output/ostree/usr/lib \
             -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
             | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
 
@@ -122,8 +122,8 @@ jobs:
           ln -sf DEBIAN debian
 
           dpkg-shlibdeps \
-            -l /output/ostree/usr/lib \
-            -l /output/bootc/usr/lib \
+            -l/output/ostree/usr/lib \
+            -l/output/bootc/usr/lib \
             -O /build/bootc/target/release/bootc \
             | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
           
