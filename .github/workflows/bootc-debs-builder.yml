@@ -36,15 +36,6 @@ jobs:
         run: |
           apt update
           apt install -y \
-            dracut \
-            iproute2 \
-            linux-image-amd64 \
-            linux-headers-amd64 \
-            firmware-linux-free \
-            firmware-linux \
-            firmware-misc-nonfree \
-            intel-microcode \
-            amd64-microcode \
             make \
             build-essential \
             go-md2man \
@@ -85,10 +76,11 @@ jobs:
           
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
-          cp -r /output/ostree/* /
 
-          dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
-            2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
+          dpkg-shlibdeps \
+            -l /output/ostree/usr/lib \
+            -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
+            | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
           DEPS=$(cat /tmp/ostree-deps)
 
           sed -i \
@@ -98,6 +90,7 @@ jobs:
           cp -r ./workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
           
           dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb
+          apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
 
       - name: Build bootc
         shell: bash
@@ -122,7 +115,10 @@ jobs:
           make -j$(nproc) -C /build/bootc manpages DESTDIR=/output/bootc
           make -C /build/bootc install-all DESTDIR=/output/bootc
 
-          dpkg-shlibdeps -O /build/bootc/target/release/bootc \
+          dpkg-shlibdeps \
+            -l /output/ostree/usr/lib \
+            -l /output/bootc/usr/lib \
+            -O /build/bootc/target/release/bootc \
             2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
           DEPS=$(cat /tmp/bootc-deps)
 
