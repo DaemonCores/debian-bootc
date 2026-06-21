@@ -1,0 +1,6 @@
+Package: bootc
+Version: {{ VER }}
+Architecture: amd64
+Maintainer: build
+Depends: {{ DEPS }}
+Description: bootc

@@ -1,0 +1,6 @@
+Package: libostree
+Version: {{ VER }}
+Architecture: amd64
+Maintainer: build
+Depends: {{ DEPS }}
+Description: libostree
