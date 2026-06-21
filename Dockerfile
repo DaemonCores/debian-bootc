@@ -75,7 +75,7 @@ RUN apt install -y \
         bison
 
 # Ostree build and install
-RUN mkdir -p /{build,debs} /usr/lib/ostree \
+RUN mkdir -p /{build,debs,output} /usr/lib/ostree \
     && curl -fsSL \
         https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
         | tar -xJ -C /build \
@@ -105,9 +105,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | tar --zstd -x -C /build/bootc \
     && . ${RUSTUP_HOME}/env \
     && cargo build --release --manifest-path /build/bootc/Cargo.toml \
-    && make -j$(nproc) -C /build/bootc manpages \
-    && cd /build/bootc \
-    && dpkg-shlibdeps -O target/release/bootc \
+    && dpkg-shlibdeps -O /build/bootc/target/release/bootc \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps \
     && checkinstall \
         --install=yes \
@@ -115,10 +113,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         --pkgversion=${BOOTC_VER#v} \
         --pakdir=/debs \
         --requires="$(cat /tmp/bootc-deps)" \
-        --nodoc \
         --default \
-        make -j$(nproc) -C /build/bootc install-all \
-    && cd / \
+        make -j$(nproc) -C /build/bootc manpages install-all DESTDIR=/output \
     && rm -rf /build
 
 #####################################################################################
