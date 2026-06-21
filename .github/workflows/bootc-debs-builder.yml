@@ -147,6 +147,27 @@ jobs:
           
           dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
 
+      
+      - name: Upload debs
+        uses: actions/upload-artifact@v4
+        with:
+          name: debs
+          path: /debs/*.deb
+
+  publish:
+    runs-on: ubuntu-latest  # pas de container ici
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: debs
+          path: debs/
+
       - name: Create APT repo
         id: create-apt-repo
         uses: morph027/apt-repo-action@v3
