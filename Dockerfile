@@ -76,7 +76,7 @@ RUN apt install -y \
         bison
 
 # Ostree build and install
-RUN mkdir -p /{build,output} \
+RUN mkdir -p /{build,debs} \
     && curl -fsSL \
         https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
         | tar -xJ -C /build \
@@ -84,8 +84,16 @@ RUN mkdir -p /{build,output} \
     && ./configure --prefix=/usr --sysconfdir=/etc \
         --disable-gtk-doc --disable-man \
     && make -j$(nproc) \
-    && make install DESTDIR=/output \
-    && cp -r /output/* /
+    && dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
+        2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps \
+    && checkinstall \
+        --install=yes \
+        --pkgname=libostree-local \
+        --pkgversion=${OSTREE_VER} \
+        --pakdir=/debs \
+        --requires="$(cat /tmp/ostree-deps)" \
+        --nodoc --default \
+        make install
 
 # Bootc build and install
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -97,8 +105,16 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | tar --zstd -x -C /build/bootc \
     && . ${RUSTUP_HOME}/env \
     && cargo build --release --manifest-path /build/bootc/Cargo.toml \
-    && make -j$(nproc) -C /build/bootc manpages     DESTDIR=/output \
-    && make -j$(nproc) -C /build/bootc install-all  DESTDIR=/output \
+    && dpkg-shlibdeps -O /build/bootc/target/release/bootc \
+        2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps \
+    && checkinstall \
+        --install=yes \
+        --pkgname=bootc-local \
+        --pkgversion=${BOOTC_VER#v} \
+        --pakdir=/debs \
+        --requires="$(cat /tmp/bootc-deps)" \
+        --nodoc --default \
+        make -C /build/bootc manpages install-all \
     && rm -rf /build
 
 #####################################################################################
@@ -106,7 +122,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 #####################################################################################
 FROM base AS final
 
-COPY --from=bootc-builder /output /
+COPY --from=bootc-builder /debs/*.deb /tmp/
+RUN apt install -y /tmp/*.deb && rm /tmp/*.deb
 
 # Clean and purge image
 RUN apt autoremove -y \
