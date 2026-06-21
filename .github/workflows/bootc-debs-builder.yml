@@ -53,22 +53,15 @@ jobs:
       
       - name: Prepare environement
         shell: bash
-        env:
-          DEBIAN_FRONTEND: "noninteractive"
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
-          OSTREE_VER: "2026.1"
-          BOOTC_VER: "v1.16.1"
         run: |
-          echo "export DEBIAN_FRONTEND=${DEBIAN_FRONTEND}" > ~/.bashrc
-          echo "export CARGO_HOME=${CARGO_HOME}" > ~/.bashrc
-          echo "export RUSTUP_HOME=${RUSTUP_HOME}" > ~/.bashrc
-          echo "export OSTREE_VER=${OSTREE_VER}" > ~/.bashrc
-          echo "export BOOTC_VER=${BOOTC_VER}" > ~/.bashrc
           cp -r ./workflows/bootc-debs-builder/preinstall/* /
 
       - name: Build ostree
         shell: bash
+        env:
+          CARGO_HOME: "/build/rust"
+          RUSTUP_HOME: "/build/rust"
+          OSTREE_VER: "2026.1"
         run: |
           mkdir -p /{build,debs}
           
@@ -98,6 +91,10 @@ jobs:
 
       - name: Build bootc
         shell: bash
+        env:
+          CARGO_HOME: "/build/rust"
+          RUSTUP_HOME: "/build/rust"
+          BOOTC_VER: "v1.16.1"
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
