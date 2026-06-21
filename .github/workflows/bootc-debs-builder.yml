@@ -36,18 +36,6 @@ jobs:
         run: |
           apt update
           apt install -y \
-            git \
-            curl \
-            wget \
-            dracut \
-            iproute2 \
-            linux-image-amd64 \
-            linux-headers-amd64 \
-            firmware-linux-free \
-            firmware-linux \
-            firmware-misc-nonfree \
-            intel-microcode \
-            amd64-microcode \
             make \
             build-essential \
             go-md2man \
