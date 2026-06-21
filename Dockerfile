@@ -29,7 +29,14 @@ RUN apt update \
         curl \
         wget \
         dracut \
-        iproute2
+        iproute2 \
+        linux-image-amd64 \
+        firmware-linux-free \
+        firmware-linux \
+        firmware-misc-nonfree \
+        intel-microcode \
+        amd64-microcode \
+        dkms
 
 #####################################################################################
 # Bootc build image
