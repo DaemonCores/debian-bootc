@@ -98,7 +98,6 @@ jobs:
           cp -r ./workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
           
           dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb
-          apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
 
       - name: Build bootc
         shell: bash
