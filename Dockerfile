@@ -23,6 +23,7 @@ RUN rm -rf /{home,root,mnt,srv,opt}  \
     && ln -s  /var/roothome /root
 
 # Prepare package
+COPY ./src/debiancpreinstall /
 RUN apt update \
     && apt install -y \
         git \
@@ -36,7 +37,10 @@ RUN apt update \
         firmware-misc-nonfree \
         intel-microcode \
         amd64-microcode \
-        dkms
+        dkms \
+        apt-transport-https \
+    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
+    && apt update
 
 #####################################################################################
 # Bootc build image
