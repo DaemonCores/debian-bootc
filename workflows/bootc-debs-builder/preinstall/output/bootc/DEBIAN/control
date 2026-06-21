@@ -1,5 +1,4 @@
 Source: bootc
-
 Package: bootc
 Version: {{ VER }}
 Architecture: amd64
