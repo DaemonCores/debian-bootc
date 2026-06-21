@@ -9,6 +9,7 @@ LABEL org.opencontainers.image.description="Debian 13 Trixie bootc"
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV DPKG_DEBUG=7370
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
