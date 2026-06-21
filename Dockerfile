@@ -111,7 +111,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps \
     && checkinstall \
         --install=yes \
-        --pkgname=bootc-local \
+        --pkgname=bootc \
         --pkgversion=${BOOTC_VER#v} \
         --pakdir=/debs \
         --requires="$(cat /tmp/bootc-deps)" \
