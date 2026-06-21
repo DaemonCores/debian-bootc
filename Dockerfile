@@ -4,8 +4,8 @@
 FROM debian:trixie AS base
 
 # Environement Setup
-LABEL org.opencontainers.image.title="Proxmox VE"
-LABEL org.opencontainers.image.description="Proxmox VE 9 bootc — Debian 13 Trixie"
+LABEL org.opencontainers.image.title="Debian Trixie"
+LABEL org.opencontainers.image.description="Debian 13 Trixie bootc"
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -105,9 +105,9 @@ RUN apt autoremove -y \
 
 COPY ./src/bootcpostinstall /
 RUN KVER=$(ls /usr/lib/modules | head -1) \
-    && dracut \
-        --kver "${KVER}" \
-        --force "/usr/lib/modules/${KVER}/initramfs.img" \
     && rm -f \
         /boot/initrd.img* \
-        /boot/initrd*.img
+        /boot/initrd*.img \
+    && dracut \
+        --kver "${KVER}" \
+        --force /usr/lib/modules/${KVER}/initramfs.img
