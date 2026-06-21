@@ -24,6 +24,9 @@ RUN apt update \
     && apt install -y \
         ca-certificates \
         openssl \
+        git \
+        curl \
+        wget \
     && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources
 
 COPY ./src/bootcpreinstall /  
@@ -32,9 +35,6 @@ RUN wget \
         https://daemoncores.github.io/debian-bootc/gpg.key \
     && apt update \
     && apt install -y \
-        git \
-        curl \
-        wget \
         dracut \
         iproute2 \
         linux-image-amd64 \
