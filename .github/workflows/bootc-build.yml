@@ -102,16 +102,19 @@ jobs:
           tags: ${{ needs.build.outputs.tags }}
           cache-from: type=gha
 
+      - name: Pick image ref
+        run: echo "IMAGE_REF=$(echo "${{ needs.build.outputs.tags }}" | head -n1)" >> $GITHUB_ENV
+
       - name: Check runtime deps
         run: |
           docker run --rm \
-            ghcr.io/${{ env.IMAGE_NAME }}:latest \
+            "$IMAGE_REF" \
             sh -c "ldd /usr/bin/bootc && ldd /usr/lib/libostree-1.so*"
 
       - name: Smoke test
         run: |
           docker run --rm \
-            ghcr.io/${{ env.IMAGE_NAME }}:latest \
+            "$IMAGE_REF" \
             bootc container lint
 
   push:
@@ -165,4 +168,4 @@ jobs:
       - name: Sign image
         run: |
           cosign sign --yes \
-            ghcr.io/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.digest }}
+            ghcr.io/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
