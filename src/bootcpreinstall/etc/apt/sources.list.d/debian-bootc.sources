@@ -1,0 +1,6 @@
+Types: deb
+URIs: https://daemoncores.github.io/debian-bootc/
+Suites: trixie
+Components: main
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-bootc-keyring.gpg
