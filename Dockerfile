@@ -83,17 +83,19 @@ RUN mkdir -p /{build,debs,output} /usr/lib/ostree \
     && ./configure --prefix=/usr --sysconfdir=/etc \
         --disable-gtk-doc --disable-man \
     && make -j$(nproc) \
+    && make -j$(nproc) install DESTDIR=/output \
     && dpkg-shlibdeps -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/ostree-deps \
     && checkinstall \
-        --install=yes \
+        --install=no \
         --pkgname=libostree \
         --pkgversion=${OSTREE_VER} \
         --pakdir=/debs \
         --requires="$(cat /tmp/ostree-deps)" \
         --nodoc \
         --default \
-        make -j$(nproc) install
+        make install DESTDIR=/output \
+    && apt install -y /debs/*.deb
 
 # Bootc build and install
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -105,16 +107,18 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | tar --zstd -x -C /build/bootc \
     && . ${RUSTUP_HOME}/env \
     && cargo build --release --manifest-path /build/bootc/Cargo.toml \
+    && make -j$(nproc) -C /build/bootc manpages DESTDIR=/output \
+    && make -j$(nproc) -C /build/bootc install-all DESTDIR=/output \
     && dpkg-shlibdeps -O /build/bootc/target/release/bootc \
         2>/dev/null | sed 's/shlibs:Depends=//' > /tmp/bootc-deps \
     && checkinstall \
-        --install=yes \
+        --install=no \
         --pkgname=bootc \
         --pkgversion=${BOOTC_VER#v} \
         --pakdir=/debs \
         --requires="$(cat /tmp/bootc-deps)" \
         --default \
-        make -j$(nproc) -C /build/bootc manpages install-all DESTDIR=/output \
+        make -C /build/bootc install-all DESTDIR=/output \
     && rm -rf /build
 
 #####################################################################################
