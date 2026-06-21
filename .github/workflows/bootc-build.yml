@@ -66,15 +66,22 @@ jobs:
           file: ./Dockerfile
           push: true
           load: true
+          no-cache: ${{ github.event_name == 'schedule' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Check runtime deps
+        run: |
+          docker run --rm \
+            ${{ env.IMAGE_NAME }}:latest \
+            sh -c "ldd /usr/bin/bootc && ldd /usr/lib/libostree-1.so*"
+
       - name: Smoke test
         run: |
           docker run --rm \
-            ghcr.io/${{ env.IMAGE_NAME }}:latest \
+            ${{ env.IMAGE_NAME }}:latest \
             bootc container lint
 
       - name: Install cosign
