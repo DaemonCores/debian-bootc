@@ -58,8 +58,7 @@ RUN chmod +x /usr/local/bin/bootc-finalize \
         shim-signed \
         lvm2 \
         xfsprogs \
-        bootc \
-        bootupd
+        bootc
 
 # Clean and purge image
 RUN apt autoremove -y \
