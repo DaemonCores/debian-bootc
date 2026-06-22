@@ -67,7 +67,7 @@ jobs:
           file: ./Dockerfile
           push: false
           load: true
-          no-cache: ${{ github.event_name == 'schedule' }}
+          no-cache: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
