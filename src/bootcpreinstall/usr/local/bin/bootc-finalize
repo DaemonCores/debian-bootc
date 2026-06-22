@@ -9,13 +9,21 @@ rm -rf /boot/*
 dracut --kver "${KVER}" --force /usr/lib/modules/${KVER}/initramfs.img
 
 # Structure bootupd
+SHIM_VER=$(dpkg-query -W -f='${Version}' shim-signed)
+GRUB_VER=$(dpkg-query -W -f='${Version}' grub-efi-amd64-signed)
+
 mkdir -p \
-    /usr/lib/efi/EFI/BOOT \
-    /usr/lib/efi/EFI/debian
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT" \
+    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
 mv /usr/lib/shim/shimx64.efi.signed \
-    /usr/lib/efi/EFI/BOOT/BOOTX64.EFI
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
+mv /usr/lib/shim/fbx64.efi.signed \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
+mv /usr/lib/shim/mmx64.efi.signed \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
+
 mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-    /usr/lib/efi/EFI/debian/grubx64.efi
+    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
 
 bootupctl backend generate-update-metadata /
