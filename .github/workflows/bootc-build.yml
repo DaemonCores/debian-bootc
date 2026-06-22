@@ -52,7 +52,6 @@ jobs:
           fi
 
           podman build \
-            --squash-all \
             $NO_CACHE \
             --tag "${IMAGE}:latest" \
             --tag "${IMAGE}:$(git rev-parse --short HEAD)" \
