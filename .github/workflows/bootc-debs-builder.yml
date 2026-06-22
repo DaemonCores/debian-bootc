@@ -30,6 +30,7 @@ jobs:
         shell: bash
         run: |
           cp -r ./workflows/bootc-debs-builder/preinstall/* /
+          mkdir -p /{build,debs}
 
       - name: Install build deps
         shell: bash
@@ -58,6 +59,43 @@ jobs:
             libsoup-3.0-dev \
             bison
 
+      - name: Build bootupd
+        shell: bash
+        env:
+          CARGO_HOME: "/build/rust"
+          RUSTUP_HOME: "/build/rust"
+          BOOTUPD_VER: "v0.2.32"
+        run: |
+          SAVE_PWD=$(pwd)
+
+          git clone --depth=1 --branch "${BOOTUPD_VER}" \
+            https://github.com/coreos/bootupd.git /build/bootupd
+
+          curl -fsSL \
+            "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
+            | tar --zstd -x -C /build/bootupd
+
+          . ${RUSTUP_HOME}/env
+          cargo build --release --manifest-path /build/bootupd/Cargo.toml
+
+          make -C /build/bootupd install-all DESTDIR=/output/bootupd
+
+          cd /output/bootupd/
+          ln -sf DEBIAN debian
+
+          dpkg-shlibdeps \
+            -O /build/bootupd/target/release/bootupd \
+            | sed 's/shlibs:Depends=//' > /tmp/bootupd-deps
+
+          DEPS="$(cat /tmp/bootupd-deps), util-linux"
+          sed -i \
+            -e "s|{{ VER }}|${BOOTUPD_VER#v}|g" \
+            -e "s|{{ DEPS }}|${DEPS}|g" \
+            /output/bootupd/DEBIAN/control
+
+          rm -f /output/bootupd/debian
+          dpkg-deb --build /output/bootupd /debs/bootupd_${BOOTUPD_VER#v}_amd64.deb
+
       - name: Build ostree
         shell: bash
         env:
@@ -65,7 +103,6 @@ jobs:
           RUSTUP_HOME: "/build/rust"
           OSTREE_VER: "2026.1"
         run: |
-          mkdir -p /{build,debs}
           SAVE_PWD=$(pwd)
           
           curl -fsSL \
