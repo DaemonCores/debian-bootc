@@ -38,7 +38,10 @@ jobs:
             podman login ghcr.io \
               --username "${{ github.actor }}" \
               --password-stdin
-
+          echo "${{ secrets.PAT_PKG }}" | \
+            docker login ghcr.io \
+              --username "${{ github.actor }}" \
+              --password-stdin
       - name: Build
         run: |
           NO_CACHE=""
