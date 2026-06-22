@@ -1,0 +1,9 @@
+Source: bootupd
+Package: bootupd
+Version: {{ VER }}
+Architecture: amd64
+Maintainer: build
+Section: admin
+Priority: required
+Depends: {{ DEPS }}, util-linux
+Description: bootupd
