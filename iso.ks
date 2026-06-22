@@ -4,7 +4,7 @@
 network --hostname=alma-builder
 
 # Pull the bootc image from the registry
-ostreecontainer --url=ghcr.io/daemoncores/debian-bootc:latest
+bootc --source-imgref=ghcr.io/{{ repo }}:latest --target-imgref=ghcr.io/{{ repo }}:latest
 
 # Reboot after install
 reboot

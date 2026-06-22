@@ -6,57 +6,39 @@ on:
 jobs:
   iso:
     runs-on: ubuntu-latest
+    container:
+      image: almalinux:10
+      options: --privileged
+
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
 
-      - name: Install xorriso
+      - name: Install lorax
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xorriso
+          dnf install -y 'dnf-command(config-manager)'
+          dnf config-manager -y --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+          dnf makecache --refresh
+          dnf install -y lorax git wget curl gh gh
+          git config --system --add safe.directory '*'
+
+      - uses: actions/checkout@v7
 
       - name: Download AlmaLinux boot ISO
         run: |
           mkdir -p out
           curl -fSL \
-            "https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-minimal.iso" \
+            "https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-boot.iso" \
             -o out/boot.iso
 
       - name: Inject kickstart URL into ISO
         run: |
           set -euxo pipefail
 
-          KS_URL="https://raw.githubusercontent.com/${{ github.repository }}/refs/heads/main/iso.ks"
-
-          WORKDIR=$(mktemp -d)
           NAME="$(echo "${{ github.repository }}" | sed 's|/|-|g')"
+          sed -i "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" iso.ks
 
-          xorriso \
-            -osirrox on \
-            -indev out/boot.iso \
-            -extract / "$WORKDIR"
-
-          chmod -R u+w "$WORKDIR"
-
-          find "$WORKDIR" -name "*.cfg" -type f | while read cfg; do
-            sed -i \
-              "s|inst\.stage2|inst.ks=${KS_URL} inst.stage2|g" \
-              "$cfg" || true
-          done
-
-          # Rebuild ISO without replaying broken El Torito entries
-          xorriso -as mkisofs \
-            -o "out/${NAME}.iso" \
-            -R -J \
-            -V "ALMAKS" \
-            -eltorito-alt-boot \
-            -e images/efiboot.img \
-            -no-emul-boot \
-            "$WORKDIR"
-
-          rm -rf "$WORKDIR"
-
+          mkksiso --ks iso.ks out/boot.iso "out/${NAME}.iso"
           ls -lh "out/${NAME}.iso"
 
       - name: Fetch previous release state
@@ -64,7 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view install-iso >/dev/null 2>&1; then
+          if gh release view install-iso --json name >/dev/null 2>&1; then
             echo "exists=1" >> "$GITHUB_OUTPUT"
           else
             echo "exists=0" >> "$GITHUB_OUTPUT"
@@ -75,27 +57,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
-
           NAME="$(echo "${{ github.repository }}" | sed 's|/|-|g')"
-
           title="Net-install ISO — $(date -u +%Y-%m-%d)"
-          notes="Boot this ISO to install ${NAME}. Anaconda fetches the Kickstart from GitHub and pulls the latest image from GHCR at install time."
-
+          notes="Boot this ISO to install ${NAME}. Anaconda fetches the kickstart from GitHub and pulls the latest image from GHCR at install time."
           if [[ "${{ steps.prev.outputs.exists }}" == "1" ]]; then
             gh release edit install-iso \
-              --title "$title" \
-              --notes "$notes" \
-              --target "${{ github.sha }}" \
-              --latest=false
-
-            gh release upload install-iso \
-              "out/${NAME}.iso" \
-              --clobber
+              --title "$title" --notes "$notes" \
+              --target "${{ github.sha }}" --latest=false
+            gh release upload install-iso "out/${NAME}.iso" --clobber
           else
-            gh release create install-iso \
-              "out/${NAME}.iso" \
-              --title "$title" \
-              --notes "$notes" \
-              --target "${{ github.sha }}" \
-              --latest=false
+            gh release create install-iso "out/${NAME}.iso" \
+              --title "$title" --notes "$notes" \
+              --target "${{ github.sha }}" --latest=false
           fi
