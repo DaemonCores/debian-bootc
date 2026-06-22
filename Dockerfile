@@ -74,3 +74,5 @@ RUN KVER=$(ls -1v /usr/lib/modules | tail -1) \
     && dracut \
         --kver "${KVER}" \
         --force /usr/lib/modules/${KVER}/initramfs.img
+
+RUN ostree container commit
