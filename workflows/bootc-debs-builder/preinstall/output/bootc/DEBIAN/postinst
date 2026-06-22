@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+case "$1" in
+    configure|triggered)
+        if [ -x /usr/local/bin/bootc-finalize ]; then
+            /usr/local/bin/bootc-finalize
+        fi
+        ;;
+esac
+exit 0
