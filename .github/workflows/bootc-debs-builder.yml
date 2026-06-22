@@ -191,7 +191,7 @@ jobs:
           
           chmod 755 \
             /output/bootc/DEBIAN/postinst \
-            /usr/local/bin/bootc-finalize
+            /output/bootc/usr/local/bin/bootc-finalize
 
           rm -f /output/bootc/debian
           dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
