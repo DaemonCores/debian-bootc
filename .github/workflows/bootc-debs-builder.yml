@@ -73,6 +73,7 @@ jobs:
           BOOTUPD_VER: "v0.2.32"
         run: |
           SAVE_PWD=$(pwd)
+          rm -rf /build/vendor && mkdir /build/vendor
 
           git clone --depth=1 --branch "${BOOTUPD_VER}" \
             https://github.com/coreos/bootupd.git /build/bootupd
@@ -110,6 +111,7 @@ jobs:
           OSTREE_VER: "2026.1"
         run: |
           SAVE_PWD=$(pwd)
+          rm -rf /build/vendor && mkdir /build/vendor
           
           curl -fsSL \
             https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
@@ -155,6 +157,7 @@ jobs:
           BOOTC_VER: "v1.16.1"
         run: |
           SAVE_PWD=$(pwd)
+          rm -rf /build/vendor && mkdir /build/vendor
           
           git clone --depth=1 --branch "${BOOTC_VER}" \
             https://github.com/bootc-dev/bootc.git /build/bootc
