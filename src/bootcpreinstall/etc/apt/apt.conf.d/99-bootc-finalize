@@ -1,7 +1,1 @@
-DPkg::Post-Invoke {
-    "case ${DPKG_MAINTSCRIPT_PACKAGE:-} in
-        linux-*|grub-efi-*|shim-*|*kernel*|)
-            /usr/local/bin/bootc-finalize
-            ;;
-    esac";
-};
+DPkg::Post-Invoke { "/usr/local/bin/bootc-finalize"; };
