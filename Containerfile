@@ -30,7 +30,7 @@ RUN rm -rf /{home,root,mnt,srv,opt}  \
     && mkdir -p /var/{home,roothome,mnt,srv,opt} /sysroot \
     && ln -s var/{home,mnt,srv,opt} / \
     && ln -s var/roothome /root \
-    && ln -sf sysroot/ostree /ostree
+    && ln -sf sysroot/ostree /ostree \
     && apt update \
     && apt install -y \
         ca-certificates \
