@@ -69,9 +69,8 @@ RUN apt autoremove -y \
         /usr/sbin/policy-rc.d
 
 RUN KVER=$(ls -1v /usr/lib/modules | tail -1) \
-    && rm -f \
-        /boot/initrd.img* \
-        /boot/initrd*.img \
+    && cp /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz \
+    && rm -rf /boot/* \
     && dracut \
         --kver "${KVER}" \
         --force /usr/lib/modules/${KVER}/initramfs.img
