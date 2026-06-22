@@ -7,6 +7,8 @@ FROM debian:trixie
 LABEL org.opencontainers.image.title="Debian Trixie"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootc"
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
