@@ -189,6 +189,10 @@ jobs:
             /output/bootc/DEBIAN/control
           cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
           
+          chmod 755 \
+            /output/bootc/DEBIAN/postinst \
+            /usr/local/bin/bootc-finalize
+
           rm -f /output/bootc/debian
           dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
 
