@@ -33,15 +33,19 @@ jobs:
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Log in to GHCR
+        env:
+          PAT_PKG: ${{ secrets.PAT_PKG }}
         run: |
-          echo "${{ secrets.PAT_PKG }}" | \
-            podman login ghcr.io \
-              --username "${{ github.actor }}" \
-              --password-stdin
-          echo "${{ secrets.PAT_PKG }}" | \
-            docker login ghcr.io \
-              --username "${{ github.actor }}" \
-              --password-stdin
+          # Login Podman for build and push with podman fonctionality and for bootc standard
+          podman login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin <<< "${PAT_PKG}"
+          
+          # Login Docker because github signe container with docker and not podman
+          docker login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin <<< "${PAT_PKG}"
+
       - name: Build
         run: |
           NO_CACHE=""
