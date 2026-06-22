@@ -1,3 +1,6 @@
+lang en_US.UTF-8
+keyboard --vckeymap=fr --xlayouts=fr
+
 network --hostname={{ hostname }} --activate
 
 zerombr
