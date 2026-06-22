@@ -79,7 +79,7 @@ jobs:
 
           curl -fsSL \
             "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
-            | tar --zstd -x -C /build/bootupd
+            | tar --zstd -x -C /build/
 
           . ${RUSTUP_HOME}/env
           cargo build --release --manifest-path /build/bootupd/Cargo.toml
@@ -161,7 +161,7 @@ jobs:
           
           curl -fsSL \
             https://github.com/bootc-dev/bootc/releases/download/${BOOTC_VER}/bootc-${BOOTC_VER#v}-vendor.tar.zstd \
-            | tar --zstd -x -C /build/bootc
+            | tar --zstd -x -C /build/
           
           . ${RUSTUP_HOME}/env
           cargo build --release --manifest-path /build/bootc/Cargo.toml
