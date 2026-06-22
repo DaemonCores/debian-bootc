@@ -1,10 +1,17 @@
-# personal-server net-install kickstart
-# Anaconda pulls the bootc image from GHCR at install time.
+network --hostname={{ hostname }} --activate
 
-network --hostname=alma-builder
+zerombr
+clearpart --all --initlabel
+autopart --type=lvm --fstype=xfs
 
-# Pull the bootc image from the registry
-bootc --source-imgref=ghcr.io/{{ repo }}:latest --target-imgref=ghcr.io/{{ repo }}:latest
+bootc --source-imgref=ghcr.io/{{ repo }}:latest \
+      --target-imgref=ghcr.io/{{ repo }}:latest
 
-# Reboot after install
+%onerror
+# Dumpez les logs bootc dans la console pour pouvoir diagnostiquer
+echo "=== BOOTC ERROR ==="
+journalctl -u anaconda --no-pager -n 100 || true
+ls /tmp/anaconda*.log 2>/dev/null | xargs -I{} sh -c 'echo "=== {} ==="; cat {}'
+%end
+
 reboot
