@@ -14,15 +14,24 @@ GRUB_VER=$(dpkg-query -W -f='${Version}' grub-efi-amd64-signed)
 
 mkdir -p \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT" \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
     "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
+# Shim in BOOT/ for UEFI firmware
 mv /usr/lib/shim/shimx64.efi.signed \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
+
+# Shim also in vendor dir — bootupd looks for shimx64.efi there
+cp "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
+
+# Fallback and MokManager
 mv /usr/lib/shim/fbx64.efi.signed \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
 mv /usr/lib/shim/mmx64.efi.signed \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
 
+# GRUB EFI binary
 mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
     "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
 
