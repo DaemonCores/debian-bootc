@@ -62,7 +62,7 @@ RUN wget \
         firmware-misc-nonfree \
         intel-microcode \
         amd64-microcode \
-        bootc 2>&1 || (cat /var/log/dpkg.log && exit 1) \ \
+        bootc || (cat /var/log/dpkg.log; exit 1) \
     && apt autoremove -y \
     && apt clean \
     && rm -rf \
