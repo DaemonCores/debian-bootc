@@ -37,7 +37,8 @@ RUN apt update \
         "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
 
 COPY ./src/bootcpreinstall /  
-RUN wget \
+RUN chmod +x /usr/local/bin/bootc-finalize \
+    && wget \
         -O /usr/share/keyrings/debian-bootc-keyring.gpg \
         https://daemoncores.github.io/debian-bootc/gpg.key \
     && apt update \
