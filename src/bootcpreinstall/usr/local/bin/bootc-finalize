@@ -4,7 +4,7 @@ set -euo pipefail
 KVER=$(ls -1v /usr/lib/modules | tail -1)
 
 # Dracut
-cp /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
+mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
 rm -rf /boot/*
 dracut --kver "${KVER}" --force /usr/lib/modules/${KVER}/initramfs.img
 
@@ -13,9 +13,9 @@ mkdir -p \
     /usr/lib/efi/EFI/BOOT \
     /usr/lib/efi/EFI/debian
 
-ln -sf /usr/lib/shim/shimx64.efi.signed \
+mv /usr/lib/shim/shimx64.efi.signed \
     /usr/lib/efi/EFI/BOOT/BOOTX64.EFI
-ln -sf /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
     /usr/lib/efi/EFI/debian/grubx64.efi
 
 bootupctl backend generate-update-metadata /
