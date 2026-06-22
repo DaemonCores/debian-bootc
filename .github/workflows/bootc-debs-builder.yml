@@ -59,6 +59,9 @@ jobs:
             libsoup-3.0-dev \
             bison
 
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- --profile minimal -y
+
       - name: Build bootupd
         shell: bash
         env:
@@ -149,9 +152,6 @@ jobs:
           BOOTC_VER: "v1.16.1"
         run: |
           SAVE_PWD=$(pwd)
-
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- --profile minimal -y
           
           git clone --depth=1 --branch "${BOOTC_VER}" \
             https://github.com/bootc-dev/bootc.git /build/bootc
