@@ -30,7 +30,10 @@ RUN apt update \
         git \
         curl \
         wget \
-    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources
+    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
+    && rm -f \
+        "/etc/ssl/certs/988a38cb.0" \
+        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem"
 
 COPY ./src/bootcpreinstall /  
 RUN wget \
