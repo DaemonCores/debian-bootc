@@ -33,7 +33,8 @@ RUN apt update \
     && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
     && rm -f \
         "/etc/ssl/certs/988a38cb.0" \
-        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem"
+        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
+        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
 
 COPY ./src/bootcpreinstall /  
 RUN wget \
