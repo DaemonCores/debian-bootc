@@ -5,6 +5,6 @@ Architecture: amd64
 Maintainer: build
 Section: admin
 Priority: required
-Pre-Depends: libostree bootupd
+Pre-Depends: libostree, bootupd
 Depends: {{ DEPS }}
 Description: bootc
