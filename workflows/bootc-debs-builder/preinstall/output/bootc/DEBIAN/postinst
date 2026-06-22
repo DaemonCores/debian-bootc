@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e
+set -x
 case "$1" in
     configure|triggered)
         if [ -x /usr/local/bin/bootc-finalize ]; then
-            /usr/local/bin/bootc-finalize
+            /usr/local/bin/bootc-finalize 2>&1 | tee /tmp/bootc-finalize.log || {
+                cat /tmp/bootc-finalize.log >&2
+                exit 1
+            }
         fi
         ;;
 esac
