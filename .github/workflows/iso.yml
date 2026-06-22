@@ -36,7 +36,11 @@ jobs:
           set -euxo pipefail
 
           NAME="$(echo "${{ github.repository }}" | sed 's|/|-|g')"
-          sed -i "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" iso.ks
+          HOSTNAME="$(echo "${{ github.repository }}" | cut -d "/" -f 2)"
+          sed -i \
+            -e "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" \
+            -e "s|{{ hostname }}|${HOSTNAME}|g" \
+            iso.ks
 
           mkksiso --ks iso.ks out/boot.iso "out/${NAME}.iso"
           ls -lh "out/${NAME}.iso"
