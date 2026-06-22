@@ -24,11 +24,11 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      - name: Download AlmaLinux boot ISO
+      - name: Download Fedora 44 Server netinstall ISO
         run: |
           mkdir -p out
           curl -fSL \
-            "https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-boot.iso" \
+            "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso" \
             -o out/boot.iso
 
       - name: Inject kickstart URL into ISO
