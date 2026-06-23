@@ -1,0 +1,2 @@
+DPkg::Post-Invoke { "rm -rf /var/lib/apt/lists/* /var/log/apt/* /var/log/dpkg.log /var/log/alternatives.log"; };
+APT::Post-Invoke { "apt-get clean"; };
