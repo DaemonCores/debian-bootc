@@ -67,6 +67,8 @@ jobs:
             python3 \
             autopoint \
             gawk \
+            meson \
+            ninja-build \
             libfreetype6-dev
 
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
