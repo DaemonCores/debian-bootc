@@ -240,15 +240,12 @@ jobs:
 
           ./configure --prefix=/usr --sysconfdir=/etc \
             --disable-gtk-doc --disable-man \
-            --with-composefs
+            --with-composefs \
+            --with-systemdsystemunitdir=/usr/lib/systemd/system \
+            --with-dracut
           
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
-
-          install -Dm644 src/boot/ostree-prepare-root.service \
-              /output/ostree/usr/lib/systemd/system/ostree-prepare-root.service
-          install -Dm644 src/boot/ostree-remount.service \
-              /output/ostree/usr/lib/systemd/system/ostree-remount.service
 
           cd /output/ostree/
           ln -sf DEBIAN debian
