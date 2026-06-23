@@ -77,13 +77,15 @@ jobs:
         env:
           GRUB_VER: "1+2.12+9+fedora44"
           GRUB_FEDORA_BRANCH: "fedora-44"
+          GRUB_FALLBACK_COMMIT: "5e9e7e44eddcab0174decc12c3799825e600639f"
         run: |
           SAVE_PWD=$(pwd)
 
-          git clone --depth=1 --branch "${GRUB_FEDORA_BRANCH}" \
+          git clone --branch "${GRUB_FEDORA_BRANCH}" \
             https://github.com/rhboot/grub2.git /build/grub2-fedora
-
           cd /build/grub2-fedora
+          git checkout "${GRUB_FALLBACK_COMMIT}"
+
           ./bootstrap
 
           ./configure \
