@@ -24,11 +24,15 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      - name: Download Fedora 44 Server netinstall ISO
+      - name: Download Fedora Server netinstall ISO
+        env:
+          VERSION: "44-1.7"
         run: |
+          CUT_VERSION="$(echo "${VERSION}" | cut -d "-" -f 1)"
+
           mkdir -p out
           curl -fSL \
-            "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso" \
+            "https://archives.fedoraproject.org/pub/fedora/linux/releases/${CUT_VERSION}/Server/x86_64/iso/Fedora-Server-netinst-x86_64-${VERSION}.iso" \
             -o out/boot.iso
 
       - name: Inject kickstart URL into ISO
