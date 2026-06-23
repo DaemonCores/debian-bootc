@@ -1,8 +1,24 @@
 #!/bin/bash
 set -e
 set -x
+
 case "$1" in
     configure|triggered)
+        # Bootc filesystem migrations — idempotent
+        if [ ! -L /home ]; then
+            mkdir -p /var/{home,roothome,mnt,srv,opt} /sysroot
+            for d in home mnt srv opt; do
+                [ -d "/${d}" ] && mv "/${d}" "/var/${d}" || true
+            done
+            [ -d /root ] && mv /root /var/roothome || true
+            for d in home mnt srv opt; do
+                ln -sf "var/${d}" "/${d}"
+            done
+            ln -sf var/roothome /root
+            ln -sf sysroot/ostree /ostree
+        fi
+
+        # Run bootc-finalize
         if [ -x /usr/local/bin/bootc-finalize ]; then
             /usr/local/bin/bootc-finalize 2>&1 | tee /tmp/bootc-finalize.log || {
                 cat /tmp/bootc-finalize.log >&2
