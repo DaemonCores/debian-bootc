@@ -26,12 +26,7 @@ SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 # All symlink require relative path because anaconda setup mount root disk in /mnt insted of /
 # Install SSL dependencies before use apt with https for fix ssl error
 COPY ./src/debianpreinstall /
-RUN rm -rf /{home,root,mnt,srv,opt}  \
-    && mkdir -p /var/{home,roothome,mnt,srv,opt} /sysroot \
-    && ln -s var/{home,mnt,srv,opt} / \
-    && ln -s var/roothome /root \
-    && ln -sf sysroot/ostree /ostree \
-    && apt update \
+RUN apt update \
     && apt install -y \
         ca-certificates \
         openssl \
@@ -63,13 +58,7 @@ RUN wget \
         intel-microcode \
         amd64-microcode \
         bootc || (cat /var/log/dpkg.log; exit 1) \
-    && apt autoremove -y \
-    && apt clean \
     && rm -rf \
-        /var/lib/apt/lists/* \
-        /var/log/apt/* \
-        /var/log/dpkg.log \
-        /var/log/alternatives.log \
         /tmp/* \
         /var/tmp/* \
         /run/* \
