@@ -1,5 +1,5 @@
-Source: grub-efi-amd64-bin
-Package: grub-efi-amd64-bin
+Source: grub-efi-amd64-signed
+Package: grub-efi-amd64-signed
 Version: {{ VER }}
 Architecture: amd64
 Maintainer: build

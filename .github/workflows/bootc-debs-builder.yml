@@ -64,15 +64,17 @@ jobs:
             gperf \
             flex \
             gettext \
-            python3
+            python3 \
+            autopoint \
+            libfreetype6-dev
 
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
 
-      - name: Build grub-efi-amd64-bin
+      - name: Build grub-efi-amd64-signed
         shell: bash
         env:
-          GRUB_VER: "2.12-9+fedora44"
+          GRUB_VER: "1+2.12+9+fedora44"
           GRUB_FEDORA_BRANCH: "fedora-44"
         run: |
           SAVE_PWD=$(pwd)
@@ -92,14 +94,38 @@ jobs:
 
           make -j$(nproc)
 
-          make install DESTDIR=/tmp/grub-install
+          GRUB_MODULES=" \
+            all_video boot blscfg btrfs blsuki \
+            cat configfile cryptodisk \
+            echo ext2 f2fs fat font \
+            gcry_rijndael gcry_rsa gcry_serpent \
+            gcry_sha256 gcry_twofish gcry_whirlpool \
+            gfxmenu gfxterm gzio \
+            halt hfsplus http increment iso9660 \
+            jpeg loadenv loopback linux lvm luks luks2 \
+            memdisk mdraid09 mdraid1x minicmd net \
+            normal part_apple part_msdos part_gpt \
+            password_pbkdf2 pgp png reboot regexp \
+            search search_fs_uuid search_fs_file \
+            search_label serial sleep \
+            squash4 syslinuxcfg \
+            test tftp version video xfs zstd \
+            efi_netfs efifwsetup efinet lsefi lsefimmap connectefi bli \
+            backtrace chain tpm usb usbserial_common \
+            usbserial_pl2303 usbserial_ftdi usbserial_usbdebug \
+            keylayouts at_keyboard"
 
-          # Keep only EFI modules — matches grub-efi-amd64-bin package content
-          mkdir -p /output/grub-efi-amd64-bin/usr/lib/grub/
-          cp -r /tmp/grub-install/usr/lib/grub/x86_64-efi \
-            /output/grub-efi-amd64-bin/usr/lib/grub/
+          mkdir -p \
+            /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed
 
-          cd /output/grub-efi-amd64-bin/
+          ./grub-mkimage \
+            -O x86_64-efi \
+            -o /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+            -d grub-core \
+            -p /EFI/debian \
+            ${GRUB_MODULES}
+
+          cd /output/grub-efi-amd64-signed/
           ln -sf DEBIAN debian
 
           sed -i \
@@ -107,8 +133,8 @@ jobs:
             DEBIAN/control
 
           rm -f debian
-          dpkg-deb --build /output/grub-efi-amd64-bin \
-            /debs/grub-efi-amd64-bin_${GRUB_VER}_amd64.deb
+          dpkg-deb --build /output/grub-efi-amd64-signed \
+            /debs/grub-efi-amd64-signed_${GRUB_VER}_amd64.deb
 
       - name: Build bootupd
         shell: bash
