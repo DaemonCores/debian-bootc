@@ -5,6 +5,6 @@ Architecture: amd64
 Maintainer: build
 Section: admin
 Priority: required
-Pre-Depends: lvm2, xfsprogs, dracut, libostree, bootupd, grub-efi-amd64, grub-efi-amd64-signed, shim-signed
+Pre-Depends: lvm2, xfsprogs, dracut, libostree, bootupd
 Depends: iproute2, {{ DEPS }}
 Description: bootc
