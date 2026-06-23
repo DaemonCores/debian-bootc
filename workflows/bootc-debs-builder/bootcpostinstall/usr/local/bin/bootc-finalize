@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-KVER=$(ls -1v /usr/lib/modules | tail -1)
+KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
+[ -z "${KVER}" ] && exit 0
 
 # Dracut
 mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
