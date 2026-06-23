@@ -180,7 +180,7 @@ jobs:
       - name: Build libcomposefs
         shell: bash
         env:
-          COMPOSEFS_VER: "v1.0.9"
+          COMPOSEFS_VER: "v1.0.8"
         run: |
           git clone --depth=1 --branch "${COMPOSEFS_VER}" \
             https://github.com/composefs/composefs.git /build/composefs
