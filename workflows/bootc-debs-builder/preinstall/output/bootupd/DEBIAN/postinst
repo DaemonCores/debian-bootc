@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+configure|triggered)
+    if [ -d /run/systemd/system ]; then
+        mkdir -p /etc/systemd/system/multi-user.target.wants
+        ln -sf /usr/lib/systemd/system/bootloader-update.service \
+            /etc/systemd/system/multi-user.target.wants/bootloader-update.service
+    fi
+    ;;
+esac
