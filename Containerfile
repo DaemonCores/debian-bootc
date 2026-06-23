@@ -58,6 +58,42 @@ RUN wget \
         intel-microcode \
         amd64-microcode \
         bootc \
+        adduser \
+        sudo \
+        locales \
+        console-setup \
+        console-data \
+        bash-completion \
+        less \
+        man-db \
+        nano \
+        iproute2 \
+        groff-base \
+        manpages \
+        libnss-systemd \
+        systemd-timesyncd \
+        util-linux-extra \
+        file \
+        traceroute \
+        lsof \
+        bzip2 \
+        xz-utils \
+        apt-listchanges \
+        bind9-host \
+        bind9-dnsutils \
+        perl \
+        wtmpdb \
+        media-types \
+        liblockfile-bin \
+        openssh-server \
+        openssh-client \
+        reportbug \
+        debian-faq \
+        krb5-locales \
+        inetutils-telnet \
+        netcat-traditional \
+        doc-debian \
+    && echo "%wheel ALL=(ALL:ALL) PASSWD: ALL" > /etc/sudoers.d/wheel \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
