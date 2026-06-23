@@ -66,6 +66,7 @@ jobs:
             gettext \
             python3 \
             autopoint \
+            gawk \
             libfreetype6-dev
 
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
