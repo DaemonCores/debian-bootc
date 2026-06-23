@@ -19,12 +19,9 @@ mkdir -p \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
     "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
-# Create standalone monolithic GRUB EFI with all needed modules embedded
-# Replaces the signed Debian grub (loses Secure Boot but gains module independence)
-grub-mkstandalone \
-    --format=x86_64-efi \
-    --output="/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi" \
-    "boot/grub/grub.cfg=/usr/lib/bootupd/grub2-static/grub-static-efi.cfg"
+# GRUB EFI binary — use pre-built Debian monolithic (includes blscfg and all needed modules)
+cp /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi \
+    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
 
 # Shim in BOOT/ for UEFI firmware
 mv /usr/lib/shim/shimx64.efi.signed \
