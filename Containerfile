@@ -57,7 +57,7 @@ RUN wget \
         firmware-misc-nonfree \
         intel-microcode \
         amd64-microcode \
-        bootc || (cat /var/log/dpkg.log; exit 1) \
+        bootc \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
