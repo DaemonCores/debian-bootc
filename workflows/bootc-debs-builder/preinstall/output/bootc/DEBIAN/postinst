@@ -17,6 +17,10 @@ case "$1" in
             ln -sf sysroot/ostree /ostree
         fi
 
+        mkdir -p /etc/systemd/system/timers.target.wants
+        ln -sf /usr/lib/systemd/system/bootc-fetch-apply-updates.timer \
+            /etc/systemd/system/timers.target.wants/bootc-fetch-apply-updates.timer
+
         # Run bootc-finalize
         if [ -x /usr/local/bin/bootc-finalize ]; then
             /usr/local/bin/bootc-finalize 2>&1 | tee /tmp/bootc-finalize.log || {
