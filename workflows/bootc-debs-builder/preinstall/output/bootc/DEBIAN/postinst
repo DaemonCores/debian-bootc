@@ -5,7 +5,7 @@ case "$1" in
     configure|triggered)
         # Bootc filesystem migrations — idempotent
         if [ ! -L /home ]; then
-            mkdir -p /var/{home,roothome,mnt,srv,opt} /sysroot
+            mkdir -p /sysroot/ostree
             for d in home mnt srv opt; do
                 [ -d "/${d}" ] && mv "/${d}" "/var/${d}" || true
             done
