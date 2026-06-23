@@ -3,6 +3,7 @@ set -euo pipefail
 
 KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
 [ -z "${KVER}" ] && exit 0
+[ -f "/boot/vmlinuz-${KVER}" ] || exit 0
 
 # Dracut
 mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
@@ -18,6 +19,13 @@ mkdir -p \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
     "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
+# Create standalone monolithic GRUB EFI with all needed modules embedded
+# Replaces the signed Debian grub (loses Secure Boot but gains module independence)
+grub-mkstandalone \
+    --format=x86_64-efi \
+    --output="/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi" \
+    "boot/grub/grub.cfg=/usr/lib/bootupd/grub2-static/grub-static-efi.cfg"
+
 # Shim in BOOT/ for UEFI firmware
 mv /usr/lib/shim/shimx64.efi.signed \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
@@ -31,9 +39,5 @@ mv /usr/lib/shim/fbx64.efi.signed \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
 mv /usr/lib/shim/mmx64.efi.signed \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
-
-# GRUB EFI binary
-mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
 
 bootupctl backend generate-update-metadata /
