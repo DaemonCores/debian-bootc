@@ -5,5 +5,5 @@ Architecture: amd64
 Maintainer: build
 Section: libs
 Priority: required
-Depends: {{ DEPS }}
+Depends: libcomposefs, {{ DEPS }}
 Description: libostree
