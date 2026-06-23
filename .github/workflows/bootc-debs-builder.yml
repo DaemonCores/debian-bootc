@@ -61,6 +61,7 @@ jobs:
             libgirepository1.0-dev \
             libsoup-3.0-dev \
             bison \
+            gperf \
             flex \
             gettext \
             python3
@@ -80,7 +81,7 @@ jobs:
             https://github.com/rhboot/grub2.git /build/grub2-fedora
 
           cd /build/grub2-fedora
-          ./autogen.sh
+          ./bootstrap
 
           ./configure \
             --target=x86_64 \
