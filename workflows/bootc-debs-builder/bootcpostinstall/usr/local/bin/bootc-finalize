@@ -19,8 +19,8 @@ mkdir -p \
     "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
     "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
-# GRUB EFI binary — custom build from Fedora source with blscfg embedded
-cp /usr/lib/grub/x86_64-efi-unsigned/grubx64.efi \
+# GRUB EFI binary — custom Fedora build with blscfg embedded
+mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
     "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
 
 # Shim in BOOT/ for UEFI firmware
