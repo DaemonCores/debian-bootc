@@ -5,6 +5,6 @@ Architecture: amd64
 Maintainer: build
 Section: admin
 Priority: required
-Pre-Depends: grub-efi-amd64-signed, shim-signed
+Pre-Depends: grub-efi-amd64, grub-efi-amd64-signed, shim-signed
 Depends: {{ DEPS }}, util-linux
 Description: bootupd

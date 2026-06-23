@@ -60,10 +60,54 @@ jobs:
             gobject-introspection \
             libgirepository1.0-dev \
             libsoup-3.0-dev \
-            bison
+            bison \
+            flex \
+            gettext \
+            python3
 
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
+
+      - name: Build grub-efi-amd64-bin
+        shell: bash
+        env:
+          GRUB_VER: "2.12-9+fedora44"
+          GRUB_FEDORA_BRANCH: "fedora-44"
+        run: |
+          SAVE_PWD=$(pwd)
+
+          git clone --depth=1 --branch "${GRUB_FEDORA_BRANCH}" \
+            https://github.com/rhboot/grub2.git /build/grub2-fedora
+
+          cd /build/grub2-fedora
+          ./autogen.sh
+
+          ./configure \
+            --target=x86_64 \
+            --with-platform=efi \
+            --prefix=/usr \
+            --disable-werror \
+            MAKEINFO=true
+
+          make -j$(nproc)
+
+          make install DESTDIR=/tmp/grub-install
+
+          # Keep only EFI modules — matches grub-efi-amd64-bin package content
+          mkdir -p /output/grub-efi-amd64-bin/usr/lib/grub/
+          cp -r /tmp/grub-install/usr/lib/grub/x86_64-efi \
+            /output/grub-efi-amd64-bin/usr/lib/grub/
+
+          cd /output/grub-efi-amd64-bin/
+          ln -sf DEBIAN debian
+
+          sed -i \
+            -e "s|{{ VER }}|${GRUB_VER}|g" \
+            DEBIAN/control
+
+          rm -f debian
+          dpkg-deb --build /output/grub-efi-amd64-bin \
+            /debs/grub-efi-amd64-bin_${GRUB_VER}_amd64.deb
 
       - name: Build bootupd
         shell: bash
