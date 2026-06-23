@@ -93,7 +93,6 @@ RUN wget \
         inetutils-telnet \
         netcat-traditional \
         doc-debian \
-    && echo "%wheel ALL=(ALL:ALL) PASSWD: ALL" > /etc/sudoers.d/wheel \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
