@@ -175,6 +175,50 @@ jobs:
           rm -f /output/bootupd/debian
           dpkg-deb --build /output/bootupd /debs/bootupd_${BOOTUPD_VER#v}_amd64.deb
 
+      - name: Build libcomposefs
+        shell: bash
+        env:
+          COMPOSEFS_VER: "v1.0.9"
+        run: |
+          git clone --depth=1 --branch "${COMPOSEFS_VER}" \
+            https://github.com/composefs/composefs.git /build/composefs
+
+          meson setup \
+            --prefix=/usr \
+            --libdir=/usr/lib \
+            --buildtype=plain \
+            /build/composefs-build \
+            /build/composefs
+
+          meson compile -C /build/composefs-build
+
+          # Install to DESTDIR for packaging
+          DESTDIR=/output/libcomposefs meson install -C /build/composefs-build
+
+          # Install to system so ostree build finds it
+          meson install -C /build/composefs-build
+
+          cd /output/libcomposefs/
+          ln -sf DEBIAN debian
+
+          # Generate shlibs
+          SO=$(find /output/libcomposefs/usr/lib -name "libcomposefs.so.*" ! -type l | head -1)
+          SONAME=$(objdump -p $SO | awk '/SONAME/{print $2}')
+          LIBBASE=$(echo $SONAME | sed 's/\.so\..*//')
+          SOVERSION=$(echo $SONAME | sed 's/.*\.so\.//')
+          echo "${LIBBASE} ${SOVERSION} libcomposefs" > /output/libcomposefs/DEBIAN/shlibs
+
+          sed -i \
+            -e "s|{{ VER }}|${COMPOSEFS_VER#v}|g" \
+            DEBIAN/control
+
+          rm -f debian
+          dpkg-deb --build /output/libcomposefs \
+            /debs/libcomposefs_${COMPOSEFS_VER#v}_amd64.deb
+
+          # Enregistrer dans dpkg pour que dpkg-shlibdeps d'ostree fonctionne
+          apt install -y /debs/libcomposefs_${COMPOSEFS_VER#v}_amd64.deb
+
       - name: Build ostree
         shell: bash
         env:
@@ -191,7 +235,8 @@ jobs:
           cd /build/libostree-${OSTREE_VER}
 
           ./configure --prefix=/usr --sysconfdir=/etc \
-            --disable-gtk-doc --disable-man
+            --disable-gtk-doc --disable-man \
+            --with-composefs
           
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
