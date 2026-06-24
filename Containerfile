@@ -3,6 +3,7 @@
 # NOTE: use debian trixie not pined for auto security update
 #####################################################################################
 FROM debian:trixie
+STOPSIGNAL SIGRTMIN+3
 
 # Environment setup
 LABEL org.opencontainers.image.title="Debian Trixie bootc"
@@ -93,6 +94,8 @@ RUN wget \
         inetutils-telnet \
         netcat-traditional \
         doc-debian \
+        dbus \
+        ifupdown2 \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
