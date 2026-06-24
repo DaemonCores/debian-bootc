@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+
+grep -q "^# ifupdown2-autoconf" /etc/network/interfaces || exit 0
+
+IFACE=$(ip -o link show | awk -F': ' '/ether/{print $2; exit}')
+[ -z "$IFACE" ] && exit 0
+
+cat > /etc/network/interfaces << EOF
+# ifupdown2-autoconf: auto-configured on boot, remove this line to disable
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+auto ${IFACE}
+iface ${IFACE} inet dhcp
+iface ${IFACE} inet6 dhcp
+EOF

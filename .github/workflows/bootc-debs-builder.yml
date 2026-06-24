@@ -106,6 +106,7 @@ jobs:
           # Preserve +pmx suffix for pve-manager version check
           sed -i "s/^Version: .*/Version: ${ORIG_VER}+bootc1/" \
             /output/ifupdown2/DEBIAN/control
+          chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf
 
           dpkg-deb --build /output/ifupdown2 \
             /debs/ifupdown2_${ORIG_VER}+bootc1_all.deb
