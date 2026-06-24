@@ -74,6 +74,41 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
 
+      - name: Repack ifupdown2 from Proxmox with bootc fix
+        shell: bash
+        env:
+          PVE_REPO: "http://download.proxmox.com/debian/pve"
+          PVE_SUITE: "trixie"
+        run: |
+          # Télécharger ifupdown2 depuis le repo Proxmox no-subscription
+          apt-get download -o Dir::Cache=/tmp/ifupdown2dl \
+            "$(apt-get --print-uris install ifupdown2 2>/dev/null \
+              | grep -o "'[^']*proxmox[^']*'" | tr -d "'")" 2>/dev/null || \
+          curl -fsSL "${PVE_REPO}/dists/${PVE_SUITE}/pve-no-subscription/binary-amd64/Packages.gz" \
+            | zcat | grep -A5 "^Package: ifupdown2" | grep Filename \
+            | awk '{print "'${PVE_REPO}'/"$2}' \
+            | xargs curl -fsSLo /tmp/ifupdown2.deb
+
+          # Extraire
+          mkdir -p /build/ifupdown2
+          dpkg-deb -R /tmp/ifupdown2.deb /build/ifupdown2
+
+          # Injecter le fix bootc
+          mkdir -p /build/ifupdown2/usr/lib/systemd/system/ifupdown2-pre.service.d
+          cat > /build/ifupdown2/usr/lib/systemd/system/ifupdown2-pre.service.d/bootc.conf << 'EOF'
+          [Unit]
+          After=ostree-remount.service
+          EOF
+
+          # Bumper la version en gardant +pmx pour que pve-manager soit content
+          ORIG_VER=$(dpkg-deb -f /tmp/ifupdown2.deb Version)
+          sed -i "s/^Version: .*/Version: ${ORIG_VER}+bootc1/" \
+            /build/ifupdown2/DEBIAN/control
+
+          # Remballer
+          dpkg-deb --build /build/ifupdown2 \
+            /debs/ifupdown2_${ORIG_VER}+bootc1_all.deb
+
       - name: Build grub-efi-amd64-signed
         shell: bash
         env:
