@@ -1,0 +1,28 @@
+[Unit]
+Description=First Boot User Setup
+Documentation=man:firstboot-user-setup(1)
+
+# Take over TTY1 before getty does
+Before=getty@tty1.service
+Conflicts=getty@tty1.service
+After=systemd-user-sessions.service local-fs.target
+
+# Only run once — skip if flag file exists
+ConditionPathExists=!/var/lib/firstboot-user-setup.done
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/local/bin/firstboot-user-setup
+
+# Exclusive TTY access
+StandardInput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+# No timeout — user can take as long as needed
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

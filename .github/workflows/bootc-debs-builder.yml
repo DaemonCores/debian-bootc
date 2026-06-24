@@ -80,6 +80,28 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
 
+      - name: Build firstboot-user-setup
+        shell: bash
+        env:
+          FIRSTBOOT_VER: "1.0.0"
+        run: |
+          SAVE_PWD=$(pwd)
+
+          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/firstbootpostinstall/* \
+            /output/firstboot-user-setup/
+
+          chmod 755 \
+            /output/firstboot-user-setup/DEBIAN/postinst \
+            /output/firstboot-user-setup/usr/local/bin/firstboot-user-setup
+
+          sed -i \
+            -e "s|{{ VER }}|${FIRSTBOOT_VER}|g" \
+            -e "s|, {{ DEPS }}||g" \
+            /output/firstboot-user-setup/DEBIAN/control
+
+          dpkg-deb --build /output/firstboot-user-setup \
+            /debs/firstboot-user-setup_${FIRSTBOOT_VER}_all.deb
+
       - name: Repack ifupdown2 from Proxmox with bootc fix
         shell: bash
         run: |
