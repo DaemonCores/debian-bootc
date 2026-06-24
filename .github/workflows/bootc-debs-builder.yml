@@ -278,10 +278,17 @@ jobs:
             --disable-gtk-doc --disable-man \
             --with-composefs \
             --with-systemdsystemunitdir=/usr/lib/systemd/system \
+            --with-systemdsystemgeneratordir=/usr/lib/systemd/system-generators \
             --with-dracut
-          
+
           make -j$(nproc)
           make -j$(nproc) install DESTDIR=/output/ostree
+
+          # Verify and fail loudly if missing
+          test -d /output/ostree/usr/lib/dracut/modules.d/98ostree \
+              || { echo "ERROR: 98ostree dracut module missing from build output" >&2; exit 1; }
+          test -f /output/ostree/usr/lib/systemd/system-generators/ostree-system-generator \
+              || { echo "ERROR: ostree-system-generator missing from build output" >&2; exit 1; }
 
           cd /output/ostree/
           ln -sf DEBIAN debian
