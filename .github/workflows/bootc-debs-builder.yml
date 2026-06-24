@@ -41,7 +41,7 @@ jobs:
         run: |
           curl -fsSL https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg \
             -o /usr/share/keyrings/proxmox-release-trixie.gpg
-          printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${PVE_GPG_SHA256}" \
+          printf '%s  /usr/share/keyrings/proxmox-archive-keyring.gpg\n' "${PVE_GPG_SHA256}" \
             | sha256sum -c -
 
           apt update
