@@ -1,0 +1,9 @@
+Source: firstboot-user-setup
+Package: firstboot-user-setup
+Version: {{ VER }}
+Architecture: all
+Maintainer: build
+Section: admin
+Priority: optional
+Depends: whiptail, {{ DEPS }}
+Description: First-boot user setup TUI
