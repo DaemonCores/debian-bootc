@@ -18,12 +18,11 @@ if [ -n "$AUSER" ]; then
     rm -rf "/home/${AUSER}"
 
     useradd                              \
-        --home-dir "/home/${AUSER}"      \
-        --base-dir "/home/${AUSER}"      \
-        --uid      "$AUID"               \
-        --no-user-group                  \
-        --shell    /bin/bash             \
-        --comment  "$AGECOS"             \
+        --home-dir    "/home/${AUSER}"   \
+        --uid         "$AUID"            \
+        --groups      "${AUSER}"         \
+        --shell       /bin/bash          \
+        --comment     "$AGECOS"          \
         --create-home "$AUSER"
 
     usermod -p "$AHASH" "$AUSER"
