@@ -110,6 +110,36 @@ jobs:
           dpkg-deb --build /output/ifupdown2 \
             /debs/ifupdown2_${ORIG_VER}+bootc1_all.deb
 
+      - name: Repack systemd-timesyncd with bootc fix
+        shell: bash
+        run: |
+          SAVE_PWD=$(pwd)
+
+          apt update
+          cd /tmp
+          apt-get download systemd-timesyncd
+
+          mkdir -p /output/systemd-timesyncd
+          dpkg-deb -R systemd-timesyncd_*.deb /output/systemd-timesyncd
+
+          ORIG_VER=$(dpkg-deb -f systemd-timesyncd_*.deb Version)
+          ARCH=$(dpkg-deb -f systemd-timesyncd_*.deb Architecture)
+
+          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/timesyncpostinstall/* \
+            /output/systemd-timesyncd/
+
+          # Regenerate md5sums after content modification
+          find /output/systemd-timesyncd -not -path '*/DEBIAN/*' -type f \
+            | xargs md5sum \
+            | sed "s|/output/systemd-timesyncd/||" \
+            > /output/systemd-timesyncd/DEBIAN/md5sums
+
+          sed -i "s/^Version: .*/Version: ${ORIG_VER}+bootc1/" \
+            /output/systemd-timesyncd/DEBIAN/control
+
+          dpkg-deb --build /output/systemd-timesyncd \
+            /debs/systemd-timesyncd_${ORIG_VER}+bootc1_${ARCH}.deb
+
       - name: Build grub-efi-amd64-signed
         shell: bash
         env:
