@@ -96,6 +96,9 @@ RUN wget \
         doc-debian \
         dbus \
         ifupdown2 \
+        isc-dhcp-client \
+        wpasupplicant \
+        broadcom-sta-dkms \
     && echo "%wheel ALL=(ALL:ALL) PASSWD: ALL" > /etc/sudoers.d/wheel \
     && rm -rf \
         /tmp/* \
