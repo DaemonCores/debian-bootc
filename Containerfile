@@ -96,6 +96,7 @@ RUN wget \
         doc-debian \
         dbus \
         ifupdown2 \
+    && echo "%wheel ALL=(ALL:ALL) PASSWD: ALL" > /etc/sudoers.d/wheel \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
