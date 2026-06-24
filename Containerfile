@@ -99,12 +99,15 @@ RUN wget \
         isc-dhcp-client \
         wpasupplicant \
         broadcom-sta-dkms \
+        firstboot-user-setup \
     && echo "%wheel ALL=(ALL:ALL) PASSWD: ALL" > /etc/sudoers.d/wheel \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
         /run/* \
         /usr/sbin/policy-rc.d
+
+COPY ./assets/banner/motd /etc/motd
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE
