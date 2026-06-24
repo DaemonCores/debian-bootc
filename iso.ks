@@ -12,6 +12,7 @@ if [ -n "$AUSER" ]; then
     AHASH=$(getent shadow "$AUSER" | cut -d: -f2)
     AGECOS=$(getent passwd "$AUSER" | cut -d: -f5)
     AUID=$(getent passwd "$AUSER" | cut -d: -f3)
+    AGID=$(getent passwd "$AUSER" | cut -d: -f4)
     IN_WHEEL=$(id -nG "$AUSER" | grep -qw wheel && echo yes || echo no)
 
     userdel "$AUSER" 2>/dev/null || true
@@ -20,7 +21,6 @@ if [ -n "$AUSER" ]; then
     groupadd --gid "$AGID" "$AUSER" 2>/dev/null || true
     useradd                              \
         --home-dir    "/home/${AUSER}"   \
-        --base-dir    "/home/${AUSER}"   \
         --uid         "$AUID"            \
         --gid         "$AGID"            \
         --shell       /bin/bash          \
