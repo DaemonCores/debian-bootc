@@ -33,10 +33,16 @@ HEADER="${BANNER_DIR}/anaconda-header.png"
 }
 
 WORKDIR=$(mktemp -d)
-trap 'umount "$WORKDIR/rootfs-mount" 2>/dev/null || true; rm -rf "$WORKDIR"' EXIT
+trap 'umount "$WORKDIR/iso-mnt"    2>/dev/null || true
+      umount "$WORKDIR/rootfs-mount" 2>/dev/null || true
+      rm -rf "$WORKDIR"' EXIT
 
+# APRÈS (loop mount — kernel, pas de dépendance au format ISO)
 echo "[banners] Extracting ISO..."
-xorriso -osirrox on -indev "$SRC_ISO" -extract / "$WORKDIR/iso-root" 2>/dev/null
+mkdir -p "$WORKDIR/iso-mnt" "$WORKDIR/iso-root"
+mount -o loop,ro "$SRC_ISO" "$WORKDIR/iso-mnt"
+cp -a "$WORKDIR/iso-mnt/." "$WORKDIR/iso-root/"
+umount "$WORKDIR/iso-mnt"
 chmod -R u+w "$WORKDIR/iso-root"
 
 INSTALL_IMG=""
