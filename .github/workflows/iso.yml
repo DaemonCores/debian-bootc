@@ -4,77 +4,210 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  iso:
-    runs-on: ubuntu-latest
-    container:
-      image: almalinux:10
-      options: --privileged
 
+  # ── 1. Crée la release AVANT les builds ─────────────────────────────────
+  create-release:
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-
-      - name: Install lorax
-        run: |
-          dnf install -y 'dnf-command(config-manager)'
-          dnf config-manager -y --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-          dnf makecache --refresh
-          dnf install -y lorax git wget curl gh gh
-          git config --system --add safe.directory '*'
-
-      - uses: actions/checkout@v7
-
-      - name: Download Fedora Server netinstall ISO
-        env:
-          VERSION: "44-1.7"
-        run: |
-          CUT_VERSION="$(echo "${VERSION}" | cut -d "-" -f 1)"
-
-          mkdir -p out
-          curl -fSL \
-            "https://archives.fedoraproject.org/pub/fedora/linux/releases/${CUT_VERSION}/Server/x86_64/iso/Fedora-Server-netinst-x86_64-${VERSION}.iso" \
-            -o out/boot.iso
-
-      - name: Inject kickstart URL into ISO
-        run: |
-          set -euxo pipefail
-
-          NAME="$(echo "${{ github.repository }}" | sed 's|/|-|g')"
-          HOSTNAME="$(echo "${{ github.repository }}" | cut -d "/" -f 2)"
-          sed -i \
-            -e "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" \
-            -e "s|{{ hostname }}|${HOSTNAME}|g" \
-            iso.ks
-
-          mkksiso --ks iso.ks out/boot.iso "out/${NAME}.iso"
-          ls -lh "out/${NAME}.iso"
-
-      - name: Fetch previous release state
-        id: prev
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view install-iso --json name >/dev/null 2>&1; then
-            echo "exists=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=0" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euxo pipefail
           NAME="$(echo "${{ github.repository }}" | sed 's|/|-|g')"
-          title="Net-install ISO — $(date -u +%Y-%m-%d)"
-          notes="Boot this ISO to install ${NAME}. Anaconda fetches the kickstart from GitHub and pulls the latest image from GHCR at install time."
-          if [[ "${{ steps.prev.outputs.exists }}" == "1" ]]; then
+          title="Install ISO — $(date -u +%Y-%m-%d)"
+          notes="Net-install and offline ISOs for ${NAME}."
+          if gh release view install-iso \
+               --repo "${{ github.repository }}" \
+               --json name >/dev/null 2>&1; then
             gh release edit install-iso \
-              --title "$title" --notes "$notes" \
-              --target "${{ github.sha }}" --latest=false
-            gh release upload install-iso "out/${NAME}.iso" --clobber
+              --repo    "${{ github.repository }}" \
+              --title   "$title" \
+              --notes   "$notes" \
+              --target  "${{ github.sha }}" \
+              --latest=false
           else
-            gh release create install-iso "out/${NAME}.iso" \
-              --title "$title" --notes "$notes" \
-              --target "${{ github.sha }}" --latest=false
+            gh release create install-iso \
+              --repo    "${{ github.repository }}" \
+              --title   "$title" \
+              --notes   "$notes" \
+              --target  "${{ github.sha }}" \
+              --latest=false
           fi
+
+  # ── 2. Builds en parallèle ──────────────────────────────────────────────
+  build-iso:
+    needs: create-release
+    runs-on: ubuntu-latest
+    container:
+      image: almalinux:10
+      options: --privileged
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false   # si un build plante, l'autre upload quand même
+      matrix:
+        include:
+          - type: online
+            suffix: online
+            vol_suffix: _NET
+          - type: offline
+            suffix: offline
+            vol_suffix: _OFFLINE
+
+    steps:
+
+      # ─── SETUP ────────────────────────────────────────────────────────────
+
+      - name: Install dependencies
+        run: |
+          dnf install -y epel-release
+          dnf install -y 'dnf-command(config-manager)'
+          dnf config-manager -y \
+            --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+          dnf makecache --refresh
+          dnf install -y git gh xorriso squashfs-tools imagemagick
+          if [[ "${{ matrix.type }}" == "online" ]]; then
+            dnf install -y lorax curl cpio gzip
+          else
+            dnf install -y podman
+          fi
+          git config --system --add safe.directory '*'
+
+      - uses: actions/checkout@v4
+
+      - name: Compute names
+        id: names
+        run: |
+          NAME="$(echo "${{ github.repository }}" | sed 's|/|-|g')"
+          HOSTNAME="$(echo "${{ github.repository }}" | cut -d "/" -f 2)"
+          DISPLAY_NAME=$(python3 -c "
+          h = '${HOSTNAME}'.replace('-',' ').replace('_',' ')
+          print(' '.join(w.capitalize() for w in h.split()))
+          ")
+          BASE="$(echo "${HOSTNAME}" | tr '[:lower:]-' '[:upper:]_')"
+          VOLUME_ID="$(echo "${BASE}${{ matrix.vol_suffix }}" | cut -c1-32)"
+          echo "name=${NAME}"                         >> "$GITHUB_OUTPUT"
+          echo "hostname=${HOSTNAME}"                 >> "$GITHUB_OUTPUT"
+          echo "display_name=${DISPLAY_NAME}"         >> "$GITHUB_OUTPUT"
+          echo "volume_id=${VOLUME_ID}"               >> "$GITHUB_OUTPUT"
+          echo "iso=${NAME}-${{ matrix.suffix }}.iso" >> "$GITHUB_OUTPUT"
+
+      # ─── ONLINE ───────────────────────────────────────────────────────────
+
+      - name: Download Fedora netinstall ISO
+        if: matrix.type == 'online'
+        env:
+          VERSION: "44-1.7"
+        run: |
+          CUT="$(echo "${VERSION}" | cut -d '-' -f 1)"
+          mkdir -p out
+          curl -fSL \
+            "https://archives.fedoraproject.org/pub/fedora/linux/releases/${CUT}/Server/x86_64/iso/Fedora-Server-netinst-x86_64-${VERSION}.iso" \
+            -o out/base.iso
+
+      - name: Build updates.img — disable Anaconda Users module
+        if: matrix.type == 'online'
+        run: |
+          # Équivalent de [customizations.installer.modules] disable = ["...Users"]
+          # NOTE : si le boot crashe, vérifier la liste dans /etc/anaconda/anaconda.conf
+          # de l'ISO Fedora 44 et ajuster en conséquence.
+          mkdir -p updates-tree/etc/anaconda/conf.d
+          printf '%s\n' \
+            '[Anaconda]' \
+            'optional_modules =' \
+            '  org.fedoraproject.Anaconda.Modules.Localization' \
+            '  org.fedoraproject.Anaconda.Modules.Network' \
+            '  org.fedoraproject.Anaconda.Modules.Payloads' \
+            '  org.fedoraproject.Anaconda.Modules.Storage' \
+            '  org.fedoraproject.Anaconda.Modules.Services' \
+            '  org.fedoraproject.Anaconda.Modules.Timezone' \
+            '  org.fedoraproject.Anaconda.Modules.Security' \
+            '  org.fedoraproject.Anaconda.Modules.Subscription' \
+            > updates-tree/etc/anaconda/conf.d/99-disable-users.conf
+          (cd updates-tree && find . | cpio -o -H newc | gzip > ../out/updates.img)
+
+      - name: Render kickstart
+        if: matrix.type == 'online'
+        run: |
+          sed \
+            -e "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" \
+            -e "s|{{ hostname }}|${{ steps.names.outputs.hostname }}|g" \
+            iso.ks.tpl > /tmp/iso.ks
+
+      - name: Build online ISO
+        if: matrix.type == 'online'
+        run: |
+          set -euxo pipefail
+          mkksiso \
+            --ks /tmp/iso.ks \
+            --add out/updates.img \
+            --cmdline "inst.updates=file:///run/install/repo/updates.img" \
+            -V "${{ steps.names.outputs.volume_id }}" \
+            out/base.iso \
+            out/boot-tmp.iso
+          xorriso \
+            -indev  out/boot-tmp.iso \
+            -outdev "out/${{ steps.names.outputs.iso }}" \
+            -application_id "${{ steps.names.outputs.display_name }} Installer" \
+            -publisher      "${{ steps.names.outputs.display_name }}" \
+            -commit_eject none
+          rm out/boot-tmp.iso
+
+      # ─── OFFLINE ──────────────────────────────────────────────────────────
+
+      - name: Render BIB config
+        if: matrix.type == 'offline'
+        run: |
+          sed \
+            -e "s|{{ hostname }}|${{ steps.names.outputs.hostname }}|g" \
+            -e "s|{{ display_name }}|${{ steps.names.outputs.display_name }}|g" \
+            -e "s|{{ volume_id }}|${{ steps.names.outputs.volume_id }}|g" \
+            -e "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" \
+            iso-offline-config.toml.tpl > /tmp/iso-config.toml
+
+      - name: Pull image from GHCR
+        if: matrix.type == 'offline'
+        env:
+          PAT_PKG: ${{ secrets.PAT_PKG }}
+        run: |
+          podman login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin <<< "${PAT_PKG}"
+          podman pull "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+
+      - name: Build offline ISO with BIB
+        if: matrix.type == 'offline'
+        run: |
+          mkdir -p out
+          podman run --rm --privileged --pull=newer \
+            --security-opt label=type:unconfined_t \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            -v /tmp/iso-config.toml:/config.toml:ro \
+            -v "$(pwd)/out":/output \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+              --type anaconda-iso \
+              --config /config.toml \
+              "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+          find out -name "*.iso" -exec \
+            mv {} "out/${{ steps.names.outputs.iso }}" \;
+
+      # ─── SHARED ───────────────────────────────────────────────────────────
+
+      - name: Inject banners (optional)
+        run: |
+          ISO="out/${{ steps.names.outputs.iso }}"
+          if [[ -f "assets/banner/anaconda-sidebar.png" || \
+                -f "assets/banner/anaconda-header.png" ]]; then
+            bash scripts/inject-banners-iso.sh "${ISO}" out/branded.iso
+            mv out/branded.iso "${ISO}"
+          fi
+
+      - name: Upload ISO to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload install-iso \
+            --repo "${{ github.repository }}" \
+            "out/${{ steps.names.outputs.iso }}" --clobber
