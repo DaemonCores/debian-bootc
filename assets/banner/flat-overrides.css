@@ -2,10 +2,16 @@
  * Appended to fedora-server.css — layout properties are NOT touched.
  * Only visual properties: color, background, border, radius, shadow,
  * transition, text-shadow.
+ *
+ * Full-window background strategy:
+ *   background-full.png (4K) is set on the window → covers entire surface.
+ *   Sidebar and topbar overlay with semi-transparent flat colors.
+ *   Content area stays light with semi-transparent white surface.
  * ─────────────────────────────────────────────────────────────────────── */
 
 /* ── Color palette ───────────────────────────────────────────────────── */
 @define-color flat_primary        #006eb4;
+@define-color flat_primary_dark   #004f82;
 @define-color flat_primary_hover  #0353a4;
 @define-color flat_primary_text   #ffffff;
 @define-color flat_bg             #f5f6f7;
@@ -21,38 +27,70 @@
 @define-color flat_info_bg        #edf5ff;
 @define-color flat_info_fg        #0043ce;
 
-/* ── Remove all shadows and round all corners consistently ───────────── */
-button                          { box-shadow: none; border-radius: 4px; transition: none; }
-entry                           { box-shadow: none; border-radius: 4px; transition: none; }
-spinbutton                      { box-shadow: none; border-radius: 4px; transition: none; }
-combobox button                 { box-shadow: none; border-radius: 4px; }
-scrolledwindow                  { box-shadow: none; }
-frame                           { box-shadow: none; }
-.frame                          { box-shadow: none; }
-popover                         { box-shadow: none; border-radius: 4px; }
-tooltip                         { border-radius: 2px; }
+/* ── Remove all shadows and round corners consistently ───────────────── */
+button       { box-shadow: none; border-radius: 4px; transition: none; }
+entry        { box-shadow: none; border-radius: 4px; transition: none; }
+spinbutton   { box-shadow: none; border-radius: 4px; transition: none; }
+combobox button { box-shadow: none; border-radius: 4px; }
+scrolledwindow  { box-shadow: none; }
+frame           { box-shadow: none; }
+.frame          { box-shadow: none; }
+popover         { box-shadow: none; border-radius: 4px; }
+tooltip         { border-radius: 2px; }
 AnacondaSpokeWindow scrolledwindow { box-shadow: none; }
 
-/* ── Main window background ──────────────────────────────────────────── */
-AnacondaHubWindow    { background-color: @flat_bg; }
-AnacondaSpokeWindow  { background-color: @flat_bg; }
-
-/* ── Hub nav-box (no image — color only, flat bottom border) ─────────── */
-AnacondaHubWindow #nav-box {
-    background-color: @flat_primary;
-    box-shadow: none;
-    border-bottom: 1px solid shade(@flat_primary, 0.85);
+/* ── Full-window background image (4K, CSS scales via cover) ─────────── */
+/* Falls back to flat_primary color if background-full.png is absent.    */
+AnacondaHubWindow,
+AnacondaSpokeWindow {
+    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
+    background-size:     cover;
+    background-repeat:   no-repeat;
+    background-position: center center;
+    background-color:    @flat_primary;
 }
 
-/* ── Spoke nav-box (overrides topbar-bg image with flat color) ───────── */
-AnacondaSpokeWindow #nav-box {
-    background-color:  @flat_primary;
+/* ── Sidebar: semi-transparent overlay on top of window background ───── */
+/* background-image: none clears the sidebar-bg.png from fedora-server.css */
+.logo-sidebar {
+    background-image: none;
+    background-color: rgba(0, 60, 110, 0.88);
+    box-shadow:       none;
+}
+
+/* Ensure all text in sidebar is white and readable */
+.logo-sidebar label,
+.logo-sidebar * { color: @flat_primary_text; }
+
+/* Logo positioning (Debian logo bottom-centered) */
+.logo {
+    background-position: 50% 90%;
+}
+
+/* ── Hub nav-box: flat primary color, no image ───────────────────────── */
+AnacondaHubWindow #nav-box {
+    background-image:  none;
+    background-color:  rgba(0, 60, 110, 0.92);
     box-shadow:        none;
-    border-bottom:     1px solid shade(@flat_primary, 0.85);
+    border-bottom:     1px solid rgba(0, 40, 80, 0.60);
+}
+AnacondaHubWindow #nav-box label { color: @flat_primary_text; }
+
+/* ── Spoke nav-box: flat color, clears topbar-bg.png ────────────────── */
+AnacondaSpokeWindow #nav-box {
+    background-image:  none;
+    background-color:  rgba(0, 60, 110, 0.92);
+    box-shadow:        none;
+    border-bottom:     1px solid rgba(0, 40, 80, 0.60);
+    color:             @flat_primary_text;
 }
 AnacondaSpokeWindow #nav-box GtkButton { box-shadow: none; }
 AnacondaSpokeWindow #nav-box button    { box-shadow: none; border-radius: 4px; }
 AnacondaSpokeWindow #nav-box label     { color: @flat_primary_text; }
+
+/* ── Content area: light surface over the background ────────────────── */
+AnacondaHubWindow    > box > box:last-child { background-color: rgba(245, 246, 247, 0.94); }
+AnacondaSpokeWindow  > box > box:last-child { background-color: rgba(245, 246, 247, 0.94); }
 
 /* ── Hub spoke selector tiles ────────────────────────────────────────── */
 AnacondaSpokeSelector {
@@ -130,11 +168,11 @@ entry {
     box-shadow:       none;
 }
 entry:focus {
-    border-color:     @flat_border_focus;
-    box-shadow:       none;
+    border-color: @flat_border_focus;
+    box-shadow:   none;
 }
 
-/* ── Info bars — replace garish defaults with flat tones ─────────────── */
+/* ── Info bars — flat tones ──────────────────────────────────────────── */
 infobar.info    box { background-color: @flat_info_bg;    border: none; }
 infobar.info    label { color: @flat_info_fg; }
 infobar.warning box { background-color: @flat_warning_bg; border: none; }
@@ -143,7 +181,7 @@ infobar.error   box { background-color: #fff1f1;          border: none; }
 infobar.error   label { color: @flat_danger; }
 infobar.info, infobar.warning, infobar.error { box-shadow: none; }
 
-/* ── Level bars ──────────────────────────────────────────────────────── */
+/* ── Level bars (password strength) ─────────────────────────────────── */
 @define-color anaconda_level_bar_low    @flat_danger;
 @define-color anaconda_level_bar_medium @flat_warning;
 @define-color anaconda_level_bar_high   @flat_success;
@@ -160,7 +198,7 @@ AnacondaDiskOverview {
     border-radius:    4px;
     box-shadow:       none;
 }
-AnacondaDiskOverview:hover  { border-color: @flat_primary; }
+AnacondaDiskOverview:hover   { border-color: @flat_primary; }
 AnacondaDiskOverview:checked {
     border-color:     @flat_primary;
     background-color: @flat_info_bg;
@@ -177,6 +215,3 @@ AnacondaLayoutIndicator {
     border-radius:    4px;
     color:            @flat_text;
 }
-
-/* ── Sidebar — keep user images but remove any residual shadow ────────── */
-.logo-sidebar { box-shadow: none; }
