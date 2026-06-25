@@ -87,25 +87,6 @@ jobs:
             "https://archives.fedoraproject.org/pub/fedora/linux/releases/${CUT}/Server/x86_64/iso/Fedora-Server-netinst-x86_64-${VERSION}.iso" \
             -o out/base.iso
 
-      # ─── PATCH  ──────────────────────────────────────────────────────────
-
-      - name: Build updates.img — disable Anaconda Users module
-        run: |
-          mkdir -p updates-tree/etc/anaconda/conf.d
-          printf '%s\n' \
-            '[Anaconda]' \
-            'optional_modules =' \
-            '  org.fedoraproject.Anaconda.Modules.Localization' \
-            '  org.fedoraproject.Anaconda.Modules.Network' \
-            '  org.fedoraproject.Anaconda.Modules.Payloads' \
-            '  org.fedoraproject.Anaconda.Modules.Storage' \
-            '  org.fedoraproject.Anaconda.Modules.Services' \
-            '  org.fedoraproject.Anaconda.Modules.Timezone' \
-            '  org.fedoraproject.Anaconda.Modules.Security' \
-            '  org.fedoraproject.Anaconda.Modules.Subscription' \
-            > updates-tree/etc/anaconda/conf.d/99-disable-users.conf
-          (cd updates-tree && find . | cpio -o -H newc | gzip > ../out/updates.img)
-
       # ─── BANNER ──────────────────────────────────────────────────────────
 
       - name: Inject banners (optional)
@@ -167,9 +148,7 @@ jobs:
 
             mkksiso \
               --ks   "/tmp/iso-${TYPE}-config.ks" \
-              --add  out/updates.img \
               ${EXTRA_ADD} \
-              --cmdline "inst.updates=file:///run/install/repo/updates.img" \
               -V    "${VOL_ID}" \
               out/base.iso \
               "out/boot-${TYPE}-tmp.iso"
@@ -189,7 +168,7 @@ jobs:
                 -e "s|Test this media & install Fedora 44|Test media \& install ${DISPLAY}|g" \
                 -e "s| rd\.live\.check||g" \
                 -e "s| inst\.stage2=[^ ]*||g" \
-                -e "/^[[:space:]]*linux / s|$| inst.stage2=cdrom|" \
+                -e "/^[[:space:]]*linux / s|$| inst.stage2=hd:LABEL=${VOL_ID}|" \
                 "$f"
             done
 
