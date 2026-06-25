@@ -174,21 +174,21 @@ echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected (Users fo
 BUILDSTAMP="$WORKDIR/squashfs-root/.buildstamp"
 if [[ -f "$BUILDSTAMP" ]]; then
   sed -i \
-    -e 's|^Product=.*|Product=${1}|' \
+    -e 's|^Product=.*|Product=${3}|' \
     -e 's|^Version=.*|Version=|' \
     -e 's|^Variant=.*|Variant=|' \
     "$BUILDSTAMP"
-  echo "[banners] → .buildstamp patched (Product=${1})"
+  echo "[banners] → .buildstamp patched (Product=${3})"
 fi
 
 # Patch os-release display name (keep ID=fedora + VARIANT_ID=server for profile detection)
 OS_RELEASE="$WORKDIR/squashfs-root/etc/os-release"
 if [[ -f "$OS_RELEASE" ]]; then
   sed -i \
-    -e 's|^NAME=.*|NAME="${1}"|' \
-    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="${1}"|' \
+    -e 's|^NAME=.*|NAME="${3}"|' \
+    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="${3}"|' \
     "$OS_RELEASE"
-  echo "[banners] → etc/os-release patched (NAME=${1})"
+  echo "[banners] → etc/os-release patched (NAME=${3})"
 fi
 
 echo "[banners] Re-squashing..."
