@@ -29,7 +29,7 @@ clear
 # Build display name from /etc/hostname (e.g. my-system → My System)
 DISPLAY_NAME=$(
     cat /etc/hostname \
-    | tr '-_' ' ' \
+    | tr -- '-_' ' ' \
     | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1' \
     | tr -s ' '
 )
