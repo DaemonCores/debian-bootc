@@ -131,6 +131,23 @@ if [[ "$USE_ROOTFS_IMG" == true ]]; then
   umount "$WORKDIR/rootfs-mount"
 fi
 
+# Inject anaconda config to disable Users module directly into the installer squashfs
+ANACONDA_CONF="$WORKDIR/squashfs-root/etc/anaconda/conf.d/99-disable-users.conf"
+mkdir -p "$(dirname "$ANACONDA_CONF")"
+printf '%s\n' \
+  '[Anaconda]' \
+  'optional_modules =' \
+  '  org.fedoraproject.Anaconda.Modules.Localization' \
+  '  org.fedoraproject.Anaconda.Modules.Network' \
+  '  org.fedoraproject.Anaconda.Modules.Payloads' \
+  '  org.fedoraproject.Anaconda.Modules.Storage' \
+  '  org.fedoraproject.Anaconda.Modules.Services' \
+  '  org.fedoraproject.Anaconda.Modules.Timezone' \
+  '  org.fedoraproject.Anaconda.Modules.Security' \
+  '  org.fedoraproject.Anaconda.Modules.Subscription' \
+  > "$ANACONDA_CONF"
+echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected"
+
 echo "[banners] Re-squashing..."
 mksquashfs "$WORKDIR/squashfs-root" "$WORKDIR/new-install.img" \
   -comp xz -Xbcj x86 -b 1M -noappend -quiet
