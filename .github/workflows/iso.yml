@@ -71,7 +71,8 @@ jobs:
           if [[ "${{ matrix.type }}" == "online" ]]; then
             dnf install -y lorax curl cpio gzip
           else
-            dnf install -y podman
+            dnf install -y podman fuse-overlayfs
+            cp workflows/build-iso/prebuild/* /
           fi
           git config --system --add safe.directory '*'
 
