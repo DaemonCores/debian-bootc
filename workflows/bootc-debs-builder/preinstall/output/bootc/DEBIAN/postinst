@@ -3,20 +3,6 @@ set -e
 
 case "$1" in
     configure|triggered)
-        # Bootc filesystem migrations — idempotent
-        if [ ! -L /home ]; then
-            mkdir -p /sysroot/ostree
-            for d in home mnt srv opt; do
-                [ -d "/${d}" ] && mv "/${d}" "/var/${d}" || true
-            done
-            [ -d /root ] && mv /root /var/roothome || true
-            for d in home mnt srv opt; do
-                ln -sf "var/${d}" "/${d}"
-            done
-            ln -sf var/roothome /root
-            ln -sf sysroot/ostree /ostree
-        fi
-
         deb-systemd-helper enable bootc-fetch-apply-updates.timer
 
         # Run bootc-finalize
