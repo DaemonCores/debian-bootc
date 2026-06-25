@@ -206,8 +206,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
             podman fuse-overlayfs xorriso squashfs-tools imagemagick
-          sudo cp -r workflows/build-iso/prebuild/* /
-          sudo podman system reset --force
           git config --global --add safe.directory '*'
 
       - name: Compute names
