@@ -67,7 +67,7 @@ jobs:
           dnf config-manager -y \
             --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
           dnf makecache --refresh
-          dnf install -y git gh xorriso squashfs-tools imagemagick
+          dnf install -y git gh xorriso squashfs-tools ImageMagick
           if [[ "${{ matrix.type }}" == "online" ]]; then
             dnf install -y lorax curl cpio gzip
           else
