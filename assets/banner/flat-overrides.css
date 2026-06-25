@@ -16,26 +16,3 @@
 @define-color flat_warning_bg     #fdf6dd;
 @define-color flat_info_bg        #D9F2FE;
 @define-color flat_info_fg        #2F6BE8;
-
-/* ── Full-screen background — set ONCE on the window ────────────────── */
-AnacondaHubWindow,
-AnacondaSpokeWindow {
-    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
-    background-size:     cover;
-    background-repeat:   no-repeat;
-    background-position: center center;
-    background-color:    @flat_primary;
-}
-
-/* ── Kill every other background-image in the hierarchy ─────────────── */
-* { background-image: none; }
-
-/* ── Sidebar — transparent ───────────────────────────────────────────── */
-.logo-sidebar {
-    background-color: transparent;
-}
-
-/* ── Nav-box — transparent ───────────────────────────────────────────── */
-#nav-box {
-    background-color: transparent;
-}
