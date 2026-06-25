@@ -118,11 +118,11 @@ if [[ -f "$HEADER" ]]; then
 fi
 
 # Inject flat design CSS overrides if provided
-if [[ -f "assets/anaconda/flat-overrides.css" ]]; then
+if [[ -f "assets/banner/flat-overrides.css" ]]; then
   SERVER_CSS="$PIXMAPS/server/fedora-server.css"
   if [[ -f "$SERVER_CSS" ]]; then
     cp "$SERVER_CSS" "${SERVER_CSS}.bak"
-    cat "assets/anaconda/flat-overrides.css" >> "$SERVER_CSS"
+    cat "assets/banner/flat-overrides.css" >> "$SERVER_CSS"
     echo "[banners] → flat-overrides.css appended to server/fedora-server.css"
   fi
 fi
@@ -145,6 +145,7 @@ printf '%s\n' \
   '  org.fedoraproject.Anaconda.Modules.Timezone' \
   '  org.fedoraproject.Anaconda.Modules.Security' \
   '  org.fedoraproject.Anaconda.Modules.Subscription' \
+  '  org.fedoraproject.Anaconda.Addons.*' \
   > "$ANACONDA_CONF"
 echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected"
 
