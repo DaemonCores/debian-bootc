@@ -188,6 +188,8 @@ jobs:
                 -e "s|Install Fedora 44|Install ${DISPLAY}|g" \
                 -e "s|Test this media & install Fedora 44|Test media \& install ${DISPLAY}|g" \
                 -e "s| rd\.live\.check||g" \
+                -e "s| inst\.stage2=[^ ]*||g" \
+                -e "s|\(linux /images/pxeboot/vmlinuz\)|\1 inst.stage2=hd:LABEL=${VOL_ID}|g" \
                 "$f"
             done
 
