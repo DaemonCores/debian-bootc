@@ -239,15 +239,15 @@ jobs:
         env:
           PAT_PKG: ${{ secrets.PAT_PKG }}
         run: |
-          podman login ghcr.io \
+          sudo podman login ghcr.io \
             --username "${{ github.actor }}" \
             --password-stdin <<< "${PAT_PKG}"
-          podman pull "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+          sudo podman pull "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
 
       - name: Build offline ISO with BIB
         run: |
           mkdir -p out
-          podman run --rm --privileged \
+          sudo podman run --rm --privileged \
             --security-opt label=type:unconfined_t \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v /tmp/iso-config.toml:/config.toml:ro \
