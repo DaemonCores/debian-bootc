@@ -107,7 +107,7 @@ RUN wget \
         /run/* \
         /usr/sbin/policy-rc.d
 
-COPY ./assets/banner/motd /etc/motd
+COPY ./assets/banner/etc /etc/etc/
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE
