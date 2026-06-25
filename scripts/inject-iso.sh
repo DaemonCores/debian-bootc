@@ -17,8 +17,9 @@
 
 set -euo pipefail
 
-SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso>}"
-DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso>}"
+SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso> [display-name]}"
+DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso> [display-name]}"
+PRODUCT_NAME="${3:-}"   # display name passed from CI (e.g. "Debian Bootc")
 BANNER_DIR="assets/banner"
 
 SIDEBAR="${BANNER_DIR}/anaconda-sidebar.png"
@@ -73,14 +74,20 @@ fi
 
 _replace() {
   local src="$1" target="$2"
-  [[ ! -f "$PIXMAPS/$target" ]] && return 0   # fichier absent dans cette variante → skip
-  # Auto-resize source to match target's original dimensions (fixes aspect/size mismatches)
+  [[ ! -f "$PIXMAPS/$target" ]] && return 0
   local dims
   dims=$(identify -format "%wx%h" "$PIXMAPS/$target" 2>/dev/null || echo "")
   if [[ -n "$dims" ]]; then
-    local resize_to="${dims}!"
-    convert "$src" -resize "$resize_to" "$PIXMAPS/$target"
-    echo "[banners]   → $target (auto-resized to ${dims})"
+    # Resize to fit within target dimensions, preserve aspect ratio,
+    # then pad with transparency to reach exact target size.
+    # This avoids deforming logos or images with different aspect ratios.
+    convert "$src" \
+      -resize "$dims" \
+      -background none \
+      -gravity center \
+      -extent "$dims" \
+      "$PIXMAPS/$target"
+    echo "[banners]   → $target (resized to ${dims}, ratio preserved)"
   else
     cp "$src" "$PIXMAPS/$target"
     echo "[banners]   → $target"
@@ -172,23 +179,23 @@ echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected (Users fo
 
 # Patch product name: .buildstamp controls "FEDORA 44" in the Anaconda header/welcome title
 BUILDSTAMP="$WORKDIR/squashfs-root/.buildstamp"
-if [[ -f "$BUILDSTAMP" ]]; then
+if [[ -n "$PRODUCT_NAME" && -f "$BUILDSTAMP" ]]; then
   sed -i \
-    -e 's|^Product=.*|Product=${3}|' \
-    -e 's|^Version=.*|Version=|' \
-    -e 's|^Variant=.*|Variant=|' \
+    -e "s|^Product=.*|Product=${PRODUCT_NAME}|" \
+    -e "s|^Version=.*|Version=|" \
+    -e "s|^Variant=.*|Variant=|" \
     "$BUILDSTAMP"
-  echo "[banners] → .buildstamp patched (Product=${3})"
+  echo "[banners] → .buildstamp patched (Product=${PRODUCT_NAME})"
 fi
 
 # Patch os-release display name (keep ID=fedora + VARIANT_ID=server for profile detection)
 OS_RELEASE="$WORKDIR/squashfs-root/etc/os-release"
-if [[ -f "$OS_RELEASE" ]]; then
+if [[ -n "$PRODUCT_NAME" && -f "$OS_RELEASE" ]]; then
   sed -i \
-    -e 's|^NAME=.*|NAME="${3}"|' \
-    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="${3}"|' \
+    -e "s|^NAME=.*|NAME=\"${PRODUCT_NAME}\"|" \
+    -e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${PRODUCT_NAME}\"|" \
     "$OS_RELEASE"
-  echo "[banners] → etc/os-release patched (NAME=${3})"
+  echo "[banners] → etc/os-release patched (NAME=${PRODUCT_NAME})"
 fi
 
 echo "[banners] Re-squashing..."
