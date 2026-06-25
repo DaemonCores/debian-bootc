@@ -26,13 +26,6 @@ SIDEBAR="${BANNER_DIR}/anaconda-sidebar.png"
 LOGO="${BANNER_DIR}/anaconda-logo.png"
 TOPBAR="${BANNER_DIR}/anaconda-topbar.png"
 HEADER="${BANNER_DIR}/anaconda-header.png"
-BG="${BANNER_DIR}/anaconda-background.png"   # full-window 4K background (optional)
-
-[[ ! -f "$SIDEBAR" && ! -f "$LOGO" && \
-   ! -f "$TOPBAR" && ! -f "$HEADER" && ! -f "$BG" ]] && {
-  echo "[banners] No banner assets found, skipping"
-  exit 0
-}
 
 WORKDIR=$(mktemp -d)
 trap 'umount "$WORKDIR/iso-mnt"    2>/dev/null || true
@@ -132,15 +125,6 @@ done
 if [[ -f "$HEADER" ]]; then
   echo "[banners] anaconda_header.png (root):"
   _replace "$HEADER" "anaconda_header.png"
-fi
-
-# background-full.png — single 4K full-window background for CSS approach
-# Referenced by flat-overrides.css as the window-level background image.
-# No resize: CSS handles scaling via background-size: cover.
-if [[ -f "$BG" ]]; then
-  mkdir -p "$PIXMAPS/server"
-  cp "$BG" "$PIXMAPS/server/background-full.png"
-  echo "[banners] → server/background-full.png (full-window background)"
 fi
 
 # Inject flat design CSS overrides if provided
