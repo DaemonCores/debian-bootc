@@ -117,6 +117,16 @@ if [[ -f "$HEADER" ]]; then
   _replace "$HEADER" "anaconda_header.png"
 fi
 
+# Inject flat design CSS overrides if provided
+if [[ -f "assets/anaconda/flat-overrides.css" ]]; then
+  SERVER_CSS="$PIXMAPS/server/fedora-server.css"
+  if [[ -f "$SERVER_CSS" ]]; then
+    cp "$SERVER_CSS" "${SERVER_CSS}.bak"
+    cat "assets/anaconda/flat-overrides.css" >> "$SERVER_CSS"
+    echo "[banners] → flat-overrides.css appended to server/fedora-server.css"
+  fi
+fi
+
 if [[ "$USE_ROOTFS_IMG" == true ]]; then
   umount "$WORKDIR/rootfs-mount"
 fi

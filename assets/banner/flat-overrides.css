@@ -1,0 +1,182 @@
+/* ── Flat design overrides for Anaconda GTK3 ─────────────────────────────
+ * Appended to fedora-server.css — layout properties are NOT touched.
+ * Only visual properties: color, background, border, radius, shadow,
+ * transition, text-shadow.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* ── Color palette ───────────────────────────────────────────────────── */
+@define-color flat_primary        #006eb4;
+@define-color flat_primary_hover  #0353a4;
+@define-color flat_primary_text   #ffffff;
+@define-color flat_bg             #f5f6f7;
+@define-color flat_surface        #ffffff;
+@define-color flat_border         #dde1e7;
+@define-color flat_border_focus   #0062ab;
+@define-color flat_text           #21272a;
+@define-color flat_text_secondary #697077;
+@define-color flat_danger         #da1e28;
+@define-color flat_success        #198038;
+@define-color flat_warning        #b28600;
+@define-color flat_warning_bg     #fdf6dd;
+@define-color flat_info_bg        #edf5ff;
+@define-color flat_info_fg        #0043ce;
+
+/* ── Remove all shadows and round all corners consistently ───────────── */
+button                          { box-shadow: none; border-radius: 4px; transition: none; }
+entry                           { box-shadow: none; border-radius: 4px; transition: none; }
+spinbutton                      { box-shadow: none; border-radius: 4px; transition: none; }
+combobox button                 { box-shadow: none; border-radius: 4px; }
+scrolledwindow                  { box-shadow: none; }
+frame                           { box-shadow: none; }
+.frame                          { box-shadow: none; }
+popover                         { box-shadow: none; border-radius: 4px; }
+tooltip                         { border-radius: 2px; }
+AnacondaSpokeWindow scrolledwindow { box-shadow: none; }
+
+/* ── Main window background ──────────────────────────────────────────── */
+AnacondaHubWindow    { background-color: @flat_bg; }
+AnacondaSpokeWindow  { background-color: @flat_bg; }
+
+/* ── Hub nav-box (no image — color only, flat bottom border) ─────────── */
+AnacondaHubWindow #nav-box {
+    background-color: @flat_primary;
+    box-shadow: none;
+    border-bottom: 1px solid shade(@flat_primary, 0.85);
+}
+
+/* ── Spoke nav-box (overrides topbar-bg image with flat color) ───────── */
+AnacondaSpokeWindow #nav-box {
+    background-color:  @flat_primary;
+    box-shadow:        none;
+    border-bottom:     1px solid shade(@flat_primary, 0.85);
+}
+AnacondaSpokeWindow #nav-box GtkButton { box-shadow: none; }
+AnacondaSpokeWindow #nav-box button    { box-shadow: none; border-radius: 4px; }
+AnacondaSpokeWindow #nav-box label     { color: @flat_primary_text; }
+
+/* ── Hub spoke selector tiles ────────────────────────────────────────── */
+AnacondaSpokeSelector {
+    background-color: @flat_surface;
+    border:           1px solid @flat_border;
+    border-radius:    4px;
+    box-shadow:       none;
+}
+AnacondaSpokeSelector:hover {
+    background-color: @flat_info_bg;
+    border-color:     @flat_primary;
+}
+AnacondaSpokeSelector:active {
+    background-color: shade(@flat_info_bg, 0.95);
+}
+.anaconda-spoke-selector-title  { color: @flat_text; }
+.anaconda-spoke-selector-status { color: @flat_text_secondary; }
+
+/* ── Continue / Begin installation button ────────────────────────────── */
+.continue-button,
+#continueButton {
+    background-color: @flat_primary;
+    background-image: none;
+    color:            @flat_primary_text;
+    border:           none;
+    border-radius:    4px;
+    box-shadow:       none;
+}
+.continue-button:hover,
+#continueButton:hover {
+    background-color: @flat_primary_hover;
+    background-image: none;
+}
+
+/* ── Spoke done button ───────────────────────────────────────────────── */
+.anaconda-spoke-window-done {
+    background-color: @flat_primary;
+    background-image: none;
+    color:            @flat_primary_text;
+    border:           none;
+    border-radius:    4px;
+    box-shadow:       none;
+}
+.anaconda-spoke-window-done:hover {
+    background-color: @flat_primary_hover;
+    background-image: none;
+}
+
+/* ── Generic buttons ─────────────────────────────────────────────────── */
+button.suggested-action {
+    background-color: @flat_primary;
+    background-image: none;
+    color:            @flat_primary_text;
+    border:           none;
+    box-shadow:       none;
+}
+button.suggested-action:hover {
+    background-color: @flat_primary_hover;
+    background-image: none;
+}
+button.destructive-action {
+    background-color: @flat_danger;
+    background-image: none;
+    color:            #ffffff;
+    border:           none;
+    box-shadow:       none;
+}
+
+/* ── Entries (text fields) ───────────────────────────────────────────── */
+entry {
+    background-color: @flat_surface;
+    background-image: none;
+    color:            @flat_text;
+    border:           1px solid @flat_border;
+    box-shadow:       none;
+}
+entry:focus {
+    border-color:     @flat_border_focus;
+    box-shadow:       none;
+}
+
+/* ── Info bars — replace garish defaults with flat tones ─────────────── */
+infobar.info    box { background-color: @flat_info_bg;    border: none; }
+infobar.info    label { color: @flat_info_fg; }
+infobar.warning box { background-color: @flat_warning_bg; border: none; }
+infobar.warning label { color: @flat_warning; }
+infobar.error   box { background-color: #fff1f1;          border: none; }
+infobar.error   label { color: @flat_danger; }
+infobar.info, infobar.warning, infobar.error { box-shadow: none; }
+
+/* ── Level bars ──────────────────────────────────────────────────────── */
+@define-color anaconda_level_bar_low    @flat_danger;
+@define-color anaconda_level_bar_medium @flat_warning;
+@define-color anaconda_level_bar_high   @flat_success;
+
+levelbar.discrete trough block.filled.low    { background: @flat_danger;  border-color: shade(@flat_danger,  0.85); }
+levelbar.discrete trough block.filled.medium { background: @flat_warning; border-color: shade(@flat_warning, 0.85); }
+levelbar.discrete trough block.filled.full,
+levelbar.discrete trough block.filled.high   { background: @flat_success; border-color: shade(@flat_success, 0.85); }
+
+/* ── Disk overview tiles (storage spoke) ─────────────────────────────── */
+AnacondaDiskOverview {
+    background-color: @flat_surface;
+    border:           1px solid @flat_border;
+    border-radius:    4px;
+    box-shadow:       none;
+}
+AnacondaDiskOverview:hover  { border-color: @flat_primary; }
+AnacondaDiskOverview:checked {
+    border-color:     @flat_primary;
+    background-color: @flat_info_bg;
+}
+.anaconda-disk-name        { color: @flat_text; }
+.anaconda-disk-description { color: @flat_text_secondary; }
+.anaconda-disk-capacity    { color: @flat_text_secondary; }
+.anaconda-disk-free        { color: @flat_success; }
+
+/* ── Layout indicator ────────────────────────────────────────────────── */
+AnacondaLayoutIndicator {
+    background-color: @flat_surface;
+    border:           1px solid @flat_border;
+    border-radius:    4px;
+    color:            @flat_text;
+}
+
+/* ── Sidebar — keep user images but remove any residual shadow ────────── */
+.logo-sidebar { box-shadow: none; }
