@@ -144,7 +144,7 @@ jobs:
 
           umount /tmp/iso-mnt
 
-          # Renomme les entrées (couvre "Fedora Server 44 or later" et variantes)
+          # rename entries
           if [[ -f /tmp/grub.cfg ]]; then
             sed -i \
               -e "s|Install Fedora Server [0-9.]* or later|Install ${DISPLAY}|g" \
@@ -159,14 +159,16 @@ jobs:
               /tmp/isolinux.cfg
           fi
 
-          # Réinjecte dans l'ISO
+          # Rewrite in ISO
           mv "${ISO}" "${ISO}.tmp"
+          XORRISO_MAPS=()
+          [[ -f /tmp/grub.cfg     ]] && XORRISO_MAPS+=(-map /tmp/grub.cfg     /EFI/BOOT/grub.cfg)
+          [[ -f /tmp/isolinux.cfg ]] && XORRISO_MAPS+=(-map /tmp/isolinux.cfg /isolinux/isolinux.cfg)
           xorriso \
             -return_with SORRY 0 \
             -indev  "${ISO}.tmp" \
             -outdev "${ISO}" \
-            -map /tmp/grub.cfg    /EFI/BOOT/grub.cfg \
-            -map /tmp/isolinux.cfg /isolinux/isolinux.cfg \
+            "${XORRISO_MAPS[@]}" \
             -boot_image any replay 2>/dev/null
           rm "${ISO}.tmp"
 
@@ -270,7 +272,7 @@ jobs:
 
           umount /tmp/iso-mnt
 
-          # Renomme les entrées (couvre "Fedora Server 44 or later" et variantes)
+          # rename entries
           if [[ -f /tmp/grub.cfg ]]; then
             sed -i \
               -e "s|Install Fedora Server [0-9.]* or later|Install ${DISPLAY}|g" \
@@ -285,14 +287,16 @@ jobs:
               /tmp/isolinux.cfg
           fi
 
-          # Réinjecte dans l'ISO
+          # Rewrite in ISO
           mv "${ISO}" "${ISO}.tmp"
+          XORRISO_MAPS=()
+          [[ -f /tmp/grub.cfg     ]] && XORRISO_MAPS+=(-map /tmp/grub.cfg     /EFI/BOOT/grub.cfg)
+          [[ -f /tmp/isolinux.cfg ]] && XORRISO_MAPS+=(-map /tmp/isolinux.cfg /isolinux/isolinux.cfg)
           xorriso \
             -return_with SORRY 0 \
             -indev  "${ISO}.tmp" \
             -outdev "${ISO}" \
-            -map /tmp/grub.cfg    /EFI/BOOT/grub.cfg \
-            -map /tmp/isolinux.cfg /isolinux/isolinux.cfg \
+            "${XORRISO_MAPS[@]}" \
             -boot_image any replay 2>/dev/null
           rm "${ISO}.tmp"
 
