@@ -23,6 +23,21 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Setup default shell with fail build on error
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
+# Fix ostree filesystem
+RUN mkdir -p /sysroot/ostree /var/lib/locale && \
+    for d in home mnt srv opt; do \
+        [ -d "/${d}" ] && mv "/${d}" "/var/${d}" || true; \
+    done && \
+    [ -d /root ] && mv /root /var/roothome || true && \
+    for d in home mnt srv opt; do \
+        ln -sf "var/${d}" "/${d}"; \
+    done && \
+    ln -sf var/roothome /root && \
+    ln -sf sysroot/ostree /ostree && \
+    cp -a /usr/lib/locale/. /var/lib/locale/ 2>/dev/null || true && \
+    rm -rf /usr/lib/locale && \
+    ln -s /var/lib/locale /usr/lib/locale
+
 # Bootc filesystem migrations
 # All symlink require relative path because anaconda setup mount root disk in /mnt insted of /
 # Install SSL dependencies before use apt with https for fix ssl error
