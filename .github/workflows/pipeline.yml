@@ -1,0 +1,22 @@
+name: Full Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  debs:
+    name: Build .deb packages
+    uses: ./.github/workflows/bootc-debs-builder.yml
+    secrets: inherit
+
+  iso:
+    name: Build ISO
+    uses: ./.github/workflows/iso.yml
+    secrets: inherit
+
+  image:
+    name: Build container image
+    needs: debs
+    uses: ./.github/workflows/bootc-build.yml
+    secrets: inherit
