@@ -183,6 +183,7 @@ jobs:
         run: |
           mkdir -p out
           podman run --rm --privileged --pull=newer \
+            --cgroups=disabled \
             --security-opt label=type:unconfined_t \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v /tmp/iso-config.toml:/config.toml:ro \
