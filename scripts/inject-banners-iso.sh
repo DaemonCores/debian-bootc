@@ -1,0 +1,122 @@
+#!/bin/bash
+# inject-banners-iso.sh — Replace Anaconda banners inside a Fedora boot ISO
+# Usage: inject-banners-iso.sh <source.iso> <dest.iso>
+#
+# Reads from assets/banner/:
+#   anaconda-sidebar.png  → sidebar background (sidebar-bg.png)
+#   anaconda-logo.png     → logo overlaid on sidebar (sidebar-logo.png)
+#                           auto-cleared (1×1 transparent) if absent but
+#                           sidebar.png is present, to hide the Fedora logo
+#   anaconda-topbar.png   → spoke navigation bar (topbar-bg.png)
+#   anaconda-header.png   → hub/progress header (anaconda_header.png)
+#
+# Files are replaced in ALL variants (root + server/ + workstation/ etc.)
+# so the branding applies regardless of which product CSS Anaconda loads.
+#
+# Requirements: unsquashfs, mksquashfs, xorriso, convert (ImageMagick)
+
+set -euo pipefail
+
+SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso>}"
+DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso>}"
+BANNER_DIR="assets/banner"
+
+SIDEBAR="${BANNER_DIR}/anaconda-sidebar.png"
+LOGO="${BANNER_DIR}/anaconda-logo.png"
+TOPBAR="${BANNER_DIR}/anaconda-topbar.png"
+HEADER="${BANNER_DIR}/anaconda-header.png"
+
+[[ ! -f "$SIDEBAR" && ! -f "$LOGO" && \
+   ! -f "$TOPBAR" && ! -f "$HEADER" ]] && {
+  echo "[banners] No banner assets found, skipping"
+  exit 0
+}
+
+WORKDIR=$(mktemp -d)
+trap 'umount "$WORKDIR/rootfs-mount" 2>/dev/null || true; rm -rf "$WORKDIR"' EXIT
+
+echo "[banners] Extracting ISO..."
+xorriso -osirrox on -indev "$SRC_ISO" -extract / "$WORKDIR/iso-root" 2>/dev/null
+chmod -R u+w "$WORKDIR/iso-root"
+
+INSTALL_IMG=""
+for c in "$WORKDIR/iso-root/images/install.img" \
+          "$WORKDIR/iso-root/images/squashfs.img"; do
+  [[ -f "$c" ]] && { INSTALL_IMG="$c"; break; }
+done
+[[ -z "$INSTALL_IMG" ]] && { echo "[banners] ERROR: install.img not found"; exit 1; }
+
+echo "[banners] Found: $INSTALL_IMG"
+echo "[banners] Unsquashing installer environment..."
+unsquashfs -d "$WORKDIR/squashfs-root" "$INSTALL_IMG"
+
+ROOTFS_IMG="$WORKDIR/squashfs-root/LiveOS/rootfs.img"
+[[ ! -f "$ROOTFS_IMG" ]] && { echo "[banners] ERROR: LiveOS/rootfs.img not found"; exit 1; }
+
+mkdir -p "$WORKDIR/rootfs-mount"
+mount -o loop,rw "$ROOTFS_IMG" "$WORKDIR/rootfs-mount"
+
+PIXMAPS="$WORKDIR/rootfs-mount/usr/share/anaconda/pixmaps"
+
+_replace() {
+  local src="$1" target="$2"
+  [[ ! -f "$PIXMAPS/$target" ]] && return 0   # fichier absent dans cette variante → skip
+  cp "$src" "$PIXMAPS/$target"
+  echo "[banners]   → $target"
+}
+
+# Génère un PNG transparent 1×1 si sidebar remplacée mais pas le logo
+# (pour masquer le logo Fedora qui s'affiche par-dessus le fond)
+TRANSPARENT=""
+if [[ -f "$SIDEBAR" && ! -f "$LOGO" ]]; then
+  TRANSPARENT="$WORKDIR/transparent.png"
+  convert -size 1x1 xc:none "$TRANSPARENT"
+  echo "[banners] No anaconda-logo.png — will clear sidebar-logo.png with transparent PNG"
+fi
+
+# Remplace dans toutes les variantes trouvées
+VARIANTS=("" "server" "workstation" "silverblue" "atomic" "cloud")
+
+for variant in "${VARIANTS[@]}"; do
+  prefix="${variant:+$variant/}"
+
+  if [[ -f "$SIDEBAR" ]]; then
+    echo "[banners] sidebar-bg.png (${prefix:-root}):"
+    _replace "$SIDEBAR" "${prefix}sidebar-bg.png"
+  fi
+
+  if [[ -f "$LOGO" ]]; then
+    echo "[banners] sidebar-logo.png (${prefix:-root}):"
+    _replace "$LOGO" "${prefix}sidebar-logo.png"
+  elif [[ -n "$TRANSPARENT" ]]; then
+    echo "[banners] sidebar-logo.png (${prefix:-root}) → transparent:"
+    _replace "$TRANSPARENT" "${prefix}sidebar-logo.png"
+  fi
+
+  if [[ -f "$TOPBAR" ]]; then
+    echo "[banners] topbar-bg.png (${prefix:-root}):"
+    _replace "$TOPBAR" "${prefix}topbar-bg.png"
+  fi
+done
+
+# anaconda_header.png n'existe qu'à la racine
+if [[ -f "$HEADER" ]]; then
+  echo "[banners] anaconda_header.png (root):"
+  _replace "$HEADER" "anaconda_header.png"
+fi
+
+umount "$WORKDIR/rootfs-mount"
+
+echo "[banners] Re-squashing..."
+mksquashfs "$WORKDIR/squashfs-root" "$WORKDIR/new-install.img" \
+  -comp xz -Xbcj x86 -b 1M -noappend -quiet
+mv "$WORKDIR/new-install.img" "$INSTALL_IMG"
+
+echo "[banners] Rebuilding ISO..."
+xorriso \
+  -indev  "$SRC_ISO" \
+  -outdev "$DST_ISO" \
+  -map    "$INSTALL_IMG" /images/$(basename "$INSTALL_IMG") \
+  -boot_image any replay 2>/dev/null
+
+echo "[banners] Done: $DST_ISO"
