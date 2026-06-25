@@ -3,11 +3,6 @@ name: Container Image CI
 on:
   schedule:
     - cron: '0 4 1 * *'
-  push:
-    paths:
-      - Containerfile
-      - .dockerignore
-      - src/**
   workflow_dispatch:
 
 jobs:
