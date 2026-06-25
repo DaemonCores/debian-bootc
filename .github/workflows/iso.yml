@@ -134,7 +134,7 @@ jobs:
           sed \
             -e "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" \
             -e "s|{{ hostname }}|${{ steps.names.outputs.hostname }}|g" \
-            iso.ks.tpl > /tmp/iso.ks
+            iso-online-config.toml.tpl > /tmp/iso.ks
 
       - name: Build online ISO
         if: matrix.type == 'online'
