@@ -197,6 +197,42 @@ jobs:
 
       # ─── SHARED ───────────────────────────────────────────────────────────
 
+      - name: Rename GRUB boot entries
+        run: |
+          set -euo pipefail
+          ISO="out/${{ steps.names.outputs.iso }}"
+          DISPLAY="${{ steps.names.outputs.display_name }}"
+
+          # Extrait les configs boot
+          mkdir -p /tmp/iso-mnt
+          mount -o loop,ro "${ISO}" /tmp/iso-mnt
+
+          cp /tmp/iso-mnt/EFI/BOOT/grub.cfg   /tmp/grub.cfg         2>/dev/null || true
+          cp /tmp/iso-mnt/isolinux/isolinux.cfg /tmp/isolinux.cfg    2>/dev/null || true
+
+          umount /tmp/iso-mnt
+
+          # Renomme les entrées (couvre "Fedora Server 44 or later" et variantes)
+          sed -i \
+            -e "s|Install Fedora Server [0-9.]* or later|Install ${DISPLAY}|g" \
+            -e "s|Test this media & install Fedora Server [0-9.]* or later|Test media \& install ${DISPLAY}|g" \
+            /tmp/grub.cfg || true
+
+          sed -i \
+            -e "s|Install Fedora Server [0-9.]* or later|Install ${DISPLAY}|g" \
+            -e "s|Test this media & install Fedora Server [0-9.]* or later|Test media \& install ${DISPLAY}|g" \
+            /tmp/isolinux.cfg || true
+
+          # Réinjecte dans l'ISO
+          mv "${ISO}" "${ISO}.tmp"
+          xorriso \
+            -indev  "${ISO}.tmp" \
+            -outdev "${ISO}" \
+            -map /tmp/grub.cfg    /EFI/BOOT/grub.cfg \
+            -map /tmp/isolinux.cfg /isolinux/isolinux.cfg \
+            -boot_image any replay 2>/dev/null
+          rm "${ISO}.tmp"
+
       - name: Inject banners (optional)
         run: |
           ISO="out/${{ steps.names.outputs.iso }}"
