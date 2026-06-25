@@ -1,6 +1,6 @@
 #!/bin/bash
 # firstboot-user-setup
-# First-boot TUI for user account creation.
+# First-boot TUI for user account and root password setup.
 # Launched by firstboot-user-setup.service before getty@tty1.
 # Modeled after Raspberry Pi OS userconfig.service.
 set -euo pipefail
@@ -26,7 +26,7 @@ fi
 exec </dev/tty1 >/dev/tty1 2>/dev/tty1
 clear
 
-# Build display name from /etc/hostname (e.g. my-system → My System)
+# Build display name from /etc/hostname (e.g. my-system -> My System)
 DISPLAY_NAME=$(
     cat /etc/hostname \
     | tr -- '-_' ' ' \
@@ -35,16 +35,16 @@ DISPLAY_NAME=$(
 )
 
 # whiptail helpers
-_title="Setup — ${DISPLAY_NAME}"
-_input() { whiptail --title "$_title" --inputbox  "$1" 10 60 "${2:-}" 3>&1 1>&2 2>&3; }
-_pass()  { whiptail --title "$_title" --passwordbox "$1" 10 60              3>&1 1>&2 2>&3; }
-_yesno() { whiptail --title "$_title" --yesno      "$1" 12 65; }
-_msg()   { whiptail --title "$_title" --msgbox      "$1" 12 65; }
+_title="Setup -- ${DISPLAY_NAME}"
+_input() { whiptail --title "$_title" --inputbox   "$1" 10 60 "${2:-}" 3>&1 1>&2 2>&3; }
+_pass()  { whiptail --title "$_title" --passwordbox "$1" 10 60          3>&1 1>&2 2>&3; }
+_yesno() { whiptail --title "$_title" --yesno       "$1" 12 65; }
+_msg()   { whiptail --title "$_title" --msgbox       "$1" 12 65; }
 
 # Welcome
 _msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user account.\nPress Enter to continue."
 
-# Username
+# ── Username ──────────────────────────────────────────────────────────────
 while true; do
     USERNAME=$(_input "Username:" "" || true)
     [[ -z "$USERNAME" ]] && { _msg "Username cannot be empty."; continue; }
@@ -56,10 +56,10 @@ while true; do
     break
 done
 
-# Full name (optional)
+# ── Full name (optional) ──────────────────────────────────────────────────
 FULLNAME=$(_input "Full name (optional, Enter to skip):" "" || echo "")
 
-# Password with confirmation
+# ── User password ─────────────────────────────────────────────────────────
 while true; do
     PASS1=$(_pass "Password for '${USERNAME}':" || true)
     [[ ${#PASS1} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
@@ -68,23 +68,39 @@ while true; do
     _msg "Passwords do not match."
 done
 
-# Sudo privileges
+# ── Root password ─────────────────────────────────────────────────────────
+SET_ROOT=no
+_yesno "Set a root password?\n\n(Allows local root login on the console)" && SET_ROOT=yes || true
+
+ROOT_PASS=""
+if [[ "$SET_ROOT" == yes ]]; then
+    while true; do
+        ROOT_PASS=$(_pass "Root password:" || true)
+        [[ ${#ROOT_PASS} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
+        ROOT2=$(_pass "Confirm root password:" || true)
+        [[ "$ROOT_PASS" == "$ROOT2" ]] && break
+        _msg "Passwords do not match."
+    done
+fi
+
+# ── Sudo privileges ───────────────────────────────────────────────────────
 IS_SUDOER=no
 _yesno "Grant sudo privileges to '${USERNAME}'?\n\n(Allows running commands as root with sudo)" && IS_SUDOER=yes || true
 
-# SSH root login
+# ── SSH root login ────────────────────────────────────────────────────────
 SSH_ROOT=no
-_yesno "Allow root SSH login with password?\n\n\342\232\240  Not recommended for production." && SSH_ROOT=yes || true
+_yesno "Allow root SSH login with password?\n\n[!] Not recommended for production." && SSH_ROOT=yes || true
 
-# Confirmation
+# ── Confirmation ──────────────────────────────────────────────────────────
 SUMMARY="Summary:\n\n"
-SUMMARY+="  User     : ${USERNAME}\n"
-[[ -n "$FULLNAME" ]] && SUMMARY+="  Full name: ${FULLNAME}\n"
-SUMMARY+="  Sudo     : ${IS_SUDOER}\n"
-SUMMARY+="  SSH root : ${SSH_ROOT}\n\nConfirm?"
+SUMMARY+="  User      : ${USERNAME}\n"
+[[ -n "$FULLNAME" ]] && SUMMARY+="  Full name : ${FULLNAME}\n"
+SUMMARY+="  Sudo      : ${IS_SUDOER}\n"
+SUMMARY+="  Root pwd  : ${SET_ROOT}\n"
+SUMMARY+="  SSH root  : ${SSH_ROOT}\n\nConfirm?"
 _yesno "$SUMMARY" || { _msg "Setup cancelled. Wizard will re-run on next boot."; exit 0; }
 
-# Create user
+# ── Create user ───────────────────────────────────────────────────────────
 groupadd --gid 1000 "$USERNAME" 2>/dev/null || true
 useradd \
     --home-dir  "/home/${USERNAME}" \
@@ -95,16 +111,21 @@ useradd \
     --create-home \
     "$USERNAME"
 
-echo "${USERNAME}:${PASS1}" | chpasswd
+# Use printf to avoid echo interpreting special characters in the password
+printf '%s:%s\n' "$USERNAME" "$PASS1" | chpasswd
 
-# Standard Debian groups
+# ── Root password ─────────────────────────────────────────────────────────
+if [[ "$SET_ROOT" == yes ]]; then
+    printf 'root:%s\n' "$ROOT_PASS" | chpasswd
+fi
+
+# ── Standard Debian groups ────────────────────────────────────────────────
 for grp in adm systemd-journal cdrom audio video plugdev netdev; do
     getent group "$grp" &>/dev/null && usermod -aG "$grp" "$USERNAME" || true
 done
+[[ "$IS_SUDOER" == yes ]] && usermod -aG sudo,wheel "$USERNAME"
 
-[[ "$IS_SUDOER" == yes ]] && usermod -aG sudo "$USERNAME"
-
-# SSH root login config
+# ── SSH root login config ─────────────────────────────────────────────────
 mkdir -p /etc/ssh/sshd_config.d
 if [[ "$SSH_ROOT" == yes ]]; then
     echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
@@ -114,3 +135,7 @@ fi
 
 touch "$FLAG"
 _msg "User '${USERNAME}' created successfully!\n\nYou can now log in."
+
+# ── Reset terminal and hand control back to getty ─────────────────────────
+stty sane
+clear
