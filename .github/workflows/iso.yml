@@ -25,7 +25,7 @@ jobs:
           dnf config-manager -y \
             --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
           dnf makecache --refresh
-          dnf install -y git gh xorriso squashfs-tools ImageMagick lorax curl cpio gzip podman fuse-overlayfs
+          dnf install -y git gh xorriso squashfs-tools ImageMagick lorax curl cpio gzip podman fuse-overlayfs isomd5sum
           git config --system --add safe.directory '*'
 
       # ─── VARIABLES ───────────────────────────────────────────────────────
@@ -106,49 +106,6 @@ jobs:
             > updates-tree/etc/anaconda/conf.d/99-disable-users.conf
           (cd updates-tree && find . | cpio -o -H newc | gzip > ../out/updates.img)
 
-      # ─── GRUB ───────────────────────────────────────────────────────────
-
-      - name: Rename GRUB boot entries
-        run: |
-          set -euo pipefail
-          ISO="out/base.iso"
-          DISPLAY="${{ steps.names.outputs.display_name }}"
-          mkdir -p /tmp/iso-mnt
-          mount -o loop,ro "${ISO}" /tmp/iso-mnt
-
-          cp /tmp/iso-mnt/EFI/BOOT/grub.cfg   /tmp/grub.cfg         2>/dev/null || true
-          cp /tmp/iso-mnt/isolinux/isolinux.cfg /tmp/isolinux.cfg    2>/dev/null || true
-
-          umount /tmp/iso-mnt
-
-          # rename entries
-          if [[ -f /tmp/grub.cfg ]]; then
-            sed -i \
-              -e "s|Install Fedora Server [0-9.]* or later|Install ${DISPLAY}|g" \
-              -e "s|Test this media & install Fedora Server [0-9.]* or later|Test media \& install ${DISPLAY}|g" \
-              /tmp/grub.cfg
-          fi
-
-          if [[ -f /tmp/isolinux.cfg ]]; then
-            sed -i \
-              -e "s|Install Fedora Server [0-9.]* or later|Install ${DISPLAY}|g" \
-              -e "s|Test this media & install Fedora Server [0-9.]* or later|Test media \& install ${DISPLAY}|g" \
-              /tmp/isolinux.cfg
-          fi
-
-          # Rewrite in ISO
-          mv "${ISO}" "${ISO}.tmp"
-          XORRISO_MAPS=()
-          [[ -f /tmp/grub.cfg     ]] && XORRISO_MAPS+=(-map /tmp/grub.cfg     /EFI/BOOT/grub.cfg)
-          [[ -f /tmp/isolinux.cfg ]] && XORRISO_MAPS+=(-map /tmp/isolinux.cfg /isolinux/isolinux.cfg)
-          xorriso \
-            -return_with SORRY 0 \
-            -indev  "${ISO}.tmp" \
-            -outdev "${ISO}" \
-            "${XORRISO_MAPS[@]}" \
-            -boot_image any replay 2>/dev/null
-          rm "${ISO}.tmp"
-
       # ─── BANNER ──────────────────────────────────────────────────────────
 
       - name: Inject banners (optional)
@@ -177,13 +134,13 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          NAME="${{ steps.names.outputs.NAME }}"
+          NAME="${{ steps.names.outputs.name }}"
 
           dualiso() {
             sed \
               -e "s|{{ repo }}|${GITHUB_REPOSITORY,,}|g" \
               -e "s|{{ hostname }}|${{ steps.names.outputs.hostname }}|g" \
-              iso-${1}-config.ks.tpl > /tmp/iso-${1}-config.ks.ks
+              iso-${1}-config.ks.tpl > /tmp/iso-${1}-config.ks
           }
 
           dualiso offline &
@@ -196,29 +153,59 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          NAME="${{ steps.names.outputs.NAME }}"
+          NAME="${{ steps.names.outputs.name }}"
 
           dualiso() {
+            local TYPE="$1"
+            local VOL_ID
+            [[ "$TYPE" == "offline" ]] \
+              && VOL_ID="${{ steps.names.outputs.volume_id_offline }}" \
+              || VOL_ID="${{ steps.names.outputs.volume_id_online }}"
+            local DISPLAY="${{ steps.names.outputs.display_name }}"
+            local EXTRA_ADD=""
+            [[ "$TYPE" == "offline" ]] && EXTRA_ADD="--add out/image.tar"
+
             mkksiso \
-              --ks /tmp/iso-${1}-config.ks.ks \
-              --add out/updates.img \
-              $([ "${1}" == "offline" ] && echo "--add out/image.tar" || true) \
+              --ks   "/tmp/iso-${TYPE}-config.ks" \
+              --add  out/updates.img \
+              ${EXTRA_ADD} \
               --cmdline "inst.updates=file:///run/install/repo/updates.img" \
-              -V $([ "${1}" == "offline" ] \
-                && echo "${{ steps.names.outputs.volume_id_offline }}" \
-                || echo "${{ steps.names.outputs.volume_id_online }}" \
-              ) \
+              -V    "${VOL_ID}" \
               out/base.iso \
-              out/boot-${1}-tmp.iso
-            
+              "out/boot-${TYPE}-tmp.iso"
+
+            # Patch both EFI and BIOS grub.cfg with correct volume label and display name
+            mkdir -p "/tmp/mnt-${TYPE}"
+            mount -o loop,ro "out/boot-${TYPE}-tmp.iso" "/tmp/mnt-${TYPE}"
+            cp "/tmp/mnt-${TYPE}/EFI/BOOT/grub.cfg"   "/tmp/grub-efi-${TYPE}.cfg"
+            cp "/tmp/mnt-${TYPE}/boot/grub2/grub.cfg"  "/tmp/grub-bios-${TYPE}.cfg"
+            umount "/tmp/mnt-${TYPE}"
+
+            for f in "/tmp/grub-efi-${TYPE}.cfg" "/tmp/grub-bios-${TYPE}.cfg"; do
+              sed -i \
+                -e "s|Fedora-S-dvd-x86_64-44|${VOL_ID}|g" \
+                -e "s|Install Fedora 44 in basic graphics mode|Install ${DISPLAY} in basic graphics mode|g" \
+                -e "s|Install Fedora 44|Install ${DISPLAY}|g" \
+                -e "s|Test this media & install Fedora 44|Test media \& install ${DISPLAY}|g" \
+                -e "s| rd\.live\.check||g" \
+                "$f"
+            done
+
+            # Inject patched grub configs and set ISO metadata
             xorriso \
               -return_with SORRY 0 \
-              -indev  out/boot-${1}-tmp.iso \
-              -outdev "out/${NAME}-${1}.iso" \
-              -application_id "${{ steps.names.outputs.display_name }} Installer" \
-              -publisher      "${{ steps.names.outputs.display_name }}" \
+              -indev  "out/boot-${TYPE}-tmp.iso" \
+              -outdev "out/${NAME}-${TYPE}.iso" \
+              -map "/tmp/grub-efi-${TYPE}.cfg"  /EFI/BOOT/grub.cfg \
+              -map "/tmp/grub-bios-${TYPE}.cfg" /boot/grub2/grub.cfg \
+              -application_id "${DISPLAY} Installer" \
+              -publisher      "${DISPLAY}" \
               -boot_image any replay
-            rm "out/boot-${1}-tmp.iso"
+
+            # Re-implant MD5 checksum so media verification still works
+            implantisomd5 "out/${NAME}-${TYPE}.iso"
+
+            rm "out/boot-${TYPE}-tmp.iso"
           }
 
           dualiso offline &
@@ -232,7 +219,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
-          NAME="${{ steps.names.outputs.NAME }}"
+          NAME="${{ steps.names.outputs.name }}"
 
           dualiso() {
             gh release upload install-iso \
