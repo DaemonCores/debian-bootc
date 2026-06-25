@@ -17,15 +17,20 @@
 
 set -euo pipefail
 
-SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso> [display-name]}"
-DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso> [display-name]}"
-PRODUCT_NAME="${3:-}"   # display name passed from CI (e.g. "Debian Bootc")
+SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso>}"
+DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso>}"
 BANNER_DIR="assets/banner"
 
 SIDEBAR="${BANNER_DIR}/anaconda-sidebar.png"
 LOGO="${BANNER_DIR}/anaconda-logo.png"
 TOPBAR="${BANNER_DIR}/anaconda-topbar.png"
 HEADER="${BANNER_DIR}/anaconda-header.png"
+
+[[ ! -f "$SIDEBAR" && ! -f "$LOGO" && \
+   ! -f "$TOPBAR" && ! -f "$HEADER" ]] && {
+  echo "[banners] No banner assets found, skipping"
+  exit 0
+}
 
 WORKDIR=$(mktemp -d)
 trap 'umount "$WORKDIR/iso-mnt"    2>/dev/null || true
@@ -67,24 +72,9 @@ fi
 
 _replace() {
   local src="$1" target="$2"
-  [[ ! -f "$PIXMAPS/$target" ]] && return 0
-  local dims
-  dims=$(identify -format "%wx%h" "$PIXMAPS/$target" 2>/dev/null || echo "")
-  if [[ -n "$dims" ]]; then
-    # Resize to fit within target dimensions, preserve aspect ratio,
-    # then pad with transparency to reach exact target size.
-    # This avoids deforming logos or images with different aspect ratios.
-    convert "$src" \
-      -resize "$dims" \
-      -background none \
-      -gravity center \
-      -extent "$dims" \
-      "$PIXMAPS/$target"
-    echo "[banners]   → $target (resized to ${dims}, ratio preserved)"
-  else
-    cp "$src" "$PIXMAPS/$target"
-    echo "[banners]   → $target"
-  fi
+  [[ ! -f "$PIXMAPS/$target" ]] && return 0   # fichier absent dans cette variante → skip
+  cp "$src" "$PIXMAPS/$target"
+  echo "[banners]   → $target"
 }
 
 # Génère un PNG transparent 1×1 si sidebar remplacée mais pas le logo
