@@ -32,8 +32,11 @@
     background-repeat:   no-repeat;
     background-position: left center;
     background-color:    @flat_primary_dark;
-    box-shadow:          none;
 }
+
+/* Force all text in sidebar to white */
+.logo-sidebar label,
+.logo-sidebar * { color: @flat_primary_text; }
 
 /* Debian logo position */
 .logo { background-position: 50% 90%; }
@@ -48,32 +51,47 @@ AnacondaSpokeWindow scrolledwindow {
     background-position: right center;
     background-color:    @flat_bg;
 }
+AnacondaHubWindow viewport,
+AnacondaSpokeWindow viewport {
+    background-color: rgba(245, 246, 247, 0.82);
+    background-image: none;
+}
 
 /* ── HUB nav-box ─────────────────────────────────────────────────────── */
 AnacondaHubWindow #nav-box {
     background-image:  none;
     background-color:  @flat_primary_dark;
-    box-shadow:        none;
-    border-bottom:     1px solid shade(@flat_primary_dark, 0.75);
 }
+AnacondaHubWindow #nav-box label { color: @flat_primary_text; }
 
 /* ── SPOKE nav-box ───────────────────────────────────────────────────── */
 AnacondaSpokeWindow #nav-box {
     background-image:  none;
     background-color:  @flat_primary_dark;
-    box-shadow:        none;
-    border-bottom:     1px solid shade(@flat_primary_dark, 0.75);
     color:             @flat_primary_text;
 }
+AnacondaSpokeWindow #nav-box label     { color: @flat_primary_text; }
+
+/* ── Hub spoke selector tiles ────────────────────────────────────────── */
+AnacondaSpokeSelector {
+    background-color: @flat_surface;
+    border:           1px solid @flat_border;
+    border-radius:    4px;
+    box-shadow:       none;
+}
+AnacondaSpokeSelector:hover {
+    background-color: @flat_info_bg;
+    border-color:     @flat_primary;
+}
+AnacondaSpokeSelector:active { background-color: shade(@flat_info_bg, 0.95); }
+.anaconda-spoke-selector-title  { color: @flat_text; }
+.anaconda-spoke-selector-status { color: @flat_text_secondary; }
 
 /* ── Continue / Begin button ─────────────────────────────────────────── */
 .continue-button, #continueButton {
     background-color: @flat_primary;
     background-image: none;
     color:            @flat_primary_text;
-    border:           none;
-    border-radius:    4px;
-    box-shadow:       none;
 }
 .continue-button:hover, #continueButton:hover {
     background-color: @flat_primary_hover;
@@ -85,9 +103,6 @@ AnacondaSpokeWindow #nav-box {
     background-color: @flat_primary;
     background-image: none;
     color:            @flat_primary_text;
-    border:           none;
-    border-radius:    4px;
-    box-shadow:       none;
 }
 .anaconda-spoke-window-done:hover {
     background-color: @flat_primary_hover;
@@ -99,8 +114,6 @@ button.suggested-action {
     background-color: @flat_primary;
     background-image: none;
     color:            @flat_primary_text;
-    border:           none;
-    box-shadow:       none;
 }
 button.suggested-action:hover {
     background-color: @flat_primary_hover;
@@ -110,8 +123,6 @@ button.destructive-action {
     background-color: @flat_danger;
     background-image: none;
     color:            #ffffff;
-    border:           none;
-    box-shadow:       none;
 }
 
 /* ── Text fields ─────────────────────────────────────────────────────── */
@@ -119,6 +130,40 @@ entry {
     background-color: @flat_surface;
     background-image: none;
     color:            @flat_text;
-    border:           1px solid @flat_border;
-    box-shadow:       none;
+}
+entry:focus { border-color: @flat_border_focus }
+
+/* ── Info bars ───────────────────────────────────────────────────────── */
+infobar.info    box   { background-color: @flat_info_bg;    border: none; }
+infobar.info    label { color: @flat_info_fg; }
+infobar.warning box   { background-color: @flat_warning_bg; border: none; }
+infobar.warning label { color: @flat_warning; }
+infobar.error   box   { background-color: #fff1f1;          border: none; }
+infobar.error   label { color: @flat_danger; }
+
+/* ── Level bars ──────────────────────────────────────────────────────── */
+@define-color anaconda_level_bar_low    @flat_danger;
+@define-color anaconda_level_bar_medium @flat_warning;
+@define-color anaconda_level_bar_high   @flat_success;
+
+levelbar.discrete trough block.filled.low    { background: @flat_danger;  border-color: shade(@flat_danger,  0.85); }
+levelbar.discrete trough block.filled.medium { background: @flat_warning; border-color: shade(@flat_warning, 0.85); }
+levelbar.discrete trough block.filled.full,
+levelbar.discrete trough block.filled.high   { background: @flat_success; border-color: shade(@flat_success, 0.85); }
+
+/* ── Disk overview tiles ─────────────────────────────────────────────── */
+AnacondaDiskOverview {
+    background-color: @flat_surface;
+}
+AnacondaDiskOverview:hover   { border-color: @flat_primary; }
+AnacondaDiskOverview:checked { border-color: @flat_primary; background-color: @flat_info_bg; }
+.anaconda-disk-name        { color: @flat_text; }
+.anaconda-disk-description { color: @flat_text_secondary; }
+.anaconda-disk-capacity    { color: @flat_text_secondary; }
+.anaconda-disk-free        { color: @flat_success; }
+
+/* ── Layout indicator ────────────────────────────────────────────────── */
+AnacondaLayoutIndicator {
+    background-color: @flat_surface;
+    color:            @flat_text;
 }
