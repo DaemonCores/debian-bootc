@@ -2,7 +2,7 @@ name: Build & Publish Bootc .deb
 
 on:
   workflow_dispatch:
-  # à la main uniquement, tu rebuildes quand tu veux
+  workflow_call:
 
 jobs:
   build:
