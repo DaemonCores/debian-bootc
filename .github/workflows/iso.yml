@@ -205,8 +205,8 @@ jobs:
               $([ "${1}" == "offline" ] && echo "--add out/image.tar" || true) \
               --cmdline "inst.updates=file:///run/install/repo/updates.img" \
               -V $([ "${1}" == "offline" ] \
-                && echo "${{ steps.names.outputs.volume_id_offline }}"
-                || echo "${{ steps.names.outputs.volume_id_online }}"
+                && echo "${{ steps.names.outputs.volume_id_offline }}" \
+                || echo "${{ steps.names.outputs.volume_id_online }}" \
               ) \
               out/base.iso \
               out/boot-${1}-tmp.iso
