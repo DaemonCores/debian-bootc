@@ -253,6 +253,7 @@ jobs:
             -v "$(pwd)/out":/output \
             quay.io/centos-bootc/bootc-image-builder:latest \
               --type anaconda-iso \
+              --rootfs ext4 \
               --config /config.toml \
               "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
           find out -name "*.iso" -exec \
