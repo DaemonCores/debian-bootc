@@ -87,17 +87,13 @@ jobs:
             "https://archives.fedoraproject.org/pub/fedora/linux/releases/${CUT}/Server/x86_64/iso/Fedora-Server-netinst-x86_64-${VERSION}.iso" \
             -o out/base.iso
 
-      # ─── BANNER ──────────────────────────────────────────────────────────
+      # ─── CUSTOMIZE ───────────────────────────────────────────────────────
 
-      - name: Inject banners (optional)
+      - name: Customize ISO
         run: |
-          ISO="out/base.iso"
-          if [[ -f "assets/banner/anaconda-sidebar.png" || \
-                -f "assets/banner/anaconda-header.png" ]]; then
-            bash scripts/inject-banners-iso.sh "${ISO}" out/branded.iso
-            mv out/branded.iso "${ISO}"
-          fi
-
+          ISO="out/${{ steps.names.outputs.iso }}"
+          bash scripts/inject-iso.sh "${ISO}" out/customized.iso
+          mv out/customized.iso "${ISO}"
 
       # ─── IMAGE ───────────────────────────────────────────────────────────
       - name: Pull et sauvegarde image OCI
