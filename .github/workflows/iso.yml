@@ -75,7 +75,7 @@ jobs:
           fi
           git config --system --add safe.directory '*'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7 
 
       - name: Compute names
         id: names
