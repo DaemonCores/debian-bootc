@@ -1,11 +1,3 @@
-/* ── Flat design overrides for Anaconda GTK3 ─────────────────────────────
- * Appended to fedora-server.css.
- *
- * GTK3 rendering model: background-image set on a GtkWindow is INVISIBLE
- * because child widgets paint solid backgrounds on top of it.
- * Solution: set background-image directly on each visible leaf widget.
- * ─────────────────────────────────────────────────────────────────────── */
-
 /* ── Color palette — extracted from background PNG ───────────────────── */
 @define-color flat_primary        #446EC5;
 @define-color flat_primary_dark   #2F6BE8;
@@ -25,56 +17,25 @@
 @define-color flat_info_bg        #D9F2FE;
 @define-color flat_info_fg        #2F6BE8;
 
-* {
-    background-image: none;
+/* ── Full-screen background — set ONCE on the window ────────────────── */
+AnacondaHubWindow,
+AnacondaSpokeWindow {
+    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
+    background-size:     cover;
+    background-repeat:   no-repeat;
+    background-position: center center;
+    background-color:    @flat_primary;
 }
 
-/* ── SIDEBAR — background-image set here: this IS the visible widget ─── */
-/* GTK3 proof: fedora-server.css already does exactly this for sidebar-bg  */
+/* ── Kill every other background-image in the hierarchy ─────────────── */
+* { background-image: none; }
+
+/* ── Sidebar — transparent ───────────────────────────────────────────── */
 .logo-sidebar {
-    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
-    background-size:     cover;
-    background-repeat:   no-repeat;
-    background-position: left center;
-}
-.logo-sidebar * {
-    background-image: none;
+    background-color: transparent;
 }
 
-/* Debian logo position */
-.logo { background-position: 50% 90%; }
-
-/* ── CONTENT AREA — background-image on scrolledwindow + viewport ────── */
-/* Scrolledwindow is also a leaf-level widget in GTK3, image renders here  */
-AnacondaHubWindow scrolledwindow,
-AnacondaSpokeWindow scrolledwindow {
-    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
-    background-size:     cover;
-    background-repeat:   no-repeat;
-    background-position: right center;
-}
-AnacondaSpokeWindow scrolledwindow * {
-    background-image: none;
-}
-
-/* ── HUB nav-box ─────────────────────────────────────────────────────── */
-AnacondaHubWindow #nav-box {
-    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
-    background-size:     cover;
-    background-repeat:   no-repeat;
-    background-position: right center;
-}
-AnacondaHubWindow #nav-box * {
-    background-image: none;
-}
-
-/* ── SPOKE nav-box ───────────────────────────────────────────────────── */
-AnacondaSpokeWindow #nav-box {
-    background-image:    url('/usr/share/anaconda/pixmaps/server/background-full.png');
-    background-size:     cover;
-    background-repeat:   no-repeat;
-    background-position: right center;
-}
-AnacondaSpokeWindow #nav-box * {
-    background-image: none;
+/* ── Nav-box — transparent ───────────────────────────────────────────── */
+#nav-box {
+    background-color: transparent;
 }
