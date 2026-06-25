@@ -128,6 +128,7 @@ mv "$WORKDIR/new-install.img" "$INSTALL_IMG"
 
 echo "[banners] Rebuilding ISO..."
 xorriso \
+  -return_with SORRY 0 \
   -indev  "$SRC_ISO" \
   -outdev "$DST_ISO" \
   -map    "$INSTALL_IMG" /images/$(basename "$INSTALL_IMG") \
