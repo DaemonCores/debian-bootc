@@ -25,9 +25,10 @@ SIDEBAR="${BANNER_DIR}/anaconda-sidebar.png"
 LOGO="${BANNER_DIR}/anaconda-logo.png"
 TOPBAR="${BANNER_DIR}/anaconda-topbar.png"
 HEADER="${BANNER_DIR}/anaconda-header.png"
+BG="${BANNER_DIR}/anaconda-background.png"   # full-window 4K background (optional)
 
 [[ ! -f "$SIDEBAR" && ! -f "$LOGO" && \
-   ! -f "$TOPBAR" && ! -f "$HEADER" ]] && {
+   ! -f "$TOPBAR" && ! -f "$HEADER" && ! -f "$BG" ]] && {
   echo "[banners] No banner assets found, skipping"
   exit 0
 }
@@ -73,8 +74,17 @@ fi
 _replace() {
   local src="$1" target="$2"
   [[ ! -f "$PIXMAPS/$target" ]] && return 0   # fichier absent dans cette variante → skip
-  cp "$src" "$PIXMAPS/$target"
-  echo "[banners]   → $target"
+  # Auto-resize source to match target's original dimensions (fixes aspect/size mismatches)
+  local dims
+  dims=$(identify -format "%wx%h" "$PIXMAPS/$target" 2>/dev/null || echo "")
+  if [[ -n "$dims" ]]; then
+    local resize_to="${dims}!"
+    convert "$src" -resize "$resize_to" "$PIXMAPS/$target"
+    echo "[banners]   → $target (auto-resized to ${dims})"
+  else
+    cp "$src" "$PIXMAPS/$target"
+    echo "[banners]   → $target"
+  fi
 }
 
 # Génère un PNG transparent 1×1 si sidebar remplacée mais pas le logo
@@ -117,6 +127,15 @@ if [[ -f "$HEADER" ]]; then
   _replace "$HEADER" "anaconda_header.png"
 fi
 
+# background-full.png — single 4K full-window background for CSS approach
+# Referenced by flat-overrides.css as the window-level background image.
+# No resize: CSS handles scaling via background-size: cover.
+if [[ -f "$BG" ]]; then
+  mkdir -p "$PIXMAPS/server"
+  cp "$BG" "$PIXMAPS/server/background-full.png"
+  echo "[banners] → server/background-full.png (full-window background)"
+fi
+
 # Inject flat design CSS overrides if provided
 if [[ -f "assets/banner/flat-overrides.css" ]]; then
   SERVER_CSS="$PIXMAPS/server/fedora-server.css"
@@ -136,6 +155,8 @@ ANACONDA_CONF="$WORKDIR/squashfs-root/etc/anaconda/conf.d/99-disable-users.conf"
 mkdir -p "$(dirname "$ANACONDA_CONF")"
 printf '%s\n' \
   '[Anaconda]' \
+  'forbidden_modules =' \
+  '  org.fedoraproject.Anaconda.Modules.Users' \
   'optional_modules =' \
   '  org.fedoraproject.Anaconda.Modules.Localization' \
   '  org.fedoraproject.Anaconda.Modules.Network' \
@@ -147,7 +168,28 @@ printf '%s\n' \
   '  org.fedoraproject.Anaconda.Modules.Subscription' \
   '  org.fedoraproject.Anaconda.Addons.*' \
   > "$ANACONDA_CONF"
-echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected"
+echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected (Users forbidden, Addons optional)"
+
+# Patch product name: .buildstamp controls "FEDORA 44" in the Anaconda header/welcome title
+BUILDSTAMP="$WORKDIR/squashfs-root/.buildstamp"
+if [[ -f "$BUILDSTAMP" ]]; then
+  sed -i \
+    -e 's|^Product=.*|Product=${1}|' \
+    -e 's|^Version=.*|Version=|' \
+    -e 's|^Variant=.*|Variant=|' \
+    "$BUILDSTAMP"
+  echo "[banners] → .buildstamp patched (Product=${1})"
+fi
+
+# Patch os-release display name (keep ID=fedora + VARIANT_ID=server for profile detection)
+OS_RELEASE="$WORKDIR/squashfs-root/etc/os-release"
+if [[ -f "$OS_RELEASE" ]]; then
+  sed -i \
+    -e 's|^NAME=.*|NAME="${1}"|' \
+    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="${1}"|' \
+    "$OS_RELEASE"
+  echo "[banners] → etc/os-release patched (NAME=${1})"
+fi
 
 echo "[banners] Re-squashing..."
 mksquashfs "$WORKDIR/squashfs-root" "$WORKDIR/new-install.img" \
