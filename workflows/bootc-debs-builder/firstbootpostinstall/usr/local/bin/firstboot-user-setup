@@ -123,7 +123,7 @@ fi
 for grp in adm systemd-journal cdrom audio video plugdev netdev; do
     getent group "$grp" &>/dev/null && usermod -aG "$grp" "$USERNAME" || true
 done
-[[ "$IS_SUDOER" == yes ]] && usermod -aG sudo,wheel "$USERNAME"
+[[ "$IS_SUDOER" == yes ]] && usermod -aG sudo "$USERNAME"
 
 # ── SSH root login config ─────────────────────────────────────────────────
 mkdir -p /etc/ssh/sshd_config.d
