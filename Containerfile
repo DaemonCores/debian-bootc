@@ -100,7 +100,6 @@ RUN wget \
         wpasupplicant \
         broadcom-sta-dkms \
         firstboot-user-setup \
-    && echo "%wheel ALL=(ALL:ALL) PASSWD: ALL" > /etc/sudoers.d/wheel \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
