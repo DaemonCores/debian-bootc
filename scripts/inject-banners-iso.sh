@@ -57,12 +57,18 @@ echo "[banners] Unsquashing installer environment..."
 unsquashfs -d "$WORKDIR/squashfs-root" "$INSTALL_IMG"
 
 ROOTFS_IMG="$WORKDIR/squashfs-root/LiveOS/rootfs.img"
-[[ ! -f "$ROOTFS_IMG" ]] && { echo "[banners] ERROR: LiveOS/rootfs.img not found"; exit 1; }
+USE_ROOTFS_IMG=false
 
-mkdir -p "$WORKDIR/rootfs-mount"
-mount -o loop,rw "$ROOTFS_IMG" "$WORKDIR/rootfs-mount"
-
-PIXMAPS="$WORKDIR/rootfs-mount/usr/share/anaconda/pixmaps"
+if [[ -f "$ROOTFS_IMG" ]]; then
+  echo "[banners] LiveOS/rootfs.img found — mounting"
+  USE_ROOTFS_IMG=true
+  mkdir -p "$WORKDIR/rootfs-mount"
+  mount -o loop,rw "$ROOTFS_IMG" "$WORKDIR/rootfs-mount"
+  PIXMAPS="$WORKDIR/rootfs-mount/usr/share/anaconda/pixmaps"
+else
+  echo "[banners] No LiveOS/rootfs.img — using squashfs-root directly"
+  PIXMAPS="$WORKDIR/squashfs-root/usr/share/anaconda/pixmaps"
+fi
 
 _replace() {
   local src="$1" target="$2"
@@ -111,7 +117,9 @@ if [[ -f "$HEADER" ]]; then
   _replace "$HEADER" "anaconda_header.png"
 fi
 
-umount "$WORKDIR/rootfs-mount"
+if [[ "$USE_ROOTFS_IMG" == true ]]; then
+  umount "$WORKDIR/rootfs-mount"
+fi
 
 echo "[banners] Re-squashing..."
 mksquashfs "$WORKDIR/squashfs-root" "$WORKDIR/new-install.img" \
