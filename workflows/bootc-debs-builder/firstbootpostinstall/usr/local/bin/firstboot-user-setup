@@ -36,13 +36,20 @@ DISPLAY_NAME=$(
 
 # whiptail helpers
 _title="Setup -- ${DISPLAY_NAME}"
-_input() { whiptail --title "$_title" --inputbox   "$1" 10 60 "${2:-}" 3>&1 1>&2 2>&3; }
-_pass()  { whiptail --title "$_title" --passwordbox "$1" 10 60          3>&1 1>&2 2>&3; }
-_yesno() { whiptail --title "$_title" --yesno       "$1" 12 65; }
-_msg()   { whiptail --title "$_title" --msgbox       "$1" 12 65; }
+_input() { whiptail --title "$_title" --inputbox    "$1" 10 60 "${2:-}" 3>&1 1>&2 2>&3; }
+_pass()  { whiptail --title "$_title" --passwordbox  "$1" 10 60          3>&1 1>&2 2>&3; }
+_yesno() { whiptail --title "$_title" --yesno        "$1" 12 65; }
+_msg()   { whiptail --title "$_title" --msgbox        "$1" 12 65; }
 
 # Welcome
 _msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user account.\nPress Enter to continue."
+
+# ── System language (locale) ──────────────────────────────────────────────
+dpkg-reconfigure locales
+
+# ── Keyboard layout ───────────────────────────────────────────────────────
+dpkg-reconfigure keyboard-configuration
+setupcon
 
 # ── Username ──────────────────────────────────────────────────────────────
 while true; do
