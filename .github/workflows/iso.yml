@@ -60,6 +60,8 @@ jobs:
 
       # ─── SETUP ────────────────────────────────────────────────────────────
 
+      - uses: actions/checkout@v7 
+
       - name: Install dependencies
         run: |
           dnf install -y epel-release
@@ -75,8 +77,6 @@ jobs:
             cp workflows/build-iso/prebuild/* /
           fi
           git config --system --add safe.directory '*'
-
-      - uses: actions/checkout@v7 
 
       - name: Compute names
         id: names
