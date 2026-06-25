@@ -91,7 +91,7 @@ jobs:
 
       - name: Customize ISO
         run: |
-          bash scripts/inject-iso.sh out/base.iso out/customized.iso "${{ steps.names.outputs.name }}"
+          bash scripts/inject-iso.sh out/base.iso out/customized.iso "${{ steps.names.outputs.display_name }}"
           mv out/customized.iso out/base.iso
 
       # ─── IMAGE ───────────────────────────────────────────────────────────
