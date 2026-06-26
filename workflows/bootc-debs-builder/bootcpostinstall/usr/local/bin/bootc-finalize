@@ -6,6 +6,13 @@ KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
 [ -f "/boot/vmlinuz-${KVER}" ] || exit 0
 
 # Dracut
+# NOTE: The order below is intentional and optimized for the bootc layer:
+# 1. Move the kernel to its final location in /usr/lib/modules
+# 2. Purge /boot entirely to ensure no stale files remain
+# 3. Generate a fresh initramfs with dracut
+# If dracut fails, set -euo pipefail aborts the entire build,
+# preventing a partially-broken image from being produced.
+# This is NOT a bug — it is the correct failure mode for atomic images.
 mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
 rm -rf /boot/*
 dracut --kver "${KVER}" --force /usr/lib/modules/${KVER}/initramfs.img

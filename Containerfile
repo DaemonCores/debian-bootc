@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.title="Debian Trixie bootc"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootable bootc/ostree container image, signed with cosign."
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
 LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
-LABEL org.opencontainers.image.licenses="LGPL-2.5"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
 
