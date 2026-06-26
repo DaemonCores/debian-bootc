@@ -27,7 +27,7 @@ permissions:
 jobs:
   debs:
     name: Build .deb packages
-    if: ${{ inputs.run_debs }}
+    if: ${{ github.event_name == 'schedule' || inputs.run_debs }}
     uses: ./.github/workflows/bootc-debs-builder.yml
     secrets: inherit
 
@@ -38,7 +38,7 @@ jobs:
     # image runs if: checked AND (debs succeeded OR debs was skipped/not selected).
     if: |
       always() &&
-      inputs.run_image &&
+      (github.event_name == 'schedule' || inputs.run_image) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped')
     uses: ./.github/workflows/bootc-build.yml
     secrets: inherit
@@ -50,7 +50,7 @@ jobs:
     # iso runs if: checked AND (debs ok OR skipped) AND (image ok OR skipped).
     if: |
       always() &&
-      inputs.run_iso &&
+      (github.event_name == 'schedule' || inputs.run_iso) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped') &&
       (needs.image.result == 'success' || needs.image.result == 'skipped')
     uses: ./.github/workflows/iso.yml
