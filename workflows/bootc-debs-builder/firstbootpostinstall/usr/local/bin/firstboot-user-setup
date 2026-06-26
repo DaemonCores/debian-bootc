@@ -81,20 +81,15 @@ while true; do
     _msg "Passwords do not match."
 done
 
-# ── Root password ─────────────────────────────────────────────────────────
-SET_ROOT=no
-_yesno "Set a root password?\n\n(Allows local root login on the console)" && SET_ROOT=yes || true
-
+# ── Root password (obligatoire) ───────────────────────────────────────────
 ROOT_PASS=""
-if [[ "$SET_ROOT" == yes ]]; then
-    while true; do
-        ROOT_PASS=$(_pass "Root password:" || true)
-        [[ ${#ROOT_PASS} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
-        ROOT2=$(_pass "Confirm root password:" || true)
-        [[ "$ROOT_PASS" == "$ROOT2" ]] && break
-        _msg "Passwords do not match."
-    done
-fi
+while true; do
+    ROOT_PASS=$(_pass "Root password (obligatoire):" || true)
+    [[ ${#ROOT_PASS} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
+    ROOT2=$(_pass "Confirm root password:" || true)
+    [[ "$ROOT_PASS" == "$ROOT2" ]] && break
+    _msg "Passwords do not match."
+done
 
 # ── Sudo privileges ───────────────────────────────────────────────────────
 IS_SUDOER=no
@@ -109,7 +104,7 @@ SUMMARY="Summary:\n\n"
 SUMMARY+="  User      : ${USERNAME}\n"
 [[ -n "$FULLNAME" ]] && SUMMARY+="  Full name : ${FULLNAME}\n"
 SUMMARY+="  Sudo      : ${IS_SUDOER}\n"
-SUMMARY+="  Root pwd  : ${SET_ROOT}\n"
+SUMMARY+="  Root pwd  : set\n"
 SUMMARY+="  SSH root  : ${SSH_ROOT}\n\nConfirm?"
 _yesno "$SUMMARY" || { _msg "Setup cancelled. Wizard will re-run on next boot."; exit 0; }
 
@@ -127,12 +122,10 @@ useradd \
 # Use printf to avoid echo interpreting special characters in the password
 printf '%s:%s\n' "$USERNAME" "$PASS1" | chpasswd
 
-# ── Root password ─────────────────────────────────────────────────────────
-if [[ "$SET_ROOT" == yes ]]; then
-    printf 'root:%s\n' "$ROOT_PASS" | chpasswd
-    # Lever l'expiration forcée posée par le KS (chage -d 0) maintenant que le user a défini son mdp
-    chage -d "$(date +%Y-%m-%d)" root
-fi
+# ── Root password (obligatoire) ───────────────────────────────────────────
+printf 'root:%s\n' "$ROOT_PASS" | chpasswd
+# Lever l'expiration forcée posée par le KS (chage -d 0) maintenant que le user a défini son mdp
+chage -d "$(date +%Y-%m-%d)" root
 
 # ── Standard Debian groups ────────────────────────────────────────────────
 for grp in adm systemd-journal cdrom audio video plugdev netdev; do
