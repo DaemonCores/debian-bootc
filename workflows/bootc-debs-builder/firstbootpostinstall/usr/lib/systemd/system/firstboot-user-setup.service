@@ -4,7 +4,6 @@ Documentation=man:firstboot-user-setup(1)
 
 # Take over TTY1 before getty does
 Before=getty@tty1.service
-Conflicts=getty@tty1.service
 After=systemd-user-sessions.service local-fs.target
 
 # Only run once — skip if flag file exists
