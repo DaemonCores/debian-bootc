@@ -134,8 +134,6 @@ hostnamectl set-hostname "$NEWHOSTNAME"
 groupadd --gid 1000 "$USERNAME" 2>/dev/null || true
 useradd \
     --home-dir  "/home/${USERNAME}" \
-    --uid       1000 \
-    --gid       1000 \
     --shell     /bin/bash \
     --comment   "${FULLNAME:-$USERNAME}" \
     --create-home \
