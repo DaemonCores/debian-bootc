@@ -23,13 +23,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Setup default shell with fail build on error
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
-# Fix ostree filesystem
-RUN rm -rf /{home,root,mnt,srv,opt,usr/lib/locale}  \
-    && mkdir -p /var/{home,roothome,mnt,srv,opt,lib/locale} \
-    && ln -s var/{home,mnt,srv,opt} / \
-    && ln -s  var/roothome /root \
-    && ln -s var/lib/locale /usr/lib/locale
-
 # Bootc filesystem migrations
 # All symlink require relative path because anaconda setup mount root disk in /mnt insted of /
 # Install SSL dependencies before use apt with https for fix ssl error
@@ -114,6 +107,14 @@ RUN wget \
         /usr/sbin/policy-rc.d
 
 COPY ./assets/banner/etc /etc/etc/
+
+# Fix ostree filesystem
+RUN mkdir -p /var/{home,roothome,mnt,srv,opt,lib/locale} \
+    && cp /usr/lib/locale/. /var/usr/lib/locale \
+    && ln -s var/{home,mnt,srv,opt} / \
+    && ln -s  var/roothome /root \
+    && ln -s var/lib/locale /usr/lib/locale \
+    && rm -rf /{home,root,mnt,srv,opt,usr/lib/locale}
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE
