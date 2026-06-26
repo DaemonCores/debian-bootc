@@ -7,4 +7,14 @@ Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: optional
 Depends: whiptail, {{ DEPS }}
-Description: First-boot user setup TUI
+Description: interactive first-boot user account setup wizard
+ Provides a terminal TUI wizard that runs on the very first boot of a
+ bootc-deployed system, before the login prompt appears. Guides the
+ administrator through hostname configuration, locale and keyboard
+ selection, primary user account creation, root password setup, sudo
+ grant, and SSH root login policy.
+ .
+ Modelled after the Raspberry Pi OS userconfig service. Runs as an
+ ExecStartPre hook on getty@tty1.service and leaves a completion flag
+ at /var/lib/firstboot-user-setup.done to prevent re-execution on
+ subsequent boots.

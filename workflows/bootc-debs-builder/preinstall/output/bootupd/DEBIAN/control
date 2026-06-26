@@ -8,4 +8,13 @@ Section: admin
 Priority: required
 Pre-Depends: grub-efi-amd64, grub-efi-amd64-signed, shim-signed
 Depends: {{ DEPS }}, util-linux
-Description: bootupd
+Description: cross-distribution EFI bootloader update manager
+ Manages updates to EFI bootloader components (shim, GRUB) independently
+ of the ostree-managed root filesystem. In a bootc system the EFI System
+ Partition lies outside the ostree tree and cannot be updated through the
+ normal container image update path; bootupd bridges this gap by tracking
+ and updating EFI binaries as a separate, managed component.
+ .
+ Compiled from upstream Fedora CoreOS sources and pre-configured to manage
+ the shim and GRUB EFI binaries provided by the grub-efi-amd64-signed
+ and shim-signed packages in this repository.
