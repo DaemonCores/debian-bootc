@@ -7,6 +7,9 @@ set -euo pipefail
 
 FLAG=/var/lib/firstboot-user-setup.done
 
+# Bug-fix 3 : en ExecStartPre de getty, ConditionPathExists n'existe pas → check ici
+[[ -f "$FLAG" ]] && exit 0
+
 # Skip if a regular user already exists (UID 1000-65533)
 _existing_user() {
     while IFS=: read -r _ _ uid _; do
@@ -24,6 +27,8 @@ fi
 
 # Grab TTY1
 exec </dev/tty1 >/dev/tty1 2>/dev/tty1
+# Bug-fix 1 : TERM n'est pas injecté par systemd en ExecStartPre → whiptail/ncurses crashe sans ça
+export TERM=linux
 clear
 
 # Build display name from /etc/hostname (e.g. my-system -> My System)
@@ -45,11 +50,12 @@ _msg()   { whiptail --title "$_title" --msgbox        "$1" 12 65; }
 _msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user account.\nPress Enter to continue."
 
 # ── System language (locale) ──────────────────────────────────────────────
-dpkg-reconfigure locales
+# Bug-fix 2 : dpkg-reconfigure peut retourner non-zéro (locale déjà set, pkg manquant) → || true
+dpkg-reconfigure locales || true
 
 # ── Keyboard layout ───────────────────────────────────────────────────────
-dpkg-reconfigure keyboard-configuration
-setupcon
+dpkg-reconfigure keyboard-configuration || true
+setupcon || true
 
 # ── Username ──────────────────────────────────────────────────────────────
 while true; do
@@ -124,6 +130,8 @@ printf '%s:%s\n' "$USERNAME" "$PASS1" | chpasswd
 # ── Root password ─────────────────────────────────────────────────────────
 if [[ "$SET_ROOT" == yes ]]; then
     printf 'root:%s\n' "$ROOT_PASS" | chpasswd
+    # Lever l'expiration forcée posée par le KS (chage -d 0) maintenant que le user a défini son mdp
+    chage -d "$(date +%Y-%m-%d)" root
 fi
 
 # ── Standard Debian groups ────────────────────────────────────────────────
