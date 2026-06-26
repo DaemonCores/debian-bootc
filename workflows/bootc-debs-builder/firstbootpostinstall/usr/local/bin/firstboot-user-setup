@@ -131,7 +131,6 @@ _yesno "$SUMMARY" || { _msg "Setup cancelled. Wizard will re-run on next boot.";
 hostnamectl set-hostname "$NEWHOSTNAME"
 
 # ── Create user ───────────────────────────────────────────────────────────
-groupadd --gid 1000 "$USERNAME" 2>/dev/null || true
 useradd \
     --home-dir  "/home/${USERNAME}" \
     --shell     /bin/bash \
