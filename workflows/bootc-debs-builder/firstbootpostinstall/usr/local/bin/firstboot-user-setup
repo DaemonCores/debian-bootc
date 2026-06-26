@@ -7,7 +7,7 @@ set -euo pipefail
 
 FLAG=/var/lib/firstboot-user-setup.done
 
-# Bug-fix 3 : en ExecStartPre de getty, ConditionPathExists n'existe pas → check ici
+# Bug-fix 3: in ExecStartPre context, ConditionPathExists is not evaluated — check the flag here
 [[ -f "$FLAG" ]] && exit 0
 
 # Skip if a regular user already exists (UID 1000-65533)
@@ -27,13 +27,16 @@ fi
 
 # Grab TTY1
 exec </dev/tty1 >/dev/tty1 2>/dev/tty1
-# Bug-fix 1 : TERM n'est pas injecté par systemd en ExecStartPre → whiptail/ncurses crashe sans ça
+# Bug-fix 1: TERM is not injected by systemd in ExecStartPre — whiptail/ncurses crashes without it
 export TERM=linux
 clear
 
 # Build display name from /etc/hostname (e.g. my-system -> My System)
+# cut -d. -f1: strip the domain if a FQDN was set (e.g. host.local → host)
 DISPLAY_NAME=$(
     cat /etc/hostname \
+    | cut -d. -f1 \
+    | tr -d '\n' \
     | tr -- '-_' ' ' \
     | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1' \
     | tr -s ' '
@@ -50,12 +53,27 @@ _msg()   { whiptail --title "$_title" --msgbox        "$1" 12 65; }
 _msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user account.\nPress Enter to continue."
 
 # ── System language (locale) ──────────────────────────────────────────────
-# Bug-fix 2 : dpkg-reconfigure peut retourner non-zéro (locale déjà set, pkg manquant) → || true
+# Bug-fix 2: dpkg-reconfigure may return non-zero (locale already set, missing package) — || true prevents abort
 dpkg-reconfigure locales || true
 
 # ── Keyboard layout ───────────────────────────────────────────────────────
 dpkg-reconfigure keyboard-configuration || true
 setupcon || true
+
+# ── Hostname (required) ──────────────────────────────────────────────────
+CURRENT_HOSTNAME=$(cat /etc/hostname | cut -d. -f1 | tr -d '\n')
+while true; do
+    NEWHOSTNAME=$(_input "Hostname:" "$CURRENT_HOSTNAME" || true)
+    [[ -z "$NEWHOSTNAME" ]] && { _msg "Hostname cannot be empty."; continue; }
+    [[ "$NEWHOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || {
+        _msg "Invalid hostname.\nAllowed: letters, digits, hyphens\n(must start and end with a letter or digit, max 63 chars)"
+        continue
+    }
+    break
+done
+# Update wizard title with the new hostname
+DISPLAY_NAME=$(echo "$NEWHOSTNAME" | tr -- '-' ' ' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1')
+_title="Setup -- ${DISPLAY_NAME}"
 
 # ── Username ──────────────────────────────────────────────────────────────
 while true; do
@@ -81,10 +99,10 @@ while true; do
     _msg "Passwords do not match."
 done
 
-# ── Root password (obligatoire) ───────────────────────────────────────────
+# ── Root password (required) ─────────────────────────────────────────────
 ROOT_PASS=""
 while true; do
-    ROOT_PASS=$(_pass "Root password (obligatoire):" || true)
+    ROOT_PASS=$(_pass "Root password (required):" || true)
     [[ ${#ROOT_PASS} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
     ROOT2=$(_pass "Confirm root password:" || true)
     [[ "$ROOT_PASS" == "$ROOT2" ]] && break
@@ -101,12 +119,16 @@ _yesno "Allow root SSH login with password?\n\n[!] Not recommended for productio
 
 # ── Confirmation ──────────────────────────────────────────────────────────
 SUMMARY="Summary:\n\n"
+SUMMARY+="  Hostname  : ${NEWHOSTNAME}\n"
 SUMMARY+="  User      : ${USERNAME}\n"
 [[ -n "$FULLNAME" ]] && SUMMARY+="  Full name : ${FULLNAME}\n"
 SUMMARY+="  Sudo      : ${IS_SUDOER}\n"
 SUMMARY+="  Root pwd  : set\n"
 SUMMARY+="  SSH root  : ${SSH_ROOT}\n\nConfirm?"
 _yesno "$SUMMARY" || { _msg "Setup cancelled. Wizard will re-run on next boot."; exit 0; }
+
+# ── Apply hostname ────────────────────────────────────────────────────────
+hostnamectl set-hostname "$NEWHOSTNAME"
 
 # ── Create user ───────────────────────────────────────────────────────────
 groupadd --gid 1000 "$USERNAME" 2>/dev/null || true
@@ -122,9 +144,9 @@ useradd \
 # Use printf to avoid echo interpreting special characters in the password
 printf '%s:%s\n' "$USERNAME" "$PASS1" | chpasswd
 
-# ── Root password (obligatoire) ───────────────────────────────────────────
+# ── Root password (required) ─────────────────────────────────────────────
 printf 'root:%s\n' "$ROOT_PASS" | chpasswd
-# Lever l'expiration forcée posée par le KS (chage -d 0) maintenant que le user a défini son mdp
+# Clear the forced expiry set by the kickstart (chage -d 0) now that the user has set their password
 chage -d "$(date +%Y-%m-%d)" root
 
 # ── Standard Debian groups ────────────────────────────────────────────────
