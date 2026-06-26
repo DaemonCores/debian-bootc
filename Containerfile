@@ -106,7 +106,7 @@ RUN wget \
         /run/* \
         /usr/sbin/policy-rc.d
 
-COPY ./assets/banner/etc /etc/etc/
+COPY ./assets/banner/etc /etc/
 
 # Fix ostree filesystem
 RUN mkdir -p /var/{home,roothome,mnt,srv,opt,usr/lib/locale} /sysroot/ostree \
