@@ -75,7 +75,8 @@ jobs:
             gawk \
             meson \
             ninja-build \
-            libfreetype6-dev
+            libfreetype6-dev \
+            sbsigntool
 
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- --profile minimal -y
@@ -164,10 +165,12 @@ jobs:
 
       - name: Build grub-efi-amd64-signed
         shell: bash
-        env:env:
+        env:
           GRUB_VER: "1+2.12+9+fedora44"
           GRUB_FEDORA_BRANCH: "fedora-44"
           GRUB_PINNED_COMMIT: "5e9e7e44eddcab0174decc12c3799825e600639f"
+          SB_SIGNING_KEY: ${{ secrets.SB_SIGNING_KEY }}
+          SB_SIGNING_CERT: ${{ secrets.SB_SIGNING_CERT }}
         run: |
           SAVE_PWD=$(pwd)
 
@@ -224,8 +227,32 @@ jobs:
           sed -i \
             -e "s|{{ VER }}|${GRUB_VER}|g" \
             DEBIAN/control
-
           rm -f debian
+          
+          # Sign the GRUB EFI binary with the Secure Boot signing key
+          echo "${SB_SIGNING_KEY}"  | base64 -d > /tmp/sb.key
+          echo "${SB_SIGNING_CERT}" | base64 -d > /tmp/sb.crt
+
+          sbsign \
+            --key  /tmp/sb.key \
+            --cert /tmp/sb.crt \
+            --output /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+            /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed
+
+          # Verify signature
+          sbverify \
+            --cert /tmp/sb.crt \
+            /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+            || { echo "ERROR: GRUB EFI signature verification failed" >&2; exit 1; }
+
+          # Include the certificate in the package for MOK enrollment on target machines
+          mkdir -p /output/grub-efi-amd64-signed/usr/share/debian-bootc
+          cp /tmp/sb.crt \
+            /output/grub-efi-amd64-signed/usr/share/debian-bootc/sb_signing.crt
+
+          rm -f /tmp/sb.key /tmp/sb.crt
+
+          chmod 755 /output/grub-efi-amd64-signed/DEBIAN/postinst
           dpkg-deb --build /output/grub-efi-amd64-signed \
             /debs/grub-efi-amd64-signed_${GRUB_VER}_amd64.deb
 
