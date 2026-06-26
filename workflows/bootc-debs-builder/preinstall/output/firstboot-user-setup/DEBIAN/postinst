@@ -1,8 +1,0 @@
-#!/bin/bash
-set -e
-
-case "$1" in
-    configure|triggered)
-        deb-systemd-helper enable firstboot-user-setup.service
-        ;;
-esac
