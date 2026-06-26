@@ -32,8 +32,8 @@ jobs:
   image:
     name: Build container image
     needs: [debs]
-    # always() force l'évaluation même si debs est skippé.
-    # image tourne si : coché ET (debs ok OU debs skippé/non sélectionné).
+    # always() forces evaluation even when the debs job was skipped.
+    # image runs if: checked AND (debs succeeded OR debs was skipped/not selected).
     if: |
       always() &&
       inputs.run_image &&
@@ -44,8 +44,8 @@ jobs:
   iso:
     name: Build ISO
     needs: [debs, image]
-    # always() force l'évaluation même si debs ou image sont skippés.
-    # iso tourne si : coché ET (debs ok OU skippé) ET (image ok OU skippé).
+    # always() forces evaluation even when debs or image were skipped.
+    # iso runs if: checked AND (debs ok OR skipped) AND (image ok OR skipped).
     if: |
       always() &&
       inputs.run_iso &&
