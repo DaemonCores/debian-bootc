@@ -38,7 +38,7 @@ trap 'umount "$WORKDIR/iso-mnt"    2>/dev/null || true
       umount "$WORKDIR/rootfs-mount" 2>/dev/null || true
       rm -rf "$WORKDIR"' EXIT
 
-# APRÈS (loop mount — kernel, pas de dépendance au format ISO)
+# AFTER (loop mount — kernel, pas de dépendance au format ISO)
 echo "[banners] Extracting ISO..."
 mkdir -p "$WORKDIR/iso-mnt" "$WORKDIR/iso-root"
 mount -o loop,ro "$SRC_ISO" "$WORKDIR/iso-mnt"

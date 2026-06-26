@@ -203,6 +203,13 @@ the installation engine. Two Kickstart templates are provided:
 Both templates configure LVM on XFS, delegate user setup to `firstboot-user-setup`,
 and set a temporary root password that is replaced on first boot.
 
+**Note on default root password:** The kickstart installer sets a temporary default
+root password `BootcDebug@0`. This is a deliberate fallback: if the first-boot
+user-setup wizard fails to run or is interrupted, the system remains accessible via
+root login so you are not locked out of your own machine. The password is replaced
+by the wizard on first successful boot, and the root account is forced to change
+password via `chage -d 0`.
+
 The ISO branding (sidebar, topbar, header, product name) and Anaconda module
 configuration are injected into the squashfs installer environment by
 `scripts/inject-iso.sh`.
@@ -215,9 +222,9 @@ stored in the same GHCR namespace as the image.
 
 Verify a pulled image:
 ```bash
-cosign verify ghcr.io/<org>/debian-bootc:latest \
+cosign verify ghcr.io/DaemonCores/debian-bootc:latest \
   --certificate-identity-regexp \
-    "https://github.com/<org>/debian-bootc/.github/workflows/bootc-build.yml@refs/heads/main" \
+    "https://github.com/DaemonCores/debian-bootc/.github/workflows/bootc-build.yml@refs/heads/main" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com"
 ```
@@ -350,7 +357,7 @@ mokutil --list-enrolled     # confirm the debian-bootc key is present
 4. Download the produced ISO from the `install-iso` release.
 5. Boot the ISO on the target machine and follow the first-boot wizard.
 
-For monthly automated rebuilds, the `bootc-build.yml` schedule (`0 4 1 * *`) will
+For monthly automated rebuilds, the `pipeline.yml` schedule (`0 4 1 * *`) will
 trigger automatically once the repository is active.
 
 ---
