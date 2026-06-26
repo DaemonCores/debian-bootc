@@ -109,11 +109,12 @@ RUN wget \
 COPY ./assets/banner/etc /etc/etc/
 
 # Fix ostree filesystem
-RUN mkdir -p /var/{home,roothome,mnt,srv,opt,usr/lib/locale} \
+RUN mkdir -p /var/{home,roothome,mnt,srv,opt,usr/lib/locale} /sysroot/ostree \
     && cp -r /usr/lib/locale/* /var/usr/lib/locale/ | true \
     && rm -rf /{home,root,mnt,srv,opt,usr/lib/locale} \
     && ln -s var/{home,mnt,srv,opt} / \
     && ln -s  var/roothome /root \
+    && ln -sf sysroot/ostree /ostree \
     && ln -s var/lib/locale /usr/lib/locale
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
