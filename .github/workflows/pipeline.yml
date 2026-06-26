@@ -49,7 +49,7 @@ jobs:
     if: |
       always()
         && inputs.run_image
-        && (needs.debs.result == 'success' &&  || needs.debs.result == 'skipped') \
+        && (needs.debs.result == 'success' &&  || needs.debs.result == 'skipped')
         && (needs.image.result == 'success' &&  || needs.image.result == 'skipped')
     name: Build ISO
     if: ${{ inputs.run_iso }}
