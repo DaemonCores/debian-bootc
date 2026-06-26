@@ -173,6 +173,7 @@ jobs:
           SB_SIGNING_CERT: ${{ secrets.SB_SIGNING_CERT }}
         run: |
           SAVE_PWD=$(pwd)
+          trap 'rm -f /tmp/sb.key /tmp/sb.crt' EXIT
 
           git clone --branch "${GRUB_FEDORA_BRANCH}" \
             https://github.com/rhboot/grub2.git /build/grub2-fedora
@@ -230,8 +231,11 @@ jobs:
           rm -f debian
           
           # Sign the GRUB EFI binary with the Secure Boot signing key
-          echo "${SB_SIGNING_KEY}"  | base64 -d > /tmp/sb.key
-          echo "${SB_SIGNING_CERT}" | base64 -d > /tmp/sb.crt
+          # Create key files with restrictive permissions immediately (umask 077
+          # in a subshell) so they are never world-readable between creation and
+          # the former chmod 600 call.
+          (umask 077; echo "${SB_SIGNING_KEY}"  | base64 -d > /tmp/sb.key)
+          (umask 077; echo "${SB_SIGNING_CERT}" | base64 -d > /tmp/sb.crt)
 
           sbsign \
             --key  /tmp/sb.key \
