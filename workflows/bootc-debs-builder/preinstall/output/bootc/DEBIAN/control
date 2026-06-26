@@ -2,7 +2,8 @@ Source: bootc
 Package: bootc
 Version: {{ VER }}
 Architecture: amd64
-Maintainer: build
+Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
+Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
 Pre-Depends: lvm2, xfsprogs, dracut, libostree, bootupd
