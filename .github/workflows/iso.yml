@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: almalinux:10
+      # --privileged requis pour loop mount (mount -o loop) lors de l'extraction
+      # et du repack des images squashfs/ISO. Ne pas retirer.
       options: --privileged
     permissions:
       contents: write
