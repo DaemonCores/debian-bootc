@@ -2,7 +2,8 @@ Source: libcomposefs
 Package: libcomposefs
 Version: {{ VER }}
 Architecture: amd64
-Maintainer: build
+Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
+Homepage: https://github.com/DaemonCores/debian-bootc
 Section: libs
 Priority: required
 Description: library for composefs filesystem images (required by libostree)
