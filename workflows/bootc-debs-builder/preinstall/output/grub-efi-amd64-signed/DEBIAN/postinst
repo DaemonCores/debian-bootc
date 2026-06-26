@@ -10,6 +10,13 @@ case "$1" in
             exit 0
         fi
 
+        # Check if EFI firmware is available.
+        # /sys/firmware/efi is absent in container builds and on legacy BIOS systems.
+        if [ ! -d /sys/firmware/efi ]; then
+            echo "INFO: No EFI firmware detected (container build or legacy BIOS), skipping MOK enrollment." >&2
+            exit 0
+        fi
+
         # Check if mokutil is available (requires shim-signed)
         if ! command -v mokutil >/dev/null 2>&1; then
             echo "INFO: mokutil not available, skipping MOK enrollment." >&2
