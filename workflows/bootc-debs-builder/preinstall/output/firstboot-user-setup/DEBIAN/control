@@ -2,7 +2,8 @@ Source: firstboot-user-setup
 Package: firstboot-user-setup
 Version: {{ VER }}
 Architecture: all
-Maintainer: build
+Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
+Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: optional
 Depends: whiptail, {{ DEPS }}
