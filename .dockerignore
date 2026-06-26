@@ -1,0 +1,7 @@
+.git/
+.github/
+workflows/
+*.iso
+out/
+README.md
+LICENSE
