@@ -23,7 +23,6 @@ permissions:
   id-token: write
 
 jobs:
-
   debs:
     name: Build .deb packages
     if: ${{ inputs.run_debs }}
@@ -33,8 +32,8 @@ jobs:
   image:
     name: Build container image
     needs: [debs]
-    # always() forces evaluation even when debs is skipped.
-    # image runs if: checked AND (debs succeeded OR debs was skipped/not selected).
+    # always() force l'évaluation même si debs est skippé.
+    # image tourne si : coché ET (debs ok OU debs skippé/non sélectionné).
     if: |
       always() &&
       inputs.run_image &&
@@ -43,14 +42,14 @@ jobs:
     secrets: inherit
 
   iso:
-    needs: [debs, image]
-    # always() forces evaluation even when debs is skipped.
-    # image runs if: checked AND (debs succeeded OR debs was skipped/not selected).
-    if: |
-      always()
-        && inputs.run_image
-        && (needs.debs.result == 'success' &&  || needs.debs.result == 'skipped')
-        && (needs.image.result == 'success' &&  || needs.image.result == 'skipped')
     name: Build ISO
+    needs: [debs, image]
+    # always() force l'évaluation même si debs ou image sont skippés.
+    # iso tourne si : coché ET (debs ok OU skippé) ET (image ok OU skippé).
+    if: |
+      always() &&
+      inputs.run_iso &&
+      (needs.debs.result == 'success' || needs.debs.result == 'skipped') &&
+      (needs.image.result == 'success' || needs.image.result == 'skipped')
     uses: ./.github/workflows/iso.yml
     secrets: inherit
