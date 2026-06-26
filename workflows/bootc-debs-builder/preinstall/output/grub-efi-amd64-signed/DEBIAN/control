@@ -6,14 +6,13 @@ Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
-Description: GRUB2 EFI binary for amd64 with BLS support (Fedora rhboot build)
+Description: GRUB2 EFI binary for amd64 with BLS and Secure Boot support
  Provides a GRUB2 EFI binary (grubx64.efi) compiled from the Fedora
- rhboot/grub2 fork at a pinned upstream commit. Includes the blscfg and
- blsuki modules required by ostree and bootc for Boot Loader Specification
- (BLS) kernel entry management, which the standard Debian GRUB package
- does not provide.
+ rhboot/grub2 fork with BLS (Boot Loader Specification) support required
+ by ostree and bootc, signed with the debian-bootc Secure Boot signing key.
  .
- Note: this binary is NOT signed by a Microsoft-trusted Certificate
- Authority. Secure Boot must be disabled or the signing key enrolled
- manually through MOK (Machine Owner Key) before booting a system
- deployed with this image.
+ The binary is verified by the shim bootloader through the MOK (Machine
+ Owner Key) mechanism. The signing certificate is included at
+ /usr/share/debian-bootc/sb_signing.crt and automatically queued for MOK
+ enrollment via the package postinst script. Enrollment confirmation is
+ required at the MokManager screen on the next reboot.
