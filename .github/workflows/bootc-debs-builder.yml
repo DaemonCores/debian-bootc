@@ -234,7 +234,8 @@ jobs:
         env:
           CARGO_HOME: "/build/rust"
           RUSTUP_HOME: "/build/rust"
-          BOOTUPD_VER: "v0.2.32"
+          BOOTUPD_VER: "v0.2.35"
+          BOOTUPD_VENDOR_SHA256: "7ada7d0c9d1facb4c5a138e1b014191971b8e97a2fca690b86357e9888584e8b"
         run: |
           SAVE_PWD=$(pwd)
           rm -rf /build/vendor && mkdir /build/vendor
@@ -244,7 +245,10 @@ jobs:
 
           curl -fsSL \
             "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
-            | tar --zstd -x -C /build/
+            -o /tmp/bootupd-vendor.tar.zstd
+          printf '%s  /tmp/bootupd-vendor.tar.zstd\n' "${BOOTUPD_VENDOR_SHA256}" \
+            | sha256sum -c -
+          tar --zstd -x -C /build/ -f /tmp/bootupd-vendor.tar.zstd
 
           . ${RUSTUP_HOME}/env
           cargo build --release --manifest-path /build/bootupd/Cargo.toml
@@ -372,17 +376,21 @@ jobs:
         env:
           CARGO_HOME: "/build/rust"
           RUSTUP_HOME: "/build/rust"
-          BOOTC_VER: "v1.16.1"
+          BOOTC_VER: "v1.16.2"
+          BOOTC_VENDOR_SHA256: 53d759ca521144a675af67e68d23c3f5f18dca784e4e900052d0cfdc4467732b
         run: |
           SAVE_PWD=$(pwd)
           rm -rf /build/vendor && mkdir /build/vendor
           
           git clone --depth=1 --branch "${BOOTC_VER}" \
             https://github.com/bootc-dev/bootc.git /build/bootc
-          
+
           curl -fsSL \
-            https://github.com/bootc-dev/bootc/releases/download/${BOOTC_VER}/bootc-${BOOTC_VER#v}-vendor.tar.zstd \
-            | tar --zstd -x -C /build/
+            "https://github.com/bootc-dev/bootc/releases/download/${BOOTC_VER}/bootc-${BOOTC_VER#v}-vendor.tar.zstd" \
+            -o /tmp/bootc-vendor.tar.zstd
+          printf '%s  /tmp/bootc-vendor.tar.zstd\n' "${BOOTC_VENDOR_SHA256}" \
+            | sha256sum -c -
+          tar --zstd -x -C /build/ -f /tmp/bootc-vendor.tar.zstd
           
           . ${RUSTUP_HOME}/env
           cargo build --release --manifest-path /build/bootc/Cargo.toml
