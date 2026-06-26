@@ -17,8 +17,9 @@
 
 set -euo pipefail
 
-SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso>}"
-DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso>}"
+SRC_ISO="${1:?Usage: $0 <source.iso> <dest.iso> [display-name]}"
+DST_ISO="${2:?Usage: $0 <source.iso> <dest.iso> [display-name]}"
+PRODUCT_NAME="${3:-}"   # display name passed from CI (e.g. "Debian Bootc")
 BANNER_DIR="assets/banner"
 
 SIDEBAR="${BANNER_DIR}/anaconda-sidebar.png"
