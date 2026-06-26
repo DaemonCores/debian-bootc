@@ -109,8 +109,8 @@ RUN wget \
 COPY ./assets/banner/etc /etc/etc/
 
 # Fix ostree filesystem
-RUN mkdir -p /var/{home,roothome,mnt,srv,opt,lib/locale} \
-    && cp -r /usr/lib/locale/* /var/usr/lib/locale | true \
+RUN mkdir -p /var/{home,roothome,mnt,srv,opt,usr/lib/locale} \
+    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ | true \
     && ln -s var/{home,mnt,srv,opt} / \
     && ln -s  var/roothome /root \
     && ln -s var/lib/locale /usr/lib/locale \
