@@ -98,7 +98,7 @@ jobs:
           mv out/customized.iso out/base.iso
 
       # ─── IMAGE ───────────────────────────────────────────────────────────
-      - name: Pull et sauvegarde image OCI
+      - name: Pull and save OCI image for offline ISO
         run: |
           podman pull "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
           mkdir -p out
@@ -107,7 +107,7 @@ jobs:
             -o out/image.tar \
             "ghcr.io/${GITHUB_REPOSITORY,,}:latest"
 
-      # ─── KISKSTART ───────────────────────────────────────────────────────
+      # ─── KICKSTART ───────────────────────────────────────────────────────
 
       - name: Render kickstart
         shell: bash
