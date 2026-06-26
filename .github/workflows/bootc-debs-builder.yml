@@ -91,7 +91,6 @@ jobs:
             /output/firstboot-user-setup/
 
           chmod 755 \
-            /output/firstboot-user-setup/DEBIAN/postinst \
             /output/firstboot-user-setup/usr/local/bin/firstboot-user-setup
 
           sed -i \
