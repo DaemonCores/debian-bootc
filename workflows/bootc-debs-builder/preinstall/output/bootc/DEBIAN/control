@@ -8,4 +8,12 @@ Section: admin
 Priority: required
 Pre-Depends: lvm2, xfsprogs, dracut, libostree, bootupd
 Depends: iproute2, {{ DEPS }}
-Description: bootc
+Description: bootable OCI container image manager for Debian
+ Manages the host operating system as an OCI container image, using
+ ostree as the on-disk storage and atomic deployment engine. Enables
+ transactional OS upgrades and rollbacks driven entirely by standard
+ container tooling and a container registry.
+ .
+ This is a Debian port of the upstream bootc project, compiled from
+ source against the ostree and composefs libraries provided by this
+ repository. It is the core component of the debian-bootc image stack.

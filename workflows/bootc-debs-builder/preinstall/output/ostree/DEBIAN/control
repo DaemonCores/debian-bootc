@@ -7,4 +7,13 @@ Homepage: https://github.com/DaemonCores/debian-bootc
 Section: libs
 Priority: required
 Depends: libcomposefs, {{ DEPS }}
-Description: libostree
+Description: content-addressed object store for bootable OS trees
+ OSTree versions and deploys Linux operating system trees using a
+ Git-like content-addressed object model. Deployments are atomic,
+ diff-based and fully rollback-capable. It manages /usr and /etc
+ while leaving /var and /home as normal mutable storage.
+ .
+ This build is compiled from upstream sources with composefs integrity
+ protection, dracut integration (50ostree initramfs module), the
+ ostree-system-generator for early boot, and the prepare-root helper
+ required by bootc image deployments.

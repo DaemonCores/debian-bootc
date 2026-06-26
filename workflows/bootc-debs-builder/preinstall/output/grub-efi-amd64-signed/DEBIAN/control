@@ -6,4 +6,14 @@ Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
-Description: GRUB modules for EFI-AMD64 (Fedora 44 build with blscfg support)
+Description: GRUB2 EFI binary for amd64 with BLS support (Fedora rhboot build)
+ Provides a GRUB2 EFI binary (grubx64.efi) compiled from the Fedora
+ rhboot/grub2 fork at a pinned upstream commit. Includes the blscfg and
+ blsuki modules required by ostree and bootc for Boot Loader Specification
+ (BLS) kernel entry management, which the standard Debian GRUB package
+ does not provide.
+ .
+ Note: this binary is NOT signed by a Microsoft-trusted Certificate
+ Authority. Secure Boot must be disabled or the signing key enrolled
+ manually through MOK (Machine Owner Key) before booting a system
+ deployed with this image.

@@ -6,4 +6,11 @@ Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: libs
 Priority: required
-Description: library for composefs filesystem images (required by libostree)
+Description: integrity-protected filesystem image library for ostree
+ composefs is a Linux filesystem that mounts read-only OS images backed
+ by a content-addressed store. Every file is verified at read time using
+ fs-verity, making it impossible to tamper with the deployed OS tree at
+ rest without detection.
+ .
+ Required by libostree when built with composefs support enabled, which
+ is mandatory for bootc deployments with image integrity enforcement.
