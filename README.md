@@ -333,10 +333,12 @@ mokutil --list-enrolled     # confirm the debian-bootc key is present
 
 ## Required secrets
 
-| Secret        | Workflow                 | Purpose                                          |
-|---------------|--------------------------|--------------------------------------------------|
-| `PAT_PKG`     | `bootc-build.yml`        | Authenticate Podman and Docker to push to GHCR   |
-| `APT_GPG_KEY` | `bootc-debs-builder.yml` | Sign the APT repository published to GitHub Pages|
+| Secret           | Workflow                    | Purpose                                           |
+|------------------|-----------------------------|---------------------------------------------------|
+| `PAT_PKG`        | `bootc-build.yml`           | Authenticate Podman and Docker to push to GHCR    |
+| `APT_GPG_KEY`    | `bootc-debs-builder.yml`    | Sign the APT repository published to GitHub Pages |
+| `SB_SIGNING_KEY` | `bootc-debs-builder.yml`    | Private key for GRUB EFI Secure Boot signing      |
+| `SB_SIGNING_CERT`| `bootc-debs-builder.yml`    | Certificate for GRUB EFI Secure Boot signing      |
 
 ---
 
