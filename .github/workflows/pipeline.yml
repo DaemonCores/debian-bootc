@@ -52,6 +52,5 @@ jobs:
         && (needs.debs.result == 'success' &&  || needs.debs.result == 'skipped')
         && (needs.image.result == 'success' &&  || needs.image.result == 'skipped')
     name: Build ISO
-    if: ${{ inputs.run_iso }}
     uses: ./.github/workflows/iso.yml
     secrets: inherit
