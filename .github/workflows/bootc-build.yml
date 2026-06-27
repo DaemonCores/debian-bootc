@@ -81,6 +81,9 @@ jobs:
       - name: Install cosign
         if: github.ref == 'refs/heads/main'
         uses: sigstore/cosign-installer@v3
+        with:
+          install-dir: /usr/local/bin
+          use-sudo: true
 
       - name: Sign image
         if: github.ref == 'refs/heads/main'
