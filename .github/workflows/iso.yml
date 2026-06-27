@@ -31,6 +31,24 @@ jobs:
           dnf install -y git gh xorriso squashfs-tools ImageMagick lorax curl cpio gzip podman fuse-overlayfs isomd5sum
           git config --system --add safe.directory '*'
 
+          COSIGN_VER=$(curl -fsSL https://api.github.com/repos/sigstore/cosign/releases/latest \
+            | grep tag_name | cut -d: -f2 | tr -d 'v", ')
+
+          curl -fsSL \
+            "https://github.com/sigstore/cosign/releases/latest/download/cosign-${COSIGN_VER}-1.x86_64.rpm" \
+            -o /tmp/cosign.rpm
+          curl -fsSL \
+            "https://github.com/sigstore/cosign/releases/latest/download/checksums.txt" \
+            -o /tmp/cosign-checksums.txt
+
+          # Verify RPM checksum against the official checksums file
+          grep "cosign-${COSIGN_VER}-1.x86_64.rpm" /tmp/cosign-checksums.txt \
+            | sed 's|  .*|  /tmp/cosign.rpm|' \
+            | sha256sum -c -
+
+          rpm -ivh /tmp/cosign.rpm
+          rm -f /tmp/cosign.rpm /tmp/cosign-checksums.txt
+
       # ─── VARIABLES ───────────────────────────────────────────────────────
 
       - name: Compute names
