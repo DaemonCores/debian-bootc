@@ -1,0 +1,11 @@
+# Build artifacts
+*.iso
+out/
+tmp/
+
+# Compressed archives (e.g., intermediate build exports)
+Archive.zip
+
+# Secrets
+.env
+.secrets

@@ -1,0 +1,80 @@
+name: Bug Report
+about: Report a bug in debian-bootc
+description: Report a bug in debian-bootc
+labels: ["bug", "triage"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which version of the debian-bootc image are you running? (e.g., `v1.2.3`, image digest, or git SHA)
+      placeholder: e.g., v1.2.3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment_type
+    attributes:
+      label: Deployment Type
+      description: How did you deploy debian-bootc?
+      options:
+        - Bare metal (bootc install to disk)
+        - Virtual machine (bootc install to VM disk)
+        - Container (e.g., `podman run`, `docker run`)
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+      placeholder: Describe the bug in detail...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Provide a minimal set of steps that reliably reproduce the issue.
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe the expected behavior...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened instead?
+      placeholder: Describe the actual behavior...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Output
+      description: |
+        Paste any relevant logs, command output, or error messages.
+        Tip: Wrap multi-line output in triple backticks (```).
+      render: shell
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any other context that might help us triage and fix the issue (hardware, network setup, custom modifications, etc.).

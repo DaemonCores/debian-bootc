@@ -1,0 +1,137 @@
+name: Docs Wiki Sync
+
+# Sync the static Markdown documentation under docs/ to the GitHub wiki so that
+# the published documentation stays in sync with the default branch on every
+# push.
+#
+# This project ships shell scripts, a Containerfile, kickstart templates and
+# Debian package build sources (no Python/TypeScript/Rust with extractable
+# docstrings), so there is no docstring-extraction step here: the workflow
+# copies docs/*.md verbatim into the wiki, per the documentation-discipline
+# "adapt to existing tooling" rule.
+
+on:
+  # Re-publish the wiki every time the default branch moves, so the published
+  # docs always reflect the current state of docs/.
+  push:
+    branches: [main]
+  # Allow a manual run from the Actions tab (useful to (re)publish on demand,
+  # e.g. right after enabling the wiki in the repo settings).
+  workflow_dispatch:
+
+# GitHub Actions has no dedicated "wiki" permission scope. Pushing to the wiki
+# (a separate git repository at <owner>/<repo>.wiki.git) is authenticated
+# through the automatically-issued GITHUB_TOKEN and requires contents: write.
+#
+# To let this workflow push to the wiki, enable in the repo settings:
+#   Settings > Actions > General > Workflow permissions >
+#     "Read and write permissions"
+# Alternatively, create a fine-grained PAT with Contents: read/write scoped to
+# the wiki repo, store it as a secret (e.g. WIKI_TOKEN) and reference it in the
+# git remote URLs below instead of secrets.GITHUB_TOKEN.
+permissions:
+  contents: write
+
+# Avoid overlapping concurrent runs on the same ref: a newer push should wait
+# for the previous sync to finish rather than cancel it, so no half-pushed
+# state ends up on the wiki.
+concurrency:
+  group: docs-wiki-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync-wiki:
+    name: Sync docs/ to GitHub wiki
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ─── 1. CHECKOUT ──────────────────────────────────────────────────────
+      # Shallow clone is enough: we only need the docs/ tree, no history.
+      # persist-credentials: false prevents the source-repo GITHUB_TOKEN from
+      # being persisted in the local git config, so it cannot leak into the
+      # wiki push (which uses its own token in the remote URL).
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # ─── 2. GIT IDENTITY ──────────────────────────────────────────────────
+      # Configure the author used for the wiki commit. The bot identity is the
+      # standard convention for automated commits on GitHub Actions and is NOT
+      # an AI-attribution line in the commit body.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # ─── 3. CLONE OR INITIALIZE WIKI ──────────────────────────────────────
+      # The GitHub wiki is exposed as a separate git repository at
+      # <owner>/<repo>.wiki.git. On the first run the wiki may not exist yet:
+      # the clone fails with "Repository not found". In that case we initialize
+      # a fresh local repo, seed it with a Home.md (GitHub requires at least one
+      # page before the wiki becomes visible) and set up the remote so the
+      # subsequent commit/push step creates the wiki on first push.
+      - name: Clone or initialize wiki repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          git clone \
+            "https://x-access-token:${GH_TOKEN}@github.com/DaemonCores/debian-bootc.wiki.git" \
+            wiki-tmp
+          clone_status=$?
+          set -e
+
+          if [ "${clone_status}" -ne 0 ]; then
+            echo "::notice::Wiki repository does not exist yet. Initializing a fresh local repo; the first push will create it."
+            mkdir -p wiki-tmp
+            cd wiki-tmp
+            # GitHub wikis historically default to 'master'; push will create the
+            # remote branch and the wiki becomes visible once a page exists.
+            git init -b master
+            git remote add origin \
+              "https://x-access-token:${GH_TOKEN}@github.com/DaemonCores/debian-bootc.wiki.git"
+            # Minimal landing page so the wiki has content to display.
+            echo "# debian-bootc wiki" > Home.md
+            git add Home.md
+          else
+            cd wiki-tmp
+          fi
+
+      # ─── 4. SYNC DOCS INTO WIKI ───────────────────────────────────────────
+      # Copy every Markdown file from docs/ into the wiki working tree,
+      # overwriting any stale version. Files removed from docs/ are deliberately
+      # NOT deleted from the wiki: the wiki may host user-edited pages (such as
+      # Home.md) that we must never clobber automatically.
+      - name: Sync docs/*.md into wiki
+        run: |
+          # Copy from the workspace root (docs/ lives at the repo root).
+          cp -v docs/*.md wiki-tmp/
+
+          # Stage everything so the next step can compute a real diff.
+          cd wiki-tmp
+          git add -A
+
+      # ─── 5. COMMIT AND PUSH ───────────────────────────────────────────────
+      # Commit only when something actually changed: `git diff --cached --quiet`
+      # exits 0 when the index matches HEAD (nothing to commit). Skipping the
+      # push in that case keeps the run green and avoids empty commits on the
+      # wiki history. `git push origin HEAD` pushes the current branch to a
+      # same-named remote branch, which works both for an existing wiki (branch
+      # already tracks origin) and for the freshly-initialized case (creates the
+      # remote branch on first push).
+      - name: Commit and push to wiki
+        run: |
+          cd wiki-tmp
+          if git diff --cached --quiet; then
+            echo "No documentation changes to push to the wiki."
+            exit 0
+          fi
+
+          git commit -m "docs: sync docs/ from commit ${{ github.sha }}
+
+          Auto-generated by the docs-wiki-sync workflow on push to main."
+
+          git push origin HEAD
