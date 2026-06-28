@@ -6,6 +6,10 @@ Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
+Conflicts: grub-pc, grub-pc-bin, grub-efi-amd64-bin
+Breaks: grub-common (<< 2.12-1), grub2-common (<< 2.12-1)
+Replaces: grub-efi-amd64
+Provides: grub-efi-amd64
 Description: GRUB2 EFI binary for amd64 with BLS and Secure Boot support
  Provides a GRUB2 EFI binary (grubx64.efi) compiled from the Fedora
  rhboot/grub2 fork with BLS (Boot Loader Specification) support required
