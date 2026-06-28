@@ -55,7 +55,7 @@ jobs:
             --tag "${IMAGE}:$(git rev-parse --short HEAD)" \
             $MONTHLY_TAG \
             -f Containerfile \
-            --format oci \
+            --format docker \
             .
 
       - name: Check runtime deps
