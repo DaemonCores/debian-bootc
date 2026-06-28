@@ -121,7 +121,7 @@ jobs:
             > /output/ifupdown2/DEBIAN/md5sums
 
           # Preserve +pmx suffix for pve-manager version check
-          sed -i "s/^Version: .*/Version: ${ORIG_VER}+bootc1/" \
+          sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc1/" \
             /output/ifupdown2/DEBIAN/control
           chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf
 
@@ -152,7 +152,7 @@ jobs:
             | sed "s|/output/systemd-timesyncd/||" \
             > /output/systemd-timesyncd/DEBIAN/md5sums
 
-          sed -i "s/^Version: .*/Version: ${ORIG_VER}+bootc1/" \
+          sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc1/" \
             /output/systemd-timesyncd/DEBIAN/control
 
           dpkg-deb --build /output/systemd-timesyncd \
