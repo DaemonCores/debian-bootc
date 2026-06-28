@@ -163,6 +163,4 @@ fi
 touch "$FLAG"
 _msg "User '${USERNAME}' created successfully!\n\nYou can now log in."
 
-# ── Reset terminal and hand control back to getty ─────────────────────────
-stty sane
-clear
+reboot
