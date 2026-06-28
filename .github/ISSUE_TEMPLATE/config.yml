@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: debian-bootc Documentation
+    url: https://github.com/DaemonCores/debian-bootc/wiki
+    about: Check the wiki for documentation before opening an issue
+  - name: Debian 13 (Trixie) base image
+    url: https://www.debian.org/releases/trixie/
+    about: For issues related to the upstream Debian base image, not debian-bootc itself
