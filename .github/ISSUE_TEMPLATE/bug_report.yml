@@ -1,5 +1,4 @@
 name: Bug Report
-about: Report a bug in debian-bootc
 description: Report a bug in debian-bootc
 labels: ["bug", "triage"]
 body:

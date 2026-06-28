@@ -1,5 +1,4 @@
 name: Feature Request
-about: Suggest a new feature for debian-bootc
 description: Suggest a new feature or enhancement for debian-bootc
 labels: ["enhancement", "triage"]
 body:
