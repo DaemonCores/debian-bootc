@@ -100,6 +100,10 @@ RUN wget \
         wpasupplicant \
         broadcom-sta-dkms \
         firstboot-user-setup \
+    && apt-mark hold \
+        grub-pc \
+        grub-pc-bin \
+        grub-efi-amd64-bin \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
