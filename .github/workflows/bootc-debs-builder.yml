@@ -39,11 +39,6 @@ jobs:
           RUSTUP_HOME: "/build/rust"
           PVE_GPG_SHA256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45
         run: |
-          curl -fsSL https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg \
-            -o /usr/share/keyrings/proxmox-archive-keyring.gpg
-          printf '%s  /usr/share/keyrings/proxmox-archive-keyring.gpg\n' "${PVE_GPG_SHA256}" \
-            | sha256sum -c -
-
           apt update
           apt install -y \
             zstd \
