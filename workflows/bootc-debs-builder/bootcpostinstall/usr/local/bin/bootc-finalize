@@ -3,7 +3,16 @@ set -euo pipefail
 
 KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
 [ -z "${KVER}" ] && exit 0
-[ -f "/boot/vmlinuz-${KVER}" ] || exit 0
+
+# Support both Debian-standard kernels (in /boot/vmlinuz-${KVER})
+# and kernels already placed in /usr/lib/modules/${KVER}/vmlinuz
+# (e.g., Proxmox pve-kernel or other downstream images).
+if [ -f "/boot/vmlinuz-${KVER}" ]; then
+    mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
+elif [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
+    # Kernel absent from both locations: nothing to do.
+    exit 0
+fi
 
 # Dracut
 # NOTE: The order below is intentional and optimized for the bootc layer:
@@ -13,7 +22,6 @@ KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
 # If dracut fails, set -euo pipefail aborts the entire build,
 # preventing a partially-broken image from being produced.
 # This is NOT a bug — it is the correct failure mode for atomic images.
-mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
 rm -rf /boot/*
 dracut --kver "${KVER}" --force /usr/lib/modules/${KVER}/initramfs.img
 
