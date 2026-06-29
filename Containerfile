@@ -101,9 +101,7 @@ RUN wget \
         broadcom-sta-dkms \
         firstboot-user-setup \
     && apt-mark hold \
-        grub-pc \
-        grub-pc-bin \
-        grub-efi-amd64-bin \
+        grub-efi-amd64-signed \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
