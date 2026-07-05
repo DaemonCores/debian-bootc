@@ -132,25 +132,24 @@ if [[ "$USE_ROOTFS_IMG" == true ]]; then
   umount "$WORKDIR/rootfs-mount"
 fi
 
-# Inject anaconda config to disable Users module directly into the installer squashfs
-ANACONDA_CONF="$WORKDIR/squashfs-root/etc/anaconda/conf.d/99-disable-users.conf"
+# Inject anaconda config to disable Users, Localization and Timezone modules directly into the installer squashfs
+ANACONDA_CONF="$WORKDIR/squashfs-root/etc/anaconda/conf.d/99-disable-anaconda-modules.conf"
 mkdir -p "$(dirname "$ANACONDA_CONF")"
 printf '%s\n' \
   '[Anaconda]' \
   'forbidden_modules =' \
   '  org.fedoraproject.Anaconda.Modules.Users' \
-  'optional_modules =' \
   '  org.fedoraproject.Anaconda.Modules.Localization' \
+  '  org.fedoraproject.Anaconda.Modules.Timezone' \
+  'optional_modules =' \
   '  org.fedoraproject.Anaconda.Modules.Network' \
   '  org.fedoraproject.Anaconda.Modules.Payloads' \
-  '  org.fedoraproject.Anaconda.Modules.Storage' \
   '  org.fedoraproject.Anaconda.Modules.Services' \
-  '  org.fedoraproject.Anaconda.Modules.Timezone' \
   '  org.fedoraproject.Anaconda.Modules.Security' \
   '  org.fedoraproject.Anaconda.Modules.Subscription' \
   '  org.fedoraproject.Anaconda.Addons.*' \
   > "$ANACONDA_CONF"
-echo "[banners] → etc/anaconda/conf.d/99-disable-users.conf injected (Users forbidden, Addons optional)"
+echo "[banners] → etc/anaconda/conf.d/99-disable-anaconda-modules.conf injected (Users/Localization/Timezone forbidden, Addons optional)"
 
 # Patch product name: .buildstamp controls "FEDORA 44" in the Anaconda header/welcome title
 BUILDSTAMP="$WORKDIR/squashfs-root/.buildstamp"
