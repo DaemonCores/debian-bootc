@@ -1,8 +1,7 @@
 network --bootproto=dhcp --hostname={{ hostname }} --activate
-
-zerombr
-clearpart --all --initlabel
-autopart --type=lvm --fstype=xfs
+# Prevent Anaconda's timezone module from enabling chronyd (it ignores
+# services --disabled=chronyd). --nontp is the only effective knob.
+timezone --nontp
 
 bootc --source-imgref=oci-archive:/run/install/repo/image.tar --target-imgref=ghcr.io/{{ repo }}:latest
 
