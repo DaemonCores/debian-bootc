@@ -9,6 +9,7 @@ fi
 
 HOST=$(hostname -s)
 FQDN="$(hostname -d 2>/dev/null)"
+HOSTS=$(cat /etc/hosts 2> /dev/null || true)
 
 [[ "${FQDN}" == "" ]] \
   && FQDN="local"
@@ -28,7 +29,11 @@ resetdomaine() {
   echo "${IP}    ${FQDN} ${HOST}" >> /etc/hosts
 }
 
-[[ ! -f "/etc/hosts" && "$(cat /etc/hosts 2> /dev/null || true)" == "" ]] \
+[[
+  ! -f "/etc/hosts"
+  || "${HOSTS}" == ""
+  ||  "$(echo ${HOSTS} | wc -l)" == "1"
+]] \
   && setdomaine \
   || resetdomaine
 
