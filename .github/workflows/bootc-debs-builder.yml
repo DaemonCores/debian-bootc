@@ -79,7 +79,7 @@ jobs:
       - name: Build firstboot-user-setup
         shell: bash
         env:
-          FIRSTBOOT_VER: "1.0.0"
+          FIRSTBOOT_VER: "1.0.1"
         run: |
           SAVE_PWD=$(pwd)
 

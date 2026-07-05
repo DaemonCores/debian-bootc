@@ -10,10 +10,18 @@ FLAG=/var/lib/firstboot-user-setup.done
 # Bug-fix 3: in ExecStartPre context, ConditionPathExists is not evaluated — check the flag here
 [[ -f "$FLAG" ]] && exit 0
 
-# Skip if a regular user already exists (UID 1000-65533)
+# Skip only if a real *human* account already exists. A user counts when its UID
+# is in the human range AND it has a login shell AND its home is under /home.
+# This excludes service/bot users that packages allocate in the same UID range
+# and that no human logs into (e.g. Proxmox's `ceph`, UID 64045, nologin shell,
+# /var/lib/ceph home) — otherwise the wizard would skip itself on first boot.
+# The check is dynamic, so it holds for any distribution with such users.
 _existing_user() {
-    while IFS=: read -r _ _ uid _; do
-        if [[ "$uid" -ge 1000 && "$uid" -le 65533 ]]; then
+    local uid home shell
+    while IFS=: read -r _ _ uid _ _ home shell; do
+        if [[ "$uid" -ge 1000 && "$uid" -le 65533 ]] \
+           && [[ "$shell" != */nologin && "$shell" != */false ]] \
+           && [[ "$home" == /home/* ]]; then
             return 0
         fi
     done < /etc/passwd
