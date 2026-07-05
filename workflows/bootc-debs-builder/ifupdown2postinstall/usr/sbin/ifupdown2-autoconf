@@ -15,4 +15,5 @@ iface lo inet loopback
 
 auto ${IFACE}
 iface ${IFACE} inet dhcp
+iface ${IFACE} inet6 auto
 EOF
