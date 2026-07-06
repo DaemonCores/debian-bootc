@@ -8,7 +8,7 @@ This document describes the architecture of debian-bootc: its layered compositio
 
 ## 1. Project Overview
 
-debian-bootc is a bootc-compliant OSTree image that delivers Debian 13 (Trixie) as an atomic, rollback-capable operating system. It is the **base layer** for projects like Proxmox-Atomic, providing the full bootc/OSTree infrastructure that other projects can extend.
+debian-bootc is a bootc-compliant OSTree image that delivers Debian 13 (Trixie) as an atomic, rollback-capable operating system. It is the **base layer** for projects like DaemonCores-VE, providing the full bootc/OSTree infrastructure that other projects can extend.
 
 The project follows the **bootc model**: the entire OS is built in a standard container pipeline (`podman build`), pushed to a container registry (GHCR), and applied atomically to the host using ostree as the on-disk storage engine. Updates are transactional and fully rollback-capable from the bootloader.
 
@@ -21,7 +21,7 @@ debian-bootc is designed as a **base layer** that other projects can build upon:
 | Layer | Source | Responsibility |
 |---|---|---|
 | **debian-bootc** | This repository | bootc, ostree, composefs, bootupd, GRUB (Fedora rhboot fork), dracut, firstboot-user-setup, ifupdown2 (repacked), systemd-timesyncd (repacked), Secure Boot signing, APT repository |
-| **Downstream layers** | Other repositories (e.g., Proxmox-Atomic) | Hypervisor, application, or custom tooling built `FROM ghcr.io/daemoncores/debian-bootc:latest` |
+| **Downstream layers** | Other repositories (e.g., DaemonCores-VE) | Hypervisor, application, or custom tooling built `FROM ghcr.io/daemoncores/debian-bootc:latest` |
 
 ### What the base layer provides
 
@@ -229,7 +229,7 @@ The `ifupdown2-pre.service` is ordered `After=ostree-remount.service` to ensure 
 
 ### Default configuration
 
-The base image does not ship a pre-configured `/etc/network/interfaces` file. Downstream layers (e.g., Proxmox-Atomic) are expected to provide their own network configuration. The `ifupdown2-autoconf` helper provides temporary DHCP on first boot to ensure basic connectivity.
+The base image does not ship a pre-configured `/etc/network/interfaces` file. Downstream layers (e.g., DaemonCores-VE) are expected to provide their own network configuration. The `ifupdown2-autoconf` helper provides temporary DHCP on first boot to ensure basic connectivity.
 
 ---
 

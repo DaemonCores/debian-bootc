@@ -89,7 +89,7 @@ The image uses **ifupdown2** (repacked from Proxmox sources with bootc-specific 
 ### Why it is necessary
 
 1. **Bridge and bond support** — ifupdown2 has mature, well-tested support for Linux bridges (`bridge_ports`), VLANs, and bonding, which `systemd-networkd` handles less gracefully, especially in complex hypervisor or multi-interface setups.
-2. **Familiar interface configuration** — The `/etc/network/interfaces` format is familiar to Debian administrators and well-documented. Downstream projects (like Proxmox-Atomic) rely on this format for their network topology.
+2. **Familiar interface configuration** — The `/etc/network/interfaces` format is familiar to Debian administrators and well-documented. Downstream projects (like DaemonCores-VE) rely on this format for their network topology.
 3. **Proxmox ecosystem compatibility** — ifupdown2 is the network manager used by Proxmox VE. Using it in the base image ensures downstream layers do not need to replace the network stack.
 
 ### Risks

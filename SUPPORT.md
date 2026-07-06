@@ -33,7 +33,7 @@ The following are explicitly out of scope for community support:
 
 - **Upstream Debian bugs**: Issues that are reproducible on a standard Debian Trixie installation (without bootc/ostree) should be reported to the [Debian Bug Tracking System](https://bugs.debian.org/) directly.
 - **Hardware-specific issues unrelated to the image**: Driver or firmware problems that are not specific to the atomic deployment model.
-- **Downstream project issues**: Bugs specific to layers built on top of debian-bootc (e.g., Proxmox-Atomic) should be reported to their respective repositories.
+- **Downstream project issues**: Bugs specific to layers built on top of debian-bootc (e.g., DaemonCores-VE) should be reported to their respective repositories.
 - **Paid enterprise support**: This is a community-maintained project. For professional support, consider commercial vendors offering Debian or bootc consulting.
 
 ## Response Expectations
