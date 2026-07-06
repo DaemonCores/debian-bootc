@@ -96,6 +96,8 @@ RUN wget \
         doc-debian \
         dbus \
         ifupdown2 \
+        resolvconf \
+        dhcpcd
         isc-dhcp-client \
         wpasupplicant \
         broadcom-sta-dkms \
