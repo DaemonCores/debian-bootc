@@ -29,6 +29,18 @@ permissions:
   id-token: write
 
 jobs:
+  meta:
+      name: Compute product name
+      runs-on: ubuntu-latest
+      outputs:
+        product_name: ${{ steps.name.outputs.product_name }}
+      steps:
+        - id: name
+          run: |
+            name="${GITHUB_REPOSITORY##*/}"   # cut at the slash -> repo name
+            name="${name//-/ }"               # replace dashes with spaces
+            echo "product_name=$name" >> "$GITHUB_OUTPUT"
+
   debs:
     name: Build .deb packages
     if: ${{ github.event_name == 'schedule' || inputs.run_debs }}
@@ -49,15 +61,16 @@ jobs:
 
   iso:
     name: Build ISO
-    needs: [debs, image]
+    needs: [debs, image, meta]
     # always() forces evaluation even when debs or image were skipped.
     # iso runs if: checked AND (debs ok OR skipped) AND (image ok OR skipped).
     if: |
       always() &&
       (github.event_name == 'schedule' || inputs.run_iso) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped') &&
-      (needs.image.result == 'success' || needs.image.result == 'skipped')
+      (needs.image.result == 'success' || needs.image.result == 'skipped') &&
+      needs.meta.result == 'success'
     uses: DaemonCores/DaemonCores-CI/.github/workflows/iso-builder.yml@main
     with:
-      product_name: "Debian Bootc"
+      product_name: ${{ needs.meta.outputs.product_name }}
     secrets: inherit
