@@ -224,7 +224,7 @@ Verify a pulled image:
 ```bash
 cosign verify ghcr.io/DaemonCores/debian-bootc:latest \
   --certificate-identity-regexp \
-    "https://github.com/DaemonCores/debian-bootc/.github/workflows/bootc-build.yml@refs/heads/main" \
+    "https://github.com/DaemonCores/DaemonCores-CI/.github/workflows/bootc-build.yml@refs/heads/main" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com"
 ```
