@@ -400,7 +400,13 @@ jobs:
       pages: write
       id-token: write
     steps:
+      - id: repo
+        shell: bash
+        run: |
+          name="${GITHUB_REPOSITORY##*/}"          # cut at the slash -> repo name
+          echo "name=${name,,}" >> "$GITHUB_OUTPUT"  # lowercase
+
       - uses: DaemonCores/DaemonCores-CI/bootc-debs-end@main
         with:
-          repo_name: debian-bootc
+          repo_name: ${{ steps.repo.outputs.name }}
           apt_gpg_key: ${{ secrets.APT_GPG_KEY }}

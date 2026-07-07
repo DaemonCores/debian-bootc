@@ -8,5 +8,5 @@ jobs:
   sync:
     uses: DaemonCores/DaemonCores-CI/.github/workflows/docs-wiki-sync.yml@main
     with:
-      wiki_repo: DaemonCores/debian-bootc
+      wiki_repo: ${{ github.repository }}
     secrets: inherit
