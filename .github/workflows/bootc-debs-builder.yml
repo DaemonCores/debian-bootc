@@ -10,71 +10,7 @@ jobs:
     container: debian:trixie
 
     steps:
-      - name: Install clone deps
-        shell: bash
-        run: |
-          apt update
-          apt install -y \
-            ca-certificates \
-            openssl \
-            git \
-            curl \
-            wget
-
-      - name: Checkout
-        uses: actions/checkout@v7 
-        with:
-          submodules: recursive
-      
-      - name: Prepare environement
-        shell: bash
-        run: |
-          cp -r ./workflows/bootc-debs-builder/preinstall/* /
-          mkdir -p /{build,debs}
-
-      - name: Install build deps
-        shell: bash
-        env:
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
-          PVE_GPG_SHA256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45
-        run: |
-          apt update
-          apt install -y \
-            zstd \
-            make \
-            build-essential \
-            go-md2man \
-            libzstd-dev \
-            pkgconf \
-            autoconf \
-            automake \
-            libtool \
-            libglib2.0-dev \
-            libcurl4-openssl-dev \
-            libgpgme-dev \
-            libarchive-dev \
-            libmount-dev \
-            libfuse3-dev \
-            libssl-dev \
-            libsystemd-dev \
-            gobject-introspection \
-            libgirepository1.0-dev \
-            libsoup-3.0-dev \
-            bison \
-            gperf \
-            flex \
-            gettext \
-            python3 \
-            autopoint \
-            gawk \
-            meson \
-            ninja-build \
-            libfreetype6-dev \
-            sbsigntool
-
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- --profile minimal -y
+      - uses: DaemonCores/DaemonCores-CI/bootc-debs-start@main
 
       - name: Build firstboot-user-setup
         shell: bash
@@ -464,60 +400,6 @@ jobs:
       pages: write
       id-token: write
     steps:
-
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: DaemonCores/DaemonCores-CI/bootc-debs-end@main
         with:
-          name: debs
-          path: debs/
-
-      - name: Create APT repo
-        id: create-apt-repo
-        uses: morph027/apt-repo-action@v3
-        with:
-          repo-name: debian-bootc
-          signing-key: ${{ secrets.APT_GPG_KEY }}
-          codename: trixie
-          components: main
-          architectures: amd64
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: ${{ steps.create-apt-repo.outputs.dir }}
-
-      # GitHub Pages deployments fail intermittently with "Deployment failed,
-      # try again later." due to transient issues on the Pages service side
-      # (see actions/deploy-pages issues #406 and #418). The error occurs
-      # immediately after deployment creation, before any syncing status, and
-      # is not caused by artifact conflicts, size, or workflow configuration.
-      # Retrying within the same run (after a short backoff) reliably succeeds.
-      - name: Deploy to GitHub Pages (attempt 1/3)
-        id: deploy_1
-        continue-on-error: true
-        uses: actions/deploy-pages@v5
-
-      - name: Wait before retry 2
-        if: steps.deploy_1.outcome == 'failure'
-        run: sleep 30
-
-      - name: Deploy to GitHub Pages (attempt 2/3)
-        id: deploy_2
-        if: steps.deploy_1.outcome == 'failure'
-        continue-on-error: true
-        uses: actions/deploy-pages@v5
-
-      - name: Wait before retry 3
-        if: steps.deploy_1.outcome == 'failure' && steps.deploy_2.outcome == 'failure'
-        run: sleep 60
-
-      - name: Deploy to GitHub Pages (attempt 3/3)
-        id: deploy_3
-        if: steps.deploy_1.outcome == 'failure' && steps.deploy_2.outcome == 'failure'
-        uses: actions/deploy-pages@v5
-
-      - name: Fail job if all deploy attempts failed
-        if: steps.deploy_1.outcome == 'failure' && steps.deploy_2.outcome == 'failure' && steps.deploy_3.outcome == 'failure'
-        run: |
-          echo "::error::All 3 GitHub Pages deploy attempts failed. This is a transient issue on the GitHub Pages service side; re-run the workflow later."
-          exit 1
+          repo_name: debian-bootc

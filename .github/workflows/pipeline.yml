@@ -39,12 +39,12 @@ jobs:
     name: Build container image
     needs: [debs]
     # always() forces evaluation even when the debs job was skipped.
-    # image runs if: checked AND (debs succeeded OR debs was skipped/not selected).
+    # image runs if: checked AND (debs succeeded OR debs was skipped).
     if: |
       always() &&
       (github.event_name == 'schedule' || inputs.run_image) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped')
-    uses: ./.github/workflows/bootc-build.yml
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/bootc-build.yml@main
     secrets: inherit
 
   iso:
@@ -57,5 +57,7 @@ jobs:
       (github.event_name == 'schedule' || inputs.run_iso) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped') &&
       (needs.image.result == 'success' || needs.image.result == 'skipped')
-    uses: ./.github/workflows/iso.yml
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/iso-builder.yml@main
+    with:
+      product_name: "Debian Bootc"
     secrets: inherit
