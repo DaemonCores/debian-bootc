@@ -1,55 +1,64 @@
 #!/bin/bash
+#
+# bootc-finalize - finalize the bootc image's kernel and bootloader layout.
+# Moves the newest kernel into /usr/lib/modules/<kver>, regenerates the
+# initramfs with dracut, and stages the signed shim/GRUB EFI binaries where
+# bootupd expects them. Invoked from the bootc package postinst during build.
 set -euo pipefail
 
+# ls -1v version-sorts to select the newest kernel; find cannot sort by version.
+# shellcheck disable=SC2012
 KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
 [ -z "${KVER}" ] && exit 0
 
-# Support both Debian-standard kernels (in /boot/vmlinuz-${KVER})
-# and kernels already placed in /usr/lib/modules/${KVER}/vmlinuz
-# (e.g., Proxmox pve-kernel or other downstream images).
+# Support both Debian-standard kernels (in /boot/vmlinuz-${KVER}) and kernels
+# already placed in /usr/lib/modules/${KVER}/vmlinuz (e.g. Proxmox pve-kernel
+# or other downstream images).
 if [ -f "/boot/vmlinuz-${KVER}" ]; then
-    mv /boot/vmlinuz-${KVER} /usr/lib/modules/${KVER}/vmlinuz
+  mv "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz"
 elif [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
-    # Kernel absent from both locations: nothing to do.
-    exit 0
+  # Kernel absent from both locations: nothing to do.
+  exit 0
 fi
 
-# Dracut
+# Dracut.
 # NOTE: The order below is intentional and optimized for the bootc layer:
-# 1. Move the kernel to its final location in /usr/lib/modules
-# 2. Purge /boot entirely to ensure no stale files remain
-# 3. Generate a fresh initramfs with dracut
-# If dracut fails, set -euo pipefail aborts the entire build,
-# preventing a partially-broken image from being produced.
-# This is NOT a bug — it is the correct failure mode for atomic images.
+#   1. Move the kernel to its final location in /usr/lib/modules.
+#   2. Purge /boot entirely to ensure no stale files remain.
+#   3. Generate a fresh initramfs with dracut.
+# If dracut fails, set -euo pipefail aborts the entire build, preventing a
+# partially-broken image from being produced. This is NOT a bug - it is the
+# correct failure mode for atomic images.
+# /boot is a fixed literal (never a variable), so this cannot expand to /*.
+# shellcheck disable=SC2115
 rm -rf /boot/*
-dracut --kver "${KVER}" --force /usr/lib/modules/${KVER}/initramfs.img
+dracut --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"
 
-# Structure bootupd
+# Structure for bootupd.
 SHIM_VER=$(dpkg-query -W -f='${Version}' shim-signed)
 GRUB_VER=$(dpkg-query -W -f='${Version}' grub-efi-amd64-signed)
 
 mkdir -p \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT" \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
-    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
+  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT" \
+  "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
+  "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
-# GRUB EFI binary — custom Fedora build with blscfg embedded
+# GRUB EFI binary - custom Fedora build with blscfg embedded.
 mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+  "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
 
-# Shim in BOOT/ for UEFI firmware
+# Shim in BOOT/ for UEFI firmware.
 mv /usr/lib/shim/shimx64.efi.signed \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
+  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
 
-# Shim also in vendor dir — bootupd looks for shimx64.efi there
+# Shim also in vendor dir - bootupd looks for shimx64.efi there.
 cp "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
+  "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
 
-# Fallback and MokManager
+# Fallback and MokManager.
 mv /usr/lib/shim/fbx64.efi.signed \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
+  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
 mv /usr/lib/shim/mmx64.efi.signed \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
+  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
 
 bootupctl backend generate-update-metadata /
