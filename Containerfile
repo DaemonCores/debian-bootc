@@ -59,6 +59,7 @@ RUN wget \
         intel-microcode \
         amd64-microcode \
         bootc \
+        podman \
         adduser \
         sudo \
         locales \
@@ -74,6 +75,7 @@ RUN wget \
         libnss-systemd \
         systemd-timesyncd \
         util-linux-extra \
+        btrfs-progs \
         file \
         traceroute \
         lsof \
