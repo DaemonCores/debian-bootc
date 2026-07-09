@@ -149,7 +149,7 @@ Disable Secure Boot entirely and rely on TPM or measured boot for integrity. Thi
 
 ### What we do
 
-The ISO generation job (`.github/workflows/iso.yml`) runs inside an `almalinux:10` container with `options: --privileged`.
+The ISO generation job (`DaemonCores-CI/.github/workflows/iso-builder.yml`) runs inside an `almalinux:10` container with `options: --privileged`.
 
 ### Why it is necessary
 
@@ -221,7 +221,7 @@ Pin every action to a SHA and maintain a manual rotation schedule. Rejected beca
 
 ### What we do
 
-The ISO workflow sets the environment variable `COSIGN_EXPERIMENTAL=1` before running `cosign verify`.
+The reusable ISO workflow (iso-builder.yml in DaemonCores-CI) sets the environment variable `COSIGN_EXPERIMENTAL=1` before running `cosign verify`.
 
 ### Why it is enabled
 
