@@ -4,39 +4,41 @@ set -e
 CERT=/usr/share/debian-bootc/sb_signing.crt
 
 case "$1" in
-    configure|triggered)
-        if [ ! -f "$CERT" ]; then
-            echo "WARNING: Secure Boot signing certificate not found at ${CERT}" >&2
-            exit 0
-        fi
+  configure | triggered)
+    if [ ! -f "$CERT" ]; then
+      echo "WARNING: Secure Boot signing certificate not found at ${CERT}" >&2
+      exit 0
+    fi
 
-        # Check if EFI firmware is available.
-        # /sys/firmware/efi is absent in container builds and on legacy BIOS systems.
-        if [ ! -d /sys/firmware/efi ]; then
-            echo "INFO: No EFI firmware detected (container build or legacy BIOS), skipping MOK enrollment." >&2
-            exit 0
-        fi
+    # Check if EFI firmware is available. /sys/firmware/efi is absent in
+    # container builds and on legacy BIOS systems.
+    if [ ! -d /sys/firmware/efi ]; then
+      echo "INFO: No EFI firmware detected (container build or legacy" \
+        "BIOS), skipping MOK enrollment." >&2
+      exit 0
+    fi
 
-        # Check if mokutil is available (requires shim-signed)
-        if ! command -v mokutil >/dev/null 2>&1; then
-            echo "INFO: mokutil not available, skipping MOK enrollment." >&2
-            exit 0
-        fi
+    # Check if mokutil is available (requires shim-signed).
+    if ! command -v mokutil >/dev/null 2>&1; then
+      echo "INFO: mokutil not available, skipping MOK enrollment." >&2
+      exit 0
+    fi
 
-        # Check if the key is already enrolled to avoid duplicate enrollment
-        if mokutil --test-key "$CERT" 2>/dev/null; then
-            echo "INFO: Secure Boot signing key is already enrolled in MOK." >&2
-            exit 0
-        fi
+    # Check if the key is already enrolled to avoid duplicate enrollment.
+    if mokutil --test-key "$CERT" 2>/dev/null; then
+      echo "INFO: Secure Boot signing key is already enrolled in MOK." >&2
+      exit 0
+    fi
 
-        echo "debian-bootc: Queuing Secure Boot signing key for MOK enrollment..."
-        echo "  Certificate: ${CERT}"
-        echo "  You will be prompted to confirm enrollment on the next reboot."
-        echo "  At the blue MokManager screen: Enroll MOK → Continue → Yes → Reboot"
-        echo ""
-        echo "  Set an enrollment password (you will need it at the MOK screen):"
-        mokutil --import "$CERT"
-        ;;
+    echo "debian-bootc: Queuing Secure Boot signing key for MOK enrollment..."
+    echo "  Certificate: ${CERT}"
+    echo "  You will be prompted to confirm enrollment on the next reboot."
+    echo "  At the blue MokManager screen:" \
+      "Enroll MOK → Continue → Yes → Reboot"
+    echo ""
+    echo "  Set an enrollment password (you will need it at the MOK screen):"
+    mokutil --import "$CERT"
+    ;;
 esac
 
 exit 0

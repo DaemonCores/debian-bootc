@@ -3,11 +3,16 @@
 # First-boot TUI for user account and root password setup.
 # Launched by firstboot-user-setup.service before getty@tty1.
 # Modeled after Raspberry Pi OS userconfig.service.
+#
+# The interactive wizard creates the user account, sets the root
+# password, and configures sudo, the SSH root-login policy, the
+# hostname, and the locale/keyboard layout.
 set -euo pipefail
 
 FLAG=/var/lib/firstboot-user-setup.done
 
-# Bug-fix 3: in ExecStartPre context, ConditionPathExists is not evaluated — check the flag here
+# Bug-fix 3: in ExecStartPre context, ConditionPathExists is not
+# evaluated — check the flag here
 [[ -f "$FLAG" ]] && exit 0
 
 # Skip only if a real *human* account already exists. A user counts when its UID
@@ -16,33 +21,44 @@ FLAG=/var/lib/firstboot-user-setup.done
 # and that no human logs into (e.g. Proxmox's `ceph`, UID 64045, nologin shell,
 # /var/lib/ceph home) — otherwise the wizard would skip itself on first boot.
 # The check is dynamic, so it holds for any distribution with such users.
+#######################################
+# Detect whether a real human account already exists on the system.
+# Globals:
+#   None
+# Arguments:
+#   None
+# Returns:
+#   0 if a human account exists, 1 otherwise.
+#######################################
 _existing_user() {
-    local uid home shell
-    while IFS=: read -r _ _ uid _ _ home shell; do
-        if [[ "$uid" -ge 1000 && "$uid" -le 65533 ]] \
-           && [[ "$shell" != */nologin && "$shell" != */false ]] \
-           && [[ "$home" == /home/* ]]; then
-            return 0
-        fi
-    done < /etc/passwd
-    return 1
+  local uid home shell
+  while IFS=: read -r _ _ uid _ _ home shell; do
+    if [[ "$uid" -ge 1000 && "$uid" -le 65533 ]] \
+      && [[ "$shell" != */nologin && "$shell" != */false ]] \
+      && [[ "$home" == /home/* ]]; then
+      return 0
+    fi
+  done </etc/passwd
+  return 1
 }
 
 if _existing_user; then
-    touch "$FLAG"
-    exit 0
+  touch "$FLAG"
+  exit 0
 fi
 
 # Grab TTY1
 exec </dev/tty1 >/dev/tty1 2>/dev/tty1
-# Bug-fix 1: TERM is not injected by systemd in ExecStartPre — whiptail/ncurses crashes without it
+# Bug-fix 1: TERM is not injected by systemd in ExecStartPre —
+# whiptail/ncurses crashes without it
 export TERM=linux
 clear
 
 # Build display name from /etc/hostname (e.g. my-system -> My System)
 # cut -d. -f1: strip the domain if a FQDN was set (e.g. host.local → host)
 DISPLAY_NAME=$(
-    cat /etc/hostname \
+  # shellcheck disable=SC2002  # keep the exact pipeline; behavior identical
+  cat /etc/hostname \
     | cut -d. -f1 \
     | tr -d '\n' \
     | tr -- '-_' ' ' \
@@ -52,16 +68,61 @@ DISPLAY_NAME=$(
 
 # whiptail helpers
 _title="Setup -- ${DISPLAY_NAME}"
-_input() { whiptail --title "$_title" --inputbox    "$1" 10 60 "${2:-}" 3>&1 1>&2 2>&3; }
-_pass()  { whiptail --title "$_title" --passwordbox  "$1" 10 60          3>&1 1>&2 2>&3; }
-_yesno() { whiptail --title "$_title" --yesno        "$1" 12 65; }
-_msg()   { whiptail --title "$_title" --msgbox        "$1" 12 65; }
+
+#######################################
+# Show a whiptail inputbox and print the entered text.
+# Globals:
+#   _title
+# Arguments:
+#   $1: Prompt message.
+#   $2: Optional default value.
+# Outputs:
+#   The entered text on stdout.
+#######################################
+_input() {
+  whiptail --title "$_title" --inputbox "$1" 10 60 "${2:-}" 3>&1 1>&2 2>&3
+}
+
+#######################################
+# Show a whiptail passwordbox and print the entered password.
+# Globals:
+#   _title
+# Arguments:
+#   $1: Prompt message.
+# Outputs:
+#   The entered password on stdout.
+#######################################
+_pass() {
+  whiptail --title "$_title" --passwordbox "$1" 10 60 3>&1 1>&2 2>&3
+}
+
+#######################################
+# Show a whiptail yes/no dialog.
+# Globals:
+#   _title
+# Arguments:
+#   $1: Prompt message.
+# Returns:
+#   0 if the user chose Yes, non-zero otherwise.
+#######################################
+_yesno() { whiptail --title "$_title" --yesno "$1" 12 65; }
+
+#######################################
+# Show a whiptail message box.
+# Globals:
+#   _title
+# Arguments:
+#   $1: Message text.
+#######################################
+_msg() { whiptail --title "$_title" --msgbox "$1" 12 65; }
 
 # Welcome
-_msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user account.\nPress Enter to continue."
+_msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user\
+ account.\nPress Enter to continue."
 
 # ── System language (locale) ──────────────────────────────────────────────
-# Bug-fix 2: dpkg-reconfigure may return non-zero (locale already set, missing package) — || true prevents abort
+# Bug-fix 2: dpkg-reconfigure may return non-zero (locale already set,
+# missing package) — || true prevents abort
 dpkg-reconfigure locales || true
 
 # ── Keyboard layout ───────────────────────────────────────────────────────
@@ -69,30 +130,43 @@ dpkg-reconfigure keyboard-configuration || true
 setupcon || true
 
 # ── Hostname (required) ──────────────────────────────────────────────────
+# shellcheck disable=SC2002  # keep the exact pipeline; behavior identical
 CURRENT_HOSTNAME=$(cat /etc/hostname | cut -d. -f1 | tr -d '\n')
 while true; do
-    NEWHOSTNAME=$(_input "Hostname:" "$CURRENT_HOSTNAME" || true)
-    [[ -z "$NEWHOSTNAME" ]] && { _msg "Hostname cannot be empty."; continue; }
-    [[ "$NEWHOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || {
-        _msg "Invalid hostname.\nAllowed: letters, digits, hyphens\n(must start and end with a letter or digit, max 63 chars)"
-        continue
-    }
-    break
+  NEWHOSTNAME=$(_input "Hostname:" "$CURRENT_HOSTNAME" || true)
+  [[ -z "$NEWHOSTNAME" ]] && {
+    _msg "Hostname cannot be empty."
+    continue
+  }
+  [[ "$NEWHOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || {
+    _msg "Invalid hostname.\nAllowed: letters, digits, hyphens\n\
+(must start and end with a letter or digit, max 63 chars)"
+    continue
+  }
+  break
 done
 # Update wizard title with the new hostname
-DISPLAY_NAME=$(echo "$NEWHOSTNAME" | tr -- '-' ' ' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1')
+DISPLAY_NAME=$(echo "$NEWHOSTNAME" | tr -- '-' ' ' \
+  | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1')
 _title="Setup -- ${DISPLAY_NAME}"
 
 # ── Username ──────────────────────────────────────────────────────────────
 while true; do
-    USERNAME=$(_input "Username:" "" || true)
-    [[ -z "$USERNAME" ]] && { _msg "Username cannot be empty."; continue; }
-    [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || {
-        _msg "Invalid username.\nAllowed: lowercase letters, digits, - or _\n(must start with a letter or _)"
-        continue
-    }
-    getent passwd "$USERNAME" &>/dev/null && { _msg "User '${USERNAME}' already exists."; continue; }
-    break
+  USERNAME=$(_input "Username:" "" || true)
+  [[ -z "$USERNAME" ]] && {
+    _msg "Username cannot be empty."
+    continue
+  }
+  [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || {
+    _msg "Invalid username.\nAllowed: lowercase letters, digits, - or _\n\
+(must start with a letter or _)"
+    continue
+  }
+  getent passwd "$USERNAME" &>/dev/null && {
+    _msg "User '${USERNAME}' already exists."
+    continue
+  }
+  break
 done
 
 # ── Full name (optional) ──────────────────────────────────────────────────
@@ -100,30 +174,44 @@ FULLNAME=$(_input "Full name (optional, Enter to skip):" "" || echo "")
 
 # ── User password ─────────────────────────────────────────────────────────
 while true; do
-    PASS1=$(_pass "Password for '${USERNAME}':" || true)
-    [[ ${#PASS1} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
-    PASS2=$(_pass "Confirm password:" || true)
-    [[ "$PASS1" == "$PASS2" ]] && break
-    _msg "Passwords do not match."
+  PASS1=$(_pass "Password for '${USERNAME}':" || true)
+  [[ ${#PASS1} -lt 8 ]] && {
+    _msg "Password must be at least 8 characters."
+    continue
+  }
+  PASS2=$(_pass "Confirm password:" || true)
+  [[ "$PASS1" == "$PASS2" ]] && break
+  _msg "Passwords do not match."
 done
 
 # ── Root password (required) ─────────────────────────────────────────────
 ROOT_PASS=""
 while true; do
-    ROOT_PASS=$(_pass "Root password (required):" || true)
-    [[ ${#ROOT_PASS} -lt 8 ]] && { _msg "Password must be at least 8 characters."; continue; }
-    ROOT2=$(_pass "Confirm root password:" || true)
-    [[ "$ROOT_PASS" == "$ROOT2" ]] && break
-    _msg "Passwords do not match."
+  ROOT_PASS=$(_pass "Root password (required):" || true)
+  [[ ${#ROOT_PASS} -lt 8 ]] && {
+    _msg "Password must be at least 8 characters."
+    continue
+  }
+  ROOT2=$(_pass "Confirm root password:" || true)
+  [[ "$ROOT_PASS" == "$ROOT2" ]] && break
+  _msg "Passwords do not match."
 done
 
 # ── Sudo privileges ───────────────────────────────────────────────────────
 IS_SUDOER=no
-_yesno "Grant sudo privileges to '${USERNAME}'?\n\n(Allows running commands as root with sudo)" && IS_SUDOER=yes || true
+# `|| true` guards a declined dialog; the C branch (true) is harmless.
+# shellcheck disable=SC2015
+_yesno "Grant sudo privileges to '${USERNAME}'?\n\n\
+(Allows running commands as root with sudo)" \
+  && IS_SUDOER=yes || true
 
 # ── SSH root login ────────────────────────────────────────────────────────
 SSH_ROOT=no
-_yesno "Allow root SSH login with password?\n\n[!] Not recommended for production." && SSH_ROOT=yes || true
+# `|| true` guards a declined dialog; the C branch (true) is harmless.
+# shellcheck disable=SC2015
+_yesno "Allow root SSH login with password?\n\n\
+[!] Not recommended for production." \
+  && SSH_ROOT=yes || true
 
 # ── Confirmation ──────────────────────────────────────────────────────────
 SUMMARY="Summary:\n\n"
@@ -133,39 +221,45 @@ SUMMARY+="  User      : ${USERNAME}\n"
 SUMMARY+="  Sudo      : ${IS_SUDOER}\n"
 SUMMARY+="  Root pwd  : set\n"
 SUMMARY+="  SSH root  : ${SSH_ROOT}\n\nConfirm?"
-_yesno "$SUMMARY" || { _msg "Setup cancelled. Wizard will re-run on next boot."; exit 0; }
+_yesno "$SUMMARY" || {
+  _msg "Setup cancelled. Wizard will re-run on next boot."
+  exit 0
+}
 
 # ── Apply hostname ────────────────────────────────────────────────────────
 hostnamectl set-hostname "$NEWHOSTNAME"
 
 # ── Create user ───────────────────────────────────────────────────────────
 useradd \
-    --home-dir  "/home/${USERNAME}" \
-    --shell     /bin/bash \
-    --comment   "${FULLNAME:-$USERNAME}" \
-    --create-home \
-    "$USERNAME"
+  --home-dir "/home/${USERNAME}" \
+  --shell /bin/bash \
+  --comment "${FULLNAME:-$USERNAME}" \
+  --create-home \
+  "$USERNAME"
 
 # Use printf to avoid echo interpreting special characters in the password
 printf '%s:%s\n' "$USERNAME" "$PASS1" | chpasswd
 
 # ── Root password (required) ─────────────────────────────────────────────
 printf 'root:%s\n' "$ROOT_PASS" | chpasswd
-# Clear the forced expiry set by the kickstart (chage -d 0) now that the user has set their password
+# Clear the forced expiry set by the kickstart (chage -d 0) now that the
+# user has set their password
 chage -d "$(date +%Y-%m-%d)" root
 
 # ── Standard Debian groups ────────────────────────────────────────────────
 for grp in adm systemd-journal cdrom audio video plugdev netdev; do
-    getent group "$grp" &>/dev/null && usermod -aG "$grp" "$USERNAME" || true
+  # `|| true` guards a missing group; the C branch (true) is harmless.
+  # shellcheck disable=SC2015
+  getent group "$grp" &>/dev/null && usermod -aG "$grp" "$USERNAME" || true
 done
 [[ "$IS_SUDOER" == yes ]] && usermod -aG sudo "$USERNAME"
 
 # ── SSH root login config ─────────────────────────────────────────────────
 mkdir -p /etc/ssh/sshd_config.d
 if [[ "$SSH_ROOT" == yes ]]; then
-    echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
+  echo "PermitRootLogin yes" >/etc/ssh/sshd_config.d/01-permitrootlogin.conf
 else
-    echo "PermitRootLogin no"  > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
+  echo "PermitRootLogin no" >/etc/ssh/sshd_config.d/01-permitrootlogin.conf
 fi
 
 touch "$FLAG"
