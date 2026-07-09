@@ -2,16 +2,16 @@
 set -e
 
 case "$1" in
-    configure|triggered)
-        deb-systemd-helper enable bootc-fetch-apply-updates.timer
+  configure | triggered)
+    deb-systemd-helper enable bootc-fetch-apply-updates.timer
 
-        # Run bootc-finalize
-        if [ -x /usr/local/bin/bootc-finalize ]; then
-            /usr/local/bin/bootc-finalize 2>&1 | tee /tmp/bootc-finalize.log || {
-                cat /tmp/bootc-finalize.log >&2
-                exit 1
-            }
-        fi
-        ;;
+    # Run bootc-finalize.
+    if [ -x /usr/local/bin/bootc-finalize ]; then
+      /usr/local/bin/bootc-finalize 2>&1 | tee /tmp/bootc-finalize.log || {
+        cat /tmp/bootc-finalize.log >&2
+        exit 1
+      }
+    fi
+    ;;
 esac
 exit 0

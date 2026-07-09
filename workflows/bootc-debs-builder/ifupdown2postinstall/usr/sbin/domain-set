@@ -1,22 +1,31 @@
 #!/bin/bash
+#
+# domain-set - render /etc/hosts and /etc/issue from their templates using the
+# host's current global IPv4 address, short hostname and DHCP-advertised domain.
 set -euo pipefail
 
-IP=$(ip -4 addr show scope global | grep -oP "(?<=inet )[\d.]+" | head -1 || true)
+IP=$(ip -4 addr show scope global \
+  | grep -oP "(?<=inet )[\d.]+" | head -1 || true)
 
 if [[ -z "$IP" ]]; then
   exit 0
 fi
 
 HOST=$(hostname -s)
-FQDN=$(echo $(dhcpcd -U | grep '^domain_name=' | cut -d= -f2 | tr -d "'") | cut -d ' ' -f 1)
-HOSTS=$(cat /etc/hosts 2> /dev/null || true)
+# First domain advertised over DHCP (domain_name may list several).
+FQDN=$(dhcpcd -U | sed -n "s/^domain_name='\?\([^' ]*\).*/\1/p" | head -1)
+HOSTS=$(cat /etc/hosts 2>/dev/null || true)
 
 [[ "${FQDN}" == "" ]] \
   && FQDN="local"
 
+#######################################
+# Render /etc/hosts from the template, substituting IP/host/domain.
+# Globals:
+#   IP, HOST, FQDN
+#######################################
 setdomaine() {
   cp /etc/hosts.tpl /etc/hosts
-
   sed -i \
     -e "s|{{ IP }}|${IP}|g" \
     -e "s|{{ HOST }}|${HOST}|g" \
@@ -24,17 +33,22 @@ setdomaine() {
     /etc/hosts
 }
 
+#######################################
+# Rewrite the host's own entry in an already-populated /etc/hosts.
+# Globals:
+#   IP, HOST, FQDN, HOSTS
+#######################################
 resetdomaine() {
   sed -i "/${HOST}/d" /etc/hosts
   sed -i "/${IP}/d" /etc/hosts
-  echo "${IP}    ${HOSTS}.${FQDN} ${HOST}" >> /etc/hosts
+  echo "${IP}    ${HOSTS}.${FQDN} ${HOST}" >>/etc/hosts
 }
 
-if [[
-  ! -f "/etc/hosts"
-  || "${HOSTS}" == ""
-  ||  "$(echo ${HOSTS} | wc -l)" == "1"
-]]; then
+# The unquoted ${HOSTS} is intentional: word-splitting collapses the file to a
+# single logical line so wc -l reports whether it holds one entry.
+# shellcheck disable=SC2086
+lines=$(echo ${HOSTS} | wc -l)
+if [[ ! -f "/etc/hosts" || "${HOSTS}" == "" || "${lines}" == "1" ]]; then
   setdomaine || true
 else
   resetdomaine || true
