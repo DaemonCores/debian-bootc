@@ -63,18 +63,21 @@ The CI/CD pipeline is orchestrated by `.github/workflows/pipeline.yml` and consi
 
 ### Stage 1: `bootc-debs-builder.yml`
 
-Runs inside a `debian:trixie` container. Its responsibilities:
+Runs inside a `debian:trixie` container. The stage uses the composite actions
+`bootc-debs-start` and `bootc-debs-end` (defined in
+[DaemonCores-CI](https://github.com/DaemonCores/DaemonCores-CI)) to bootstrap
+the build environment and finalize artifact publishing. Its responsibilities:
 
 1. **Install build dependencies** — compilers, Rust toolchain, Meson, etc.
 2. **Build custom `.deb` packages** from source:
    - `libcomposefs`, `libostree`, `bootupd`, `grub-efi-signed`, `bootc`, `firstboot-user-setup`
    - Repacked `ifupdown2` with bootc-specific patches
    - Repacked `systemd-timesyncd` with `After=network-online.target` drop-in
-3. **Publish the APT repository** to GitHub Pages using `morph027/apt-repo-action`
+3. **Publish the APT Repository** to GitHub Pages using `morph027/apt-repo-action`
 
 The resulting `.deb` artifacts are uploaded as workflow artifacts and consumed by the base image build.
 
-### Stage 2: `bootc-build.yml`
+### Stage 2: `bootc-build.yml` (reusable workflow in DaemonCores-CI)
 
 Runs on `ubuntu-latest`. Its responsibilities:
 
@@ -87,7 +90,7 @@ Runs on `ubuntu-latest`. Its responsibilities:
 6. **Push to GHCR** — push `:latest`, `:short-sha`, and optionally `:monthly-YYYYMMDD`
 7. **Sign the image** with cosign using keyless Sigstore signing via GitHub Actions OIDC
 
-### Stage 3: `iso.yml`
+### Stage 3: `iso-builder.yml` (reusable workflow in DaemonCores-CI)
 
 Runs inside an `almalinux:10` **privileged** container. Its responsibilities:
 

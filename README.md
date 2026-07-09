@@ -234,27 +234,30 @@ cosign verify ghcr.io/DaemonCores/debian-bootc:latest \
 ## CI/CD pipeline
 
 ```
-┌─────────────────────┐     ┌──────────────┐     ┌───────────────────┐
-│  bootc-debs-builder │───▶│ bootc-build  │───▶│       iso         │
-│                     │     │              │     │                   │
-│  Compile from src:  │     │  Build OCI   │     │  Download Fedora  │
-│  - libcomposefs     │     │  image from  │     │  netinstall ISO   │
-│  - libostree        │     │  Containerfile│    │  Inject branding  │
-│  - bootupd          │     │              │     │  Render kickstart │
-│  - grub-efi-signed  │     │  Push to     │     │  Build online ISO │
-│  - bootc            │     │  GHCR        │     │  Build offline ISO│
-│  - firstboot-setup  │     │              │     │                   │
-│  - ifupdown2 repack │     │  Sign with   │     │  Upload to        │
-│  - timesyncd repack │     │  cosign      │     │  GitHub Releases  │
-│                     │     │              │     │                   │
-│  Publish APT repo   │     │  Smoke test: │     │                   │
-│  to GitHub Pages    │     │  bootc lint  │     │                   │
-└─────────────────────┘     └──────────────┘     └───────────────────┘
+┌─────────────────────┐     ┌──────────────────────┐     ┌───────────────────────┐
+│  bootc-debs-builder  │───▶│ bootc-build (reusable │───▶│ iso-builder (reusable │
+│                     │     │  workflow from        │     │  workflow from         │
+│  Compile from src:  │     │  DaemonCores-CI)      │     │  DaemonCores-CI)       │
+│  - libcomposefs     │     │                       │     │                       │
+│  - libostree        │     │  Build OCI image from │     │  Download Fedora       │
+│  - bootupd          │     │  Containerfile        │     │  netinstall ISO       │
+│  - grub-efi-signed  │     │                       │     │  Inject branding       │
+│  - bootc            │     │  Push to GHCR         │     │  Render kickstart      │
+│  - firstboot-setup  │     │                       │     │  Build online ISO      │
+│  - ifupdown2 repack │     │  Sign with cosign     │     │  Build offline ISO     │
+│  - timesyncd repack │     │                       │     │                       │
+│                     │     │  Smoke test:          │     │  Upload to             │
+│  Publish APT repo   │     │  bootc lint           │     │  GitHub Releases       │
+│  to GitHub Pages    │     │                       │     │                       │
+└─────────────────────┘     └──────────────────────┘     └───────────────────────┘
 ```
 
-The **Full Pipeline** workflow (`pipeline.yml`) orchestrates all three stages with
-optional per-stage toggles, useful for rebuilding only the component that changed
-without running the full 30+ minute pipeline.
+The **Full Pipeline** workflow (`pipeline.yml` in this repo) orchestrates all
+three stages by calling reusable workflows defined in the
+[DaemonCores-CI](https://github.com/DaemonCores/DaemonCores-CI) repository for
+stages 2 and 3. Each stage can be toggled independently via optional per-stage
+inputs, useful for rebuilding only the component that changed without running
+the full 30+ minute pipeline.
 
 ### Why GitHub Actions are not pinned to commit SHAs
 
@@ -342,7 +345,7 @@ mokutil --list-enrolled     # confirm the debian-bootc key is present
 
 | Secret           | Workflow                    | Purpose                                           |
 |------------------|-----------------------------|---------------------------------------------------|
-| `PAT_PKG`        | `bootc-build.yml`           | Authenticate Podman and Docker to push to GHCR    |
+| `PAT_PKG`        | `DaemonCores-CI/.github/workflows/bootc-build.yml` (reusable) | Authenticate Podman and Docker to push to GHCR    |
 | `APT_GPG_KEY`    | `bootc-debs-builder.yml`    | Sign the APT repository published to GitHub Pages |
 | `SB_SIGNING_KEY` | `bootc-debs-builder.yml`    | Private key for GRUB EFI Secure Boot signing      |
 | `SB_SIGNING_CERT`| `bootc-debs-builder.yml`    | Certificate for GRUB EFI Secure Boot signing      |
