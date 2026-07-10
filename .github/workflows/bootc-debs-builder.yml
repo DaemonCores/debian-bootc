@@ -111,6 +111,9 @@ jobs:
 
   publish:
     needs: [setup, wave0, wave1, wave2, wave3]
+    # Run when the waves succeeded or were skipped (empty waves), but stop on a
+    # cancel and skip if any wave failed.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
