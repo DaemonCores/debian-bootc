@@ -6,14 +6,16 @@ Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
-Conflicts: grub-pc, grub-pc-bin, grub-efi-amd64-bin
-Breaks: grub-common (<< 2.12-1), grub2-common (<< 2.12-1)
-Replaces: grub-efi-amd64
-Provides: grub-efi-amd64
-Description: GRUB2 EFI binary for amd64 with BLS and Secure Boot support
- Provides a GRUB2 EFI binary (grubx64.efi) compiled from the Fedora
- rhboot/grub2 fork with BLS (Boot Loader Specification) support required
- by ostree and bootc, signed with the debian-bootc Secure Boot signing key.
+Conflicts: grub-pc, grub-pc-bin, grub-efi-amd64-bin, grub-common, grub2-common
+Replaces: grub-efi-amd64, grub-efi-amd64-bin, grub-common, grub2-common
+Provides: grub-efi-amd64, grub-efi-amd64-bin, grub-common, grub2-common
+Description: GRUB2 EFI binary and userspace for amd64 (BLS, Secure Boot)
+ Provides a GRUB2 EFI binary (grubx64.efi) plus the full grub2-* userspace
+ (grub2-editenv, grub2-install, grub2-mkconfig, x86_64-efi modules, fonts),
+ compiled from the Fedora rhboot/grub2 fork with BLS (Boot Loader
+ Specification) support required by ostree and bootc, and signed with the
+ debian-bootc Secure Boot signing key. It fully supersedes Debian's
+ grub-common/grub2-common so the naming matches bootupd's grub2-* tooling.
  .
  The binary is verified by the shim bootloader through the MOK (Machine
  Owner Key) mechanism. The signing certificate is included at
