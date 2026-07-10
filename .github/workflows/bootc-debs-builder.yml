@@ -1,404 +1,122 @@
 name: Build & Publish Bootc .deb
 
+# Generic, manifest-driven builder. setup reads workflows/bootc-debs-builder/
+# packages.yml, computes dependency waves (topological levels), and each wave is
+# a matrix that builds its packages in parallel via the build-one-deb reusable
+# workflow. A package with deps lands in a later wave and installs its deps'
+# debs first. Independent packages all run together in wave 0.
+
 on:
   workflow_dispatch:
   workflow_call:
+    outputs:
+      any_rebuilt:
+        description: 'true if at least one package was rebuilt (not cache-reused).'
+        value: ${{ jobs.publish.outputs.any_rebuilt }}
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
-    container: debian:trixie
-
+    outputs:
+      wave0: ${{ steps.waves.outputs.wave0 }}
+      wave1: ${{ steps.waves.outputs.wave1 }}
+      wave2: ${{ steps.waves.outputs.wave2 }}
+      wave3: ${{ steps.waves.outputs.wave3 }}
+      env_image: ${{ steps.waves.outputs.env_image }}
     steps:
-      - uses: DaemonCores/DaemonCores-CI/bootc-debs-start@main
+      - uses: actions/checkout@v7
 
-      - name: Build firstboot-user-setup
-        shell: bash
-        env:
-          FIRSTBOOT_VER: "1.0.2"
-        run: |
-          SAVE_PWD=$(pwd)
-
-          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/firstbootpostinstall/* \
-            /output/firstboot-user-setup/
-
-          chmod 755 \
-            /output/firstboot-user-setup/usr/local/bin/firstboot-user-setup
-
-          sed -i \
-            -e "s|{{ VER }}|${FIRSTBOOT_VER}|g" \
-            -e "s|, {{ DEPS }}||g" \
-            /output/firstboot-user-setup/DEBIAN/control
-
-          dpkg-deb --build /output/firstboot-user-setup \
-            /debs/firstboot-user-setup_${FIRSTBOOT_VER}_all.deb
-
-      - name: Repack ifupdown2 from Proxmox with bootc fix
+      - name: Compute dependency waves
+        id: waves
         shell: bash
         run: |
-          SAVE_PWD=$(pwd)
-
-          apt update
-          cd /tmp
-          apt-get download ifupdown2
-
-          mkdir -p /output/ifupdown2
-          dpkg-deb -R /tmp/ifupdown2_*.deb /output/ifupdown2
-
-          ORIG_VER=$(dpkg-deb -f /tmp/ifupdown2_*.deb Version)
-
-          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ifupdown2postinstall/* \
-            /output/ifupdown2/
-
-          # Regenerate md5sums after content modification
-          find /output/ifupdown2 -not -path '*/DEBIAN/*' -type f \
-            | xargs md5sum \
-            | sed "s|/output/ifupdown2/||" \
-            > /output/ifupdown2/DEBIAN/md5sums
-
-          # Preserve +pmx suffix for pve-manager version check
-          sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc2/" \
-            /output/ifupdown2/DEBIAN/control
-          chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf \
-            /output/ifupdown2/usr/sbin/domain-set
-
-          dpkg-deb --build /output/ifupdown2 \
-            /debs/ifupdown2_${ORIG_VER}+bootc1_all.deb
-
-      - name: Repack systemd-timesyncd with bootc fix
-        shell: bash
-        run: |
-          SAVE_PWD=$(pwd)
-
-          apt update
-          cd /tmp
-          apt-get download systemd-timesyncd
-
-          mkdir -p /output/systemd-timesyncd
-          dpkg-deb -R systemd-timesyncd_*.deb /output/systemd-timesyncd
-
-          ORIG_VER=$(dpkg-deb -f systemd-timesyncd_*.deb Version)
-          ARCH=$(dpkg-deb -f systemd-timesyncd_*.deb Architecture)
-
-          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/timesyncpostinstall/* \
-            /output/systemd-timesyncd/
-
-          # Regenerate md5sums after content modification
-          find /output/systemd-timesyncd -not -path '*/DEBIAN/*' -type f \
-            | xargs md5sum \
-            | sed "s|/output/systemd-timesyncd/||" \
-            > /output/systemd-timesyncd/DEBIAN/md5sums
-
-          sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc1/" \
-            /output/systemd-timesyncd/DEBIAN/control
-
-          dpkg-deb --build /output/systemd-timesyncd \
-            /debs/systemd-timesyncd_${ORIG_VER}+bootc1_${ARCH}.deb
-
-      - name: Build grub-efi-amd64-signed
-        shell: bash
-        env:
-          GRUB_VER: "1+2.12+9+fedora44"
-          GRUB_FEDORA_BRANCH: "fedora-44"
-          GRUB_PINNED_COMMIT: "5e9e7e44eddcab0174decc12c3799825e600639f"
-          SB_SIGNING_KEY: ${{ secrets.SB_SIGNING_KEY }}
-          SB_SIGNING_CERT: ${{ secrets.SB_SIGNING_CERT }}
-        run: |
-          SAVE_PWD=$(pwd)
-          trap 'rm -f /tmp/sb.key /tmp/sb.crt' EXIT
-
-          git clone --branch "${GRUB_FEDORA_BRANCH}" \
-            https://github.com/rhboot/grub2.git /build/grub2-fedora
-          cd /build/grub2-fedora
-          git checkout "${GRUB_PINNED_COMMIT}"
-
-          ./bootstrap
-
-          ./configure \
-            --target=x86_64 \
-            --with-platform=efi \
-            --prefix=/usr \
-            --disable-werror \
-            MAKEINFO=true
-
-          make -j$(nproc)
-
-          GRUB_MODULES=" \
-            all_video boot blscfg btrfs blsuki \
-            cat configfile cryptodisk \
-            echo ext2 f2fs fat font \
-            gcry_rijndael gcry_rsa gcry_serpent \
-            gcry_sha256 gcry_twofish gcry_whirlpool \
-            gfxmenu gfxterm gzio \
-            halt hfsplus http increment iso9660 \
-            jpeg loadenv loopback linux lvm luks luks2 \
-            memdisk mdraid09 mdraid1x minicmd net \
-            normal part_apple part_msdos part_gpt \
-            password_pbkdf2 pgp png reboot regexp \
-            search search_fs_uuid search_fs_file \
-            search_label serial sleep \
-            squash4 syslinuxcfg \
-            test tftp version video xfs zstd \
-            efi_netfs efifwsetup efinet lsefi lsefimmap connectefi bli \
-            backtrace chain tpm usb usbserial_common \
-            usbserial_pl2303 usbserial_ftdi usbserial_usbdebug \
-            keylayouts at_keyboard"
-
-          mkdir -p \
-            /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed
-
-          ./grub-mkimage \
-            -O x86_64-efi \
-            -o /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-            -d grub-core \
-            -p /EFI/debian \
-            ${GRUB_MODULES}
-
-          cd /output/grub-efi-amd64-signed/
-          ln -sf DEBIAN debian
-
-          sed -i \
-            -e "s|{{ VER }}|${GRUB_VER}|g" \
-            DEBIAN/control
-          rm -f debian
-          
-          # Sign the GRUB EFI binary with the Secure Boot signing key
-          # Create key files with restrictive permissions immediately (umask 077
-          # in a subshell) so they are never world-readable between creation and
-          # the former chmod 600 call.
-          (umask 077; echo "${SB_SIGNING_KEY}"  | base64 -d > /tmp/sb.key)
-          (umask 077; echo "${SB_SIGNING_CERT}" | base64 -d > /tmp/sb.crt)
-
-          sbsign \
-            --key  /tmp/sb.key \
-            --cert /tmp/sb.crt \
-            --output /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-            /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed
-
-          # Verify signature
-          sbverify \
-            --cert /tmp/sb.crt \
-            /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-            || { echo "ERROR: GRUB EFI signature verification failed" >&2; exit 1; }
-
-          # Include the certificate in the package for MOK enrollment on target machines
-          mkdir -p /output/grub-efi-amd64-signed/usr/share/debian-bootc
-          cp /tmp/sb.crt \
-            /output/grub-efi-amd64-signed/usr/share/debian-bootc/sb_signing.crt
-
-          rm -f /tmp/sb.key /tmp/sb.crt
-
-          chmod 755 /output/grub-efi-amd64-signed/DEBIAN/postinst
-          dpkg-deb --build /output/grub-efi-amd64-signed \
-            /debs/grub-efi-amd64-signed_${GRUB_VER}_amd64.deb
-
-      - name: Build bootupd
-        shell: bash
-        env:
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
-          BOOTUPD_VER: "v0.2.35"
-          BOOTUPD_VENDOR_SHA256: "7ada7d0c9d1facb4c5a138e1b014191971b8e97a2fca690b86357e9888584e8b"
-        run: |
-          SAVE_PWD=$(pwd)
-          rm -rf /build/vendor && mkdir /build/vendor
-
-          git clone --depth=1 --branch "${BOOTUPD_VER}" \
-            https://github.com/coreos/bootupd.git /build/bootupd
-
+          set -euo pipefail
+          echo "env_image=ghcr.io/${GITHUB_REPOSITORY,,}:buildenv" \
+            >>"$GITHUB_OUTPUT"
           curl -fsSL \
-            "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
-            -o /tmp/bootupd-vendor.tar.zstd
-          printf '%s  /tmp/bootupd-vendor.tar.zstd\n' "${BOOTUPD_VENDOR_SHA256}" \
-            | sha256sum -c -
-          tar --zstd -x -C /build/ -f /tmp/bootupd-vendor.tar.zstd
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+            -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+          yq -o=json '.' workflows/bootc-debs-builder/packages.yml >/tmp/pkgs.json
+          python3 - <<'PY'
+          import json, os
+          pkgs = json.load(open('/tmp/pkgs.json'))['packages']
+          deps = {p['name']: (p.get('deps') or []) for p in pkgs}
+          memo = {}
+          def wave(name):
+              if name in memo:
+                  return memo[name]
+              d = deps.get(name, [])
+              memo[name] = 0 if not d else 1 + max(wave(x) for x in d)
+              return memo[name]
+          waves = {}
+          for name in deps:
+              waves.setdefault(wave(name), []).append(name)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              for i in range(4):
+                  out.write("wave%d=%s\n" % (i, json.dumps(sorted(waves.get(i, [])))))
+          PY
 
-          . ${RUSTUP_HOME}/env
-          cargo build --release --manifest-path /build/bootupd/Cargo.toml
+  wave0:
+    needs: setup
+    if: ${{ needs.setup.outputs.wave0 != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.setup.outputs.wave0) }}
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/build-one-deb.yml@main
+    with:
+      package: ${{ matrix.package }}
+      container_image: ${{ needs.setup.outputs.env_image }}
+    secrets: inherit
 
-          make -C /build/bootupd install-all DESTDIR=/output/bootupd
+  wave1:
+    needs: [setup, wave0]
+    if: ${{ needs.setup.outputs.wave1 != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.setup.outputs.wave1) }}
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/build-one-deb.yml@main
+    with:
+      package: ${{ matrix.package }}
+      container_image: ${{ needs.setup.outputs.env_image }}
+    secrets: inherit
 
-          cd /output/bootupd/
-          ln -sf DEBIAN debian
+  wave2:
+    needs: [setup, wave1]
+    if: ${{ needs.setup.outputs.wave2 != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.setup.outputs.wave2) }}
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/build-one-deb.yml@main
+    with:
+      package: ${{ matrix.package }}
+      container_image: ${{ needs.setup.outputs.env_image }}
+    secrets: inherit
 
-          dpkg-shlibdeps \
-            -O /build/bootupd/target/release/bootupd \
-            | sed 's/shlibs:Depends=//' > /tmp/bootupd-deps
-
-          DEPS="$(cat /tmp/bootupd-deps), util-linux"
-          sed -i \
-            -e "s|{{ VER }}|${BOOTUPD_VER#v}|g" \
-            -e "s|{{ DEPS }}|${DEPS}|g" \
-            /output/bootupd/DEBIAN/control
-
-          rm -f /output/bootupd/debian
-          dpkg-deb --build /output/bootupd /debs/bootupd_${BOOTUPD_VER#v}_amd64.deb
-
-      - name: Build libcomposefs
-        shell: bash
-        env:
-          COMPOSEFS_VER: "v1.0.8"
-        run: |
-          git clone --depth=1 --branch "${COMPOSEFS_VER}" \
-            https://github.com/composefs/composefs.git /build/composefs
-
-          meson setup \
-            --prefix=/usr \
-            --libdir=/usr/lib \
-            --buildtype=plain \
-            /build/composefs-build \
-            /build/composefs
-
-          meson compile -C /build/composefs-build
-
-          # Install to DESTDIR for packaging
-          DESTDIR=/output/libcomposefs meson install -C /build/composefs-build
-
-          # Install to system so ostree build finds it
-          meson install -C /build/composefs-build
-
-          cd /output/libcomposefs/
-          ln -sf DEBIAN debian
-
-          # Generate shlibs
-          SO=$(find /output/libcomposefs/usr/lib -name "libcomposefs.so.*" ! -type l | head -1)
-          SONAME=$(objdump -p $SO | awk '/SONAME/{print $2}')
-          LIBBASE=$(echo $SONAME | sed 's/\.so\..*//')
-          SOVERSION=$(echo $SONAME | sed 's/.*\.so\.//')
-          echo "${LIBBASE} ${SOVERSION} libcomposefs" > /output/libcomposefs/DEBIAN/shlibs
-
-          sed -i \
-            -e "s|{{ VER }}|${COMPOSEFS_VER#v}|g" \
-            DEBIAN/control
-
-          rm -f debian
-          dpkg-deb --build /output/libcomposefs \
-            /debs/libcomposefs_${COMPOSEFS_VER#v}_amd64.deb
-
-          # Install into the build environment so dpkg-shlibdeps can resolve libcomposefs
-          # when building the ostree package in the next step.
-          apt install -y /debs/libcomposefs_${COMPOSEFS_VER#v}_amd64.deb
-
-      - name: Build ostree
-        shell: bash
-        env:
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
-          OSTREE_VER: "2026.1"
-        run: |
-          SAVE_PWD=$(pwd)
-          rm -rf /build/vendor && mkdir /build/vendor
-          
-          curl -fsSL \
-            https://github.com/ostreedev/ostree/releases/download/v${OSTREE_VER}/libostree-${OSTREE_VER}.tar.xz \
-            | tar -xJ -C /build
-          cd /build/libostree-${OSTREE_VER}
-
-          ./configure --prefix=/usr --sysconfdir=/etc \
-            --disable-gtk-doc --disable-man \
-            --with-composefs \
-            --with-systemdsystemunitdir=/usr/lib/systemd/system \
-            --with-systemdsystemgeneratordir=/usr/lib/systemd/system-generators \
-            --with-dracut
-
-          make -j$(nproc)
-          make -j$(nproc) install DESTDIR=/output/ostree
-
-          # Verify and fail loudly if missing
-          test -d /output/ostree/usr/lib/dracut/modules.d/50ostree \
-            || { echo "ERROR: 50ostree dracut module missing from build output" >&2; exit 1; }
-          test -f /output/ostree/usr/lib/systemd/system-generators/ostree-system-generator \
-            || { echo "ERROR: ostree-system-generator missing from build output" >&2; exit 1; }
-
-          cd /output/ostree/
-          ln -sf DEBIAN debian
-
-          dpkg-shlibdeps \
-            -l/output/ostree/usr/lib \
-            -O $(find . -name "libostree-1.so*" ! -name "*.la" | head -1) \
-            | sed 's/shlibs:Depends=//' > /tmp/ostree-deps
-
-          SO=$(find /output/ostree/usr/lib -name "libostree-1.so.*" ! -name "*.la" ! -type l | head -1)
-          SONAME=$(objdump -p $SO | awk '/SONAME/{print $2}')
-          LIBBASE=$(echo $SONAME | sed 's/\.so\..*//')
-          SOVERSION=$(echo $SONAME | sed 's/.*\.so\.//')
-          echo "${LIBBASE} ${SOVERSION} libostree" > /output/ostree/DEBIAN/shlibs
-
-          DEPS=$(cat /tmp/ostree-deps)
-          sed -i \
-            -e "s|{{ VER }}|${OSTREE_VER}|g" \
-            -e "s|{{ DEPS }}|${DEPS}|g" \
-            /output/ostree/DEBIAN/control
-          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
-          
-          rm -f /output/ostree/debian
-          dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb
-          apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
-
-      - name: Build bootc
-        shell: bash
-        env:
-          CARGO_HOME: "/build/rust"
-          RUSTUP_HOME: "/build/rust"
-          BOOTC_VER: "v1.16.2"
-          BOOTC_VENDOR_SHA256: 53d759ca521144a675af67e68d23c3f5f18dca784e4e900052d0cfdc4467732b
-        run: |
-          SAVE_PWD=$(pwd)
-          rm -rf /build/vendor && mkdir /build/vendor
-          
-          git clone --depth=1 --branch "${BOOTC_VER}" \
-            https://github.com/bootc-dev/bootc.git /build/bootc
-
-          curl -fsSL \
-            "https://github.com/bootc-dev/bootc/releases/download/${BOOTC_VER}/bootc-${BOOTC_VER#v}-vendor.tar.zstd" \
-            -o /tmp/bootc-vendor.tar.zstd
-          printf '%s  /tmp/bootc-vendor.tar.zstd\n' "${BOOTC_VENDOR_SHA256}" \
-            | sha256sum -c -
-          tar --zstd -x -C /build/ -f /tmp/bootc-vendor.tar.zstd
-          
-          . ${RUSTUP_HOME}/env
-          cargo build --release --manifest-path /build/bootc/Cargo.toml
-
-          make -j$(nproc) -C /build/bootc manpages DESTDIR=/output/bootc
-          make -C /build/bootc install-all DESTDIR=/output/bootc
-
-          cd /output/bootc/
-          ln -sf DEBIAN debian
-
-          dpkg-shlibdeps \
-            -l/output/ostree/usr/lib \
-            -l/output/bootc/usr/lib \
-            -S/output/ostree \
-            -O /build/bootc/target/release/bootc \
-            | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
-          
-          DEPS=$(cat /tmp/bootc-deps)
-          sed -i \
-            -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
-            -e "s|{{ DEPS }}|${DEPS}|g"  \
-            /output/bootc/DEBIAN/control
-          cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
-          
-          chmod 755 \
-            /output/bootc/DEBIAN/postinst \
-            /output/bootc/usr/local/bin/bootc-finalize
-
-          rm -f /output/bootc/debian
-          dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
-
-      
-      - name: Upload debs
-        uses: actions/upload-artifact@v7
-        with:
-          name: debs
-          path: /debs/*.deb
+  wave3:
+    needs: [setup, wave2]
+    if: ${{ needs.setup.outputs.wave3 != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.setup.outputs.wave3) }}
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/build-one-deb.yml@main
+    with:
+      package: ${{ matrix.package }}
+      container_image: ${{ needs.setup.outputs.env_image }}
+    secrets: inherit
 
   publish:
+    needs: [setup, wave0, wave1, wave2, wave3]
     runs-on: ubuntu-latest
-    needs: build
     permissions:
       pages: write
       id-token: write
+    outputs:
+      any_rebuilt: ${{ steps.end.outputs.any_rebuilt }}
     steps:
       - id: repo
         shell: bash
@@ -406,7 +124,8 @@ jobs:
           name="${GITHUB_REPOSITORY##*/}"          # cut at the slash -> repo name
           echo "name=${name,,}" >> "$GITHUB_OUTPUT"  # lowercase
 
-      - uses: DaemonCores/DaemonCores-CI/bootc-debs-end@main
+      - id: end
+        uses: DaemonCores/DaemonCores-CI/bootc-debs-end@main
         with:
           repo_name: ${{ steps.repo.outputs.name }}
           apt_gpg_key: ${{ secrets.APT_GPG_KEY }}
