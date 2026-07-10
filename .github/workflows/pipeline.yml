@@ -9,6 +9,10 @@ on:
     - cron: '0 4 1 * *'
   workflow_dispatch:
     inputs:
+      rebuild_env:
+        description: 'Rebuild the :buildenv toolchain image first (needed once to seed it, or after editing env.yml)'
+        type: boolean
+        default: false
       run_debs:
         description: 'Build .deb packages'
         type: boolean
@@ -27,6 +31,7 @@ permissions:
   packages: write
   pages: write
   id-token: write
+  issues: write
 
 jobs:
   meta:
@@ -41,9 +46,22 @@ jobs:
             name="${name//-/ }"               # replace dashes with spaces
             echo "product_name=$name" >> "$GITHUB_OUTPUT"
 
+  build_env:
+    name: Rebuild the deb-builder env image
+    # Monthly (schedule) or on demand via the checkbox. Dev runs otherwise reuse
+    # the cached :buildenv image (zero setup time).
+    if: ${{ github.event_name == 'schedule' || inputs.rebuild_env }}
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/build-env.yml@main
+    secrets: inherit
+
   debs:
     name: Build .deb packages
-    if: ${{ github.event_name == 'schedule' || inputs.run_debs }}
+    needs: [build_env]
+    # always() lets debs run even when build_env was skipped (dev runs).
+    if: |
+      always() &&
+      (github.event_name == 'schedule' || inputs.run_debs) &&
+      (needs.build_env.result == 'success' || needs.build_env.result == 'skipped')
     uses: ./.github/workflows/bootc-debs-builder.yml
     secrets: inherit
 
@@ -57,6 +75,10 @@ jobs:
       (github.event_name == 'schedule' || inputs.run_image) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped')
     uses: DaemonCores/DaemonCores-CI/.github/workflows/bootc-build.yml@main
+    with:
+      # Force a no-cache image rebuild when at least one .deb was rebuilt
+      # (schedule already forces no-cache inside bootc-build.yml).
+      force_no_cache: ${{ needs.debs.outputs.any_rebuilt == 'true' }}
     secrets: inherit
 
   iso:
