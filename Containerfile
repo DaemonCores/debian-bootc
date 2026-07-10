@@ -60,7 +60,6 @@ RUN wget \
         amd64-microcode \
         bootc \
         podman \
-        skopeo \
         adduser \
         sudo \
         locales \
@@ -77,9 +76,6 @@ RUN wget \
         systemd-timesyncd \
         util-linux-extra \
         btrfs-progs \
-        fdisk \
-        dosfstools \
-        parted \
         file \
         traceroute \
         lsof \
