@@ -1,8 +1,7 @@
 name: Full Pipeline
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+# No concurrency lock: parallel runs are allowed and a cancel takes effect
+# immediately (the jobs below gate on !cancelled(), never always()).
 
 on:
   schedule:
@@ -57,9 +56,9 @@ jobs:
   debs:
     name: Build .deb packages
     needs: [build_env]
-    # always() lets debs run even when build_env was skipped (dev runs).
+    # !cancelled() lets debs run (but stops on cancel) even when build_env was skipped (dev runs).
     if: |
-      always() &&
+      !cancelled() &&
       (github.event_name == 'schedule' || inputs.run_debs) &&
       (needs.build_env.result == 'success' || needs.build_env.result == 'skipped')
     uses: ./.github/workflows/bootc-debs-builder.yml
@@ -68,10 +67,10 @@ jobs:
   image:
     name: Build container image
     needs: [debs]
-    # always() forces evaluation even when the debs job was skipped.
+    # !cancelled() runs the job (but stops on cancel) even when the debs job was skipped.
     # image runs if: checked AND (debs succeeded OR debs was skipped).
     if: |
-      always() &&
+      !cancelled() &&
       (github.event_name == 'schedule' || inputs.run_image) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped')
     uses: DaemonCores/DaemonCores-CI/.github/workflows/bootc-build.yml@main
@@ -84,10 +83,10 @@ jobs:
   iso:
     name: Build ISO
     needs: [debs, image, meta]
-    # always() forces evaluation even when debs or image were skipped.
+    # !cancelled() runs the job (but stops on cancel) even when debs or image were skipped.
     # iso runs if: checked AND (debs ok OR skipped) AND (image ok OR skipped).
     if: |
-      always() &&
+      !cancelled() &&
       (github.event_name == 'schedule' || inputs.run_iso) &&
       (needs.debs.result == 'success' || needs.debs.result == 'skipped') &&
       (needs.image.result == 'success' || needs.image.result == 'skipped') &&
