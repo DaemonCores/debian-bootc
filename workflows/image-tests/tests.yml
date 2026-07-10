@@ -1,0 +1,82 @@
+# Exhaustive image tests, run on a real boot of the built image (bootc install
+# to a virtual disk + QEMU/KVM), executed over SSH before the image is pushed.
+# A failing test blocks the push.
+#
+#   boot_timeout   seconds to wait for the VM to answer SSH
+#   tests[].name   label shown in the CI log
+#   tests[].run    command executed on the VM; passes on exit 0
+#   tests[].expect optional: pass instead when this string is in the output
+
+boot_timeout: 600
+
+tests:
+  # ── bootc / ostree / immutability ──────────────────────────────────────
+  - name: booted through bootc
+    run: bootc status --format=json
+    expect: booted
+  - name: bootc binary works
+    run: bootc --version
+  - name: ostree deployment present
+    run: test -d /ostree/deploy
+  - name: root is a composefs/overlay mount
+    run: findmnt -no FSTYPE / | grep -qiE 'overlay|composefs'
+  - name: /usr is read-only
+    run: "! touch /usr/.rw-probe 2>/dev/null"
+  - name: /etc is writable
+    run: touch /etc/.rw-probe && rm -f /etc/.rw-probe
+  - name: /var is writable
+    run: touch /var/.rw-probe && rm -f /var/.rw-probe
+  - name: no failed systemd units
+    run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
+
+  # ── bootloader / secure boot ───────────────────────────────────────────
+  - name: bootupd present
+    run: command -v bootupctl
+  - name: bootupd metadata readable
+    run: bootupctl status
+  - name: signed GRUB EFI staged
+    run: test -e /usr/lib/efi/grub2/*/EFI/debian/grubx64.efi
+  - name: shim staged for firmware
+    run: test -e /usr/lib/efi/shim/*/EFI/BOOT/BOOTX64.EFI
+  - name: Secure Boot signing cert shipped
+    run: test -f /usr/share/debian-bootc/sb_signing.crt
+
+  # ── kernel / initramfs / dracut ────────────────────────────────────────
+  - name: kernel modules tree present
+    run: test -d /usr/lib/modules
+  - name: initramfs generated (bootc-finalize ran)
+    run: test -e /usr/lib/modules/*/initramfs.img
+  - name: ostree dracut module baked into initramfs
+    run: lsinitrd "$(ls /usr/lib/modules/*/initramfs.img | head -1)" | grep -qi ostree
+  - name: btrfs dracut module baked into initramfs
+    run: lsinitrd "$(ls /usr/lib/modules/*/initramfs.img | head -1)" | grep -qi btrfs
+
+  # ── filesystems ────────────────────────────────────────────────────────
+  - name: btrfs-progs present
+    run: command -v mkfs.btrfs
+  - name: btrfs kernel module loads
+    run: modprobe btrfs && lsmod | grep -q btrfs
+
+  # ── podman (bootc imgstorage on upgrade) ───────────────────────────────
+  - name: podman present
+    run: command -v podman
+  - name: podman graph driver resolvable
+    run: podman info --format '{{.Store.GraphDriverName}}'
+
+  # ── networking / repacked packages ─────────────────────────────────────
+  - name: ifupdown2 repacked (+bootc)
+    run: dpkg-query -W -f='${Version}' ifupdown2
+    expect: +bootc
+  - name: systemd-timesyncd repacked (+bootc)
+    run: dpkg-query -W -f='${Version}' systemd-timesyncd
+    expect: +bootc
+  - name: DNS resolution works
+    run: getent hosts deb.debian.org
+  - name: sshd active
+    run: systemctl is-active ssh
+
+  # ── first-boot tooling shipped ─────────────────────────────────────────
+  - name: firstboot wizard present
+    run: test -x /usr/local/bin/firstboot-user-setup
+  - name: bootc-finalize helper present
+    run: test -x /usr/local/bin/bootc-finalize
