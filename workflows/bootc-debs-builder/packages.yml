@@ -129,6 +129,7 @@ packages:
         --target=x86_64 \
         --with-platform=efi \
         --prefix=/usr \
+        --sysconfdir=/etc \
         --disable-werror \
         --program-transform-name='s,grub,grub2,' \
         MAKEINFO=true
