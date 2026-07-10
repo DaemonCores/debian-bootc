@@ -120,14 +120,28 @@ packages:
 
       ./bootstrap
 
+      # --program-transform-name renames the userspace tools grub-* -> grub2-*.
+      # The Fedora source's own mkconfig scripts call grub2-probe/grub2-mkrelpath
+      # internally and bootupd invokes grub2-editenv/install/mkconfig, so the
+      # grub2 naming is the native, consistent one here (matching the EFI binary
+      # we build from the same tree). We drop Debian's grub-common entirely.
       ./configure \
         --target=x86_64 \
         --with-platform=efi \
         --prefix=/usr \
         --disable-werror \
+        --program-transform-name='s,grub,grub2,' \
         MAKEINFO=true
 
       make -j$(nproc)
+
+      # Install the full grub userspace (grub2-* tools + x86_64-efi modules +
+      # fonts + locale) into the deb. Previously the package shipped only the
+      # signed EFI binary, so the installed system had no grub tooling at all and
+      # bootupd could never self-update. This is the core of the fix.
+      make -j$(nproc) install \
+        DESTDIR=/output/grub-efi-amd64-signed \
+        MAKEINFO=true
 
       GRUB_MODULES=" \
         all_video boot blscfg btrfs blsuki \
