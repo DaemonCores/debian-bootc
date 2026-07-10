@@ -8,6 +8,7 @@ Section: admin
 Priority: required
 Pre-Depends: lvm2, xfsprogs, dracut, libostree, bootupd
 Depends: iproute2, {{ DEPS }}
+Recommends: fdisk, dosfstools, parted, skopeo
 Description: bootable OCI container image manager for Debian
  Manages the host operating system as an OCI container image, using
  ostree as the on-disk storage and atomic deployment engine. Enables
