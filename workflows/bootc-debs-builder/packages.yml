@@ -207,6 +207,15 @@ packages:
       cp /tmp/sb.crt \
         /output/grub-efi-amd64-signed/usr/share/debian-bootc/sb_signing.crt
 
+      # Stage the signed grub where bootupd reads EFI components at install time
+      # (/usr/lib/efi/<name>/<version>/EFI, cf. bootupd v0.2.35 src/efi.rs). This
+      # is what lets `bootupd install` lay grub onto the ESP; without it bootupd
+      # logs "Skip installing component EFI without update metadata" and the ESP
+      # ends up unbootable. Path matches workflows/image-tests/tests.yml.
+      install -Dm0644 \
+        /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+        "/output/grub-efi-amd64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+
       rm -f /tmp/sb.key /tmp/sb.crt
 
       chmod 755 /output/grub-efi-amd64-signed/DEBIAN/postinst
