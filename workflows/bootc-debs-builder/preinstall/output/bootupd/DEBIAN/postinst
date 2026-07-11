@@ -20,9 +20,14 @@ case "$1" in
     # fallback EFI/BOOT/BOOTX64.EFI and as the vendor EFI/debian/shimx64.efi.
     cp /usr/lib/shim/shimx64.efi.signed "${efidir}/BOOT/BOOTX64.EFI"
     cp /usr/lib/shim/shimx64.efi.signed "${efidir}/debian/shimx64.efi"
-    # MokManager + fallback come from shim-helpers-amd64-signed; best-effort.
+    # MokManager, for MOK enrollment; best-effort. Only launched on a pending
+    # MOK request, so harmless. We deliberately do NOT ship fbx64.efi (the shim
+    # fallback): booted from the removable path with no NVRAM entry, shim would
+    # launch it, and with no BOOTX64.CSV to rebuild the entry from it just resets
+    # the machine in an endless loop. Without fbx64, shim loads grubx64.efi from
+    # its own directory directly, which is exactly what we want. bootupd already
+    # owns the real NVRAM entry via efibootmgr, so the fallback is redundant.
     cp /usr/lib/shim/mmx64.efi.signed "${efidir}/BOOT/mmx64.efi" 2>/dev/null || true
-    cp /usr/lib/shim/fbx64.efi.signed "${efidir}/BOOT/fbx64.efi" 2>/dev/null || true
 
     # bootupd v0.2.35 write_update_metadata does open_dir(usr/lib/bootupd/updates)
     # (not create) and fails ENOENT if it is missing; the deb ships no empty dir.
