@@ -1,0 +1,101 @@
+--- a/src/packagesystem.rs
++++ b/src/packagesystem.rs
+@@ -86,6 +86,11 @@
+ where
+     T: AsRef<Path>,
+ {
++    // Debian (and other dpkg-based distros) have no rpm database; there the
++    // bootloader packages are tracked by dpkg, so query that instead.
++    if !Path::new("/usr/bin/rpm").exists() {
++        return query_files_dpkg(paths);
++    }
+     let mut c = ostreeutil::rpm_cmd(sysroot_path)?;
+     c.args(["-q", "--queryformat", "%{nevra},%{buildtime} ", "-f"]);
+     for arg in paths {
+@@ -101,6 +106,63 @@
+     rpm_parse_metadata(&rpmout.stdout)
+ }
+ 
++/// Debian equivalent of `query_files`: resolve the dpkg package(s) owning the
++/// given files and record their names, versions and a metadata timestamp.
++fn query_files_dpkg<T>(paths: impl IntoIterator<Item = T>) -> Result<ContentMetadata>
++where
++    T: AsRef<Path>,
++{
++    let mut names: BTreeSet<String> = BTreeSet::new();
++    for p in paths {
++        let path = p.as_ref();
++        let out = std::process::Command::new("dpkg-query")
++            .arg("--search")
++            .arg(path)
++            .output()?;
++        if !out.status.success() {
++            std::io::stderr().write_all(&out.stderr)?;
++            bail!("Failed to invoke dpkg-query --search {:?}", path);
++        }
++        // Output lines look like "pkg: /the/path"; take the owning package.
++        let stdout = String::from_utf8(out.stdout)?;
++        let owner = stdout
++            .lines()
++            .find_map(|l| l.split_once(": ").map(|(pkg, _)| pkg))
++            .map(|pkg| pkg.split(',').next().unwrap_or(pkg).trim().to_string())
++            .ok_or_else(|| anyhow::anyhow!("No dpkg owner for {:?}", path))?;
++        names.insert(owner);
++    }
++    if names.is_empty() {
++        bail!("Failed to find any dpkg packages matching the given files");
++    }
++
++    let mut modules: Vec<Module> = Vec::new();
++    let mut version_parts: Vec<String> = Vec::new();
++    for name in &names {
++        let out = std::process::Command::new("dpkg-query")
++            .args(["-W", "-f=${Version}"])
++            .arg(name)
++            .output()?;
++        if !out.status.success() {
++            std::io::stderr().write_all(&out.stderr)?;
++            bail!("Failed to query version of dpkg package {name}");
++        }
++        let version = String::from_utf8(out.stdout)?.trim().to_string();
++        version_parts.push(format!("{name}-{version}"));
++        modules.push(Module {
++            name: name.clone(),
++            rpm_evr: version,
++        });
++    }
++    modules.sort_unstable();
++
++    Ok(ContentMetadata {
++        timestamp: crate::util::get_metadata_timestamp()?,
++        version: version_parts.join(","),
++        versions: Some(modules),
++    })
++}
++
+ fn split_name_version(input: &str) -> Option<(String, String)> {
+     // assume it is "grub2-tools-1:2.06-110.el9.x86_64"
+     // strip .arch
+@@ -202,6 +264,22 @@
+ mod tests {
+     use super::*;
+ 
++    // Debian port CONTENT CHECK: prove the patched dpkg code path resolves a
++    // file's owning package name + version. dpkg-query itself ships in the
++    // "dpkg" package and is always present in the build environment, so it is a
++    // stable fixture. A regression in query_files_dpkg compiles but fails here,
++    // and the build runs `cargo test` on it, so a broken patch fails the build
++    // instead of shipping a broken bootupd.
++    #[test]
++    fn test_query_files_dpkg() {
++        let meta = query_files_dpkg(["/usr/bin/dpkg-query"]).unwrap();
++        let modules = meta.versions.expect("versions present");
++        assert_eq!(modules.len(), 1, "exactly one owning package");
++        assert_eq!(modules[0].name, "dpkg", "owner is the dpkg package");
++        assert!(!modules[0].rpm_evr.is_empty(), "version resolved");
++        assert!(meta.version.starts_with("dpkg-"), "version string shape");
++    }
++
+     #[test]
+     fn test_parse_rpmout() {
+         let testdata = "grub2-efi-x64-1:2.06-95.fc38.x86_64,1681321788 grub2-efi-x64-1:2.06-95.fc38.x86_64,1681321788 shim-x64-15.6-2.x86_64,1657222566 shim-x64-15.6-2.x86_64,1657222566 shim-x64-15.6-2.x86_64,1657222566";
