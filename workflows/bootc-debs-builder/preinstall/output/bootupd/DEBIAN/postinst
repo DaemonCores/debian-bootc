@@ -4,5 +4,26 @@ set -e
 case "$1" in
   configure | triggered)
     deb-systemd-helper enable bootloader-update.service
+
+    # Assemble the EFI components bootupd installs to the ESP. grub is staged by
+    # the grub-efi-amd64-signed package under /usr/lib/efi/grub2/...; here we add
+    # shim (from shim-signed, a Pre-Depend) under /usr/lib/efi/shim/<ver>/EFI in
+    # the 3-level <name>/<version>/EFI layout bootupd reads (cf. bootupd v0.2.35
+    # src/efi.rs and workflows/image-tests/tests.yml), then generate the update
+    # metadata bootupd needs to actually install the bootloader. This runs at
+    # image build time (writable /usr); bootc systems never apt-install on a
+    # booted, read-only /usr.
+    shim_ver=$(dpkg-query -W -f='${Version}' shim-signed 2>/dev/null || echo 0)
+    efidir="/usr/lib/efi/shim/${shim_ver}/EFI"
+    mkdir -p "${efidir}/BOOT" "${efidir}/debian"
+    # shimx64.efi.signed is the boot entrypoint: it lands as the removable-media
+    # fallback EFI/BOOT/BOOTX64.EFI and as the vendor EFI/debian/shimx64.efi.
+    cp /usr/lib/shim/shimx64.efi.signed "${efidir}/BOOT/BOOTX64.EFI"
+    cp /usr/lib/shim/shimx64.efi.signed "${efidir}/debian/shimx64.efi"
+    # MokManager + fallback come from shim-helpers-amd64-signed; best-effort.
+    cp /usr/lib/shim/mmx64.efi.signed "${efidir}/BOOT/mmx64.efi" 2>/dev/null || true
+    cp /usr/lib/shim/fbx64.efi.signed "${efidir}/BOOT/fbx64.efi" 2>/dev/null || true
+
+    bootupctl backend generate-update-metadata /
     ;;
 esac
