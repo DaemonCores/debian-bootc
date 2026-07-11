@@ -30,6 +30,11 @@ packages:
         -e "s|, {{ DEPS }}||g" \
         /output/firstboot-user-setup/DEBIAN/control
 
+      # Content check: our entrypoint is present, executable and valid shell.
+      f=/output/firstboot-user-setup/usr/local/bin/firstboot-user-setup
+      test -x "${f}" && bash -n "${f}" \
+        || { echo "ERROR: firstboot-user-setup script broken" >&2; exit 1; }
+
       dpkg-deb --build /output/firstboot-user-setup \
         /debs/firstboot-user-setup_${FIRSTBOOT_VER}_all.deb
 
@@ -64,6 +69,16 @@ packages:
       chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf \
         /output/ifupdown2/usr/sbin/domain-set
 
+      # Content check: version bumped and our helpers present + executable.
+      grep -qF "Version: 1:${ORIG_VER}+bootc2" \
+        /output/ifupdown2/DEBIAN/control \
+        || { echo "ERROR: ifupdown2 version not rewritten" >&2; exit 1; }
+      for s in ifupdown2-autoconf domain-set; do
+        test -s "/output/ifupdown2/usr/sbin/${s}" \
+          && test -x "/output/ifupdown2/usr/sbin/${s}" \
+          || { echo "ERROR: ifupdown2 ${s} missing/not exec" >&2; exit 1; }
+      done
+
       dpkg-deb --build /output/ifupdown2 \
         /debs/ifupdown2_${ORIG_VER}+bootc1_all.deb
 
@@ -95,6 +110,11 @@ packages:
 
       sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc1/" \
         /output/systemd-timesyncd/DEBIAN/control
+
+      # Content check: version rewritten in control.
+      grep -qF "Version: 1:${ORIG_VER}+bootc1" \
+        /output/systemd-timesyncd/DEBIAN/control \
+        || { echo "ERROR: systemd-timesyncd version not rewritten" >&2; exit 1; }
 
       dpkg-deb --build /output/systemd-timesyncd \
         /debs/systemd-timesyncd_${ORIG_VER}+bootc1_${ARCH}.deb
@@ -227,9 +247,13 @@ packages:
       # build so the in-tree EFI build above is untouched). This makes legacy
       # BIOS boot actually work rather than being silently skipped. Ref: bootupd
       # v0.2.35 src/bios.rs (check_grub_modules / run_grub_install).
-      mkdir -p /build/grub-pc
-      cd /build/grub-pc
-      /build/grub2-fedora/configure \
+      # The source tree is already configured in-tree for EFI above; grub refuses
+      # a second configure until it is cleaned. The EFI binary is already built,
+      # signed and staged, so distclean then reconfigure the same tree for
+      # i386-pc in-tree.
+      make -C /build/grub2-fedora distclean
+      cd /build/grub2-fedora
+      ./configure \
         --target=i386 \
         --with-platform=pc \
         --prefix=/usr \
@@ -244,6 +268,19 @@ packages:
       cd "${SAVE_PWD}"
 
       rm -f /tmp/sb.key /tmp/sb.crt
+
+      # Content checks: the grub2 userspace and BOTH platform module sets are
+      # present, and grub is staged where bootupd reads it (the signed EFI binary
+      # is already verified by sbverify above).
+      _o=/output/grub-efi-amd64-signed
+      test -x "${_o}/usr/bin/grub2-editenv" \
+        && test -x "${_o}/usr/sbin/grub2-install" \
+        && test -d "${_o}/usr/lib/grub/x86_64-efi" \
+        && test -d "${_o}/usr/lib/grub/i386-pc" \
+        || { echo "ERROR: grub userspace/modules incomplete" >&2; exit 1; }
+      compgen -G "${_o}/usr/lib/efi/grub2/*/EFI/debian/grubx64.efi" >/dev/null \
+        && compgen -G "${_o}/usr/lib/efi/grub2/*/EFI/BOOT/grubx64.efi" >/dev/null \
+        || { echo "ERROR: grub not staged for bootupd" >&2; exit 1; }
 
       chmod 755 /output/grub-efi-amd64-signed/DEBIAN/postinst
       dpkg-deb --build /output/grub-efi-amd64-signed \
@@ -310,6 +347,12 @@ packages:
         -e "s|{{ DEPS }}|${DEPS}|g" \
         /output/bootupd/DEBIAN/control
 
+      # Content check: the built bootupd binary exists (its patched dpkg
+      # behaviour is validated by cargo test above).
+      _b=$(find /output/bootupd -type f -name bootupd | head -1)
+      test -n "${_b}" && test -s "${_b}" \
+        || { echo "ERROR: bootupd binary missing from output" >&2; exit 1; }
+
       rm -f /output/bootupd/debian
       dpkg-deb --build /output/bootupd /debs/bootupd_${BOOTUPD_VER#v}_amd64.deb
 
@@ -346,6 +389,10 @@ packages:
       LIBBASE=$(echo $SONAME | sed 's/\.so\..*//')
       SOVERSION=$(echo $SONAME | sed 's/.*\.so\.//')
       echo "${LIBBASE} ${SOVERSION} libcomposefs" > /output/libcomposefs/DEBIAN/shlibs
+
+      # Content check: the shared library built and its SONAME resolved.
+      test -s "${SO}" && test -n "${SONAME}" \
+        || { echo "ERROR: libcomposefs.so not built or SONAME unresolved" >&2; exit 1; }
 
       sed -i \
         -e "s|{{ VER }}|${COMPOSEFS_VER#v}|g" \
@@ -409,6 +456,11 @@ packages:
       SOVERSION=$(echo $SONAME | sed 's/.*\.so\.//')
       echo "${LIBBASE} ${SOVERSION} libostree" > /output/ostree/DEBIAN/shlibs
 
+      # Content check: the libostree shared object built (complements the dracut
+      # module and system-generator checks above).
+      test -s "${SO}" && test -n "${SONAME}" \
+        || { echo "ERROR: libostree.so not built or SONAME unresolved" >&2; exit 1; }
+
       DEPS=$(cat /tmp/ostree-deps)
       sed -i \
         -e "s|{{ VER }}|${OSTREE_VER}|g" \
@@ -471,6 +523,12 @@ packages:
       chmod 755 \
         /output/bootc/DEBIAN/postinst \
         /output/bootc/usr/local/bin/bootc-finalize
+
+      # Content check: the bootc binary built and our finalize helper is valid.
+      test -s /build/bootc/target/release/bootc \
+        || { echo "ERROR: bootc binary not built" >&2; exit 1; }
+      bash -n /output/bootc/usr/local/bin/bootc-finalize \
+        || { echo "ERROR: bootc-finalize script broken" >&2; exit 1; }
 
       rm -f /output/bootc/debian
       dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
