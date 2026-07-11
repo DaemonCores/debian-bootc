@@ -24,6 +24,10 @@ case "$1" in
     cp /usr/lib/shim/mmx64.efi.signed "${efidir}/BOOT/mmx64.efi" 2>/dev/null || true
     cp /usr/lib/shim/fbx64.efi.signed "${efidir}/BOOT/fbx64.efi" 2>/dev/null || true
 
+    # bootupd v0.2.35 write_update_metadata does open_dir(usr/lib/bootupd/updates)
+    # (not create) and fails ENOENT if it is missing; the deb ships no empty dir.
+    mkdir -p /usr/lib/bootupd/updates
+
     bootupctl backend generate-update-metadata /
     ;;
 esac
