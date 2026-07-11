@@ -144,6 +144,15 @@ packages:
         DESTDIR=/output/grub-efi-amd64-signed \
         MAKEINFO=true
 
+      # This image is EFI-only. bootupd's BIOS component keys off the presence of
+      # /usr/sbin/grub2-install and, if it exists, queries the rpm database
+      # (absent on Debian) — which crashes `bootupctl backend
+      # generate-update-metadata` with "No such file or directory (os error 2)".
+      # Drop the BIOS installer so bootupd's BIOS component returns early and only
+      # the (rpm-free) EFI component is processed. Ref: bootupd v0.2.35
+      # src/bios.rs (GRUB_BIN = usr/sbin/grub2-install) + packagesystem::query_files.
+      rm -f /output/grub-efi-amd64-signed/usr/sbin/grub2-install
+
       GRUB_MODULES=" \
         all_video boot blscfg btrfs blsuki \
         cat configfile cryptodisk \
