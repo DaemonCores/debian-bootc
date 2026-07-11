@@ -144,15 +144,6 @@ packages:
         DESTDIR=/output/grub-efi-amd64-signed \
         MAKEINFO=true
 
-      # This image is EFI-only. bootupd's BIOS component keys off the presence of
-      # /usr/sbin/grub2-install and, if it exists, queries the rpm database
-      # (absent on Debian) — which crashes `bootupctl backend
-      # generate-update-metadata` with "No such file or directory (os error 2)".
-      # Drop the BIOS installer so bootupd's BIOS component returns early and only
-      # the (rpm-free) EFI component is processed. Ref: bootupd v0.2.35
-      # src/bios.rs (GRUB_BIN = usr/sbin/grub2-install) + packagesystem::query_files.
-      rm -f /output/grub-efi-amd64-signed/usr/sbin/grub2-install
-
       GRUB_MODULES=" \
         all_video boot blscfg btrfs blsuki \
         cat configfile cryptodisk \
@@ -217,13 +208,40 @@ packages:
         /output/grub-efi-amd64-signed/usr/share/debian-bootc/sb_signing.crt
 
       # Stage the signed grub where bootupd reads EFI components at install time
-      # (/usr/lib/efi/<name>/<version>/EFI, cf. bootupd v0.2.35 src/efi.rs). This
-      # is what lets `bootupd install` lay grub onto the ESP; without it bootupd
-      # logs "Skip installing component EFI without update metadata" and the ESP
-      # ends up unbootable. Path matches workflows/image-tests/tests.yml.
-      install -Dm0644 \
-        /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-        "/output/grub-efi-amd64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+      # (/usr/lib/efi/<name>/<version>/EFI, cf. bootupd v0.2.35 src/efi.rs). We
+      # place it under both EFI/debian (the NVRAM/vendor path bootupd points
+      # efibootmgr at) and EFI/BOOT (the removable-media path): when firmware
+      # boots \EFI\BOOT\BOOTX64.EFI (shim) with no NVRAM entry — e.g. a fresh VM —
+      # shim only looks for grubx64.efi in its OWN directory (rhboot/shim
+      # README.fallback), so grub must sit next to it there too. Paths match
+      # workflows/image-tests/tests.yml.
+      for _sub in debian BOOT; do
+        install -Dm0644 \
+          /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+          "/output/grub-efi-amd64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/${_sub}/grubx64.efi"
+      done
+
+      # BIOS (i386-pc) platform. bootupd's BIOS component runs
+      # `grub2-install --target i386-pc` guarded on /usr/lib/grub/i386-pc, so
+      # build and install that platform's modules too (a second, out-of-tree
+      # build so the in-tree EFI build above is untouched). This makes legacy
+      # BIOS boot actually work rather than being silently skipped. Ref: bootupd
+      # v0.2.35 src/bios.rs (check_grub_modules / run_grub_install).
+      mkdir -p /build/grub-pc
+      cd /build/grub-pc
+      /build/grub2-fedora/configure \
+        --target=i386 \
+        --with-platform=pc \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --disable-werror \
+        --program-transform-name='s,grub,grub2,' \
+        MAKEINFO=true
+      make -j$(nproc)
+      make -j$(nproc) install \
+        DESTDIR=/output/grub-efi-amd64-signed \
+        MAKEINFO=true
+      cd "${SAVE_PWD}"
 
       rm -f /tmp/sb.key /tmp/sb.crt
 
@@ -234,6 +252,7 @@ packages:
   - name: bootupd
     sources:
       - preinstall/output/bootupd
+      - patches/bootupd-0.2.35-dpkg.patch
     env:
       CARGO_HOME: "/build/rust"
       RUSTUP_HOME: "/build/rust"
@@ -246,6 +265,13 @@ packages:
       git clone --depth=1 --branch "${BOOTUPD_VER}" \
         https://github.com/coreos/bootupd.git /build/bootupd
 
+      # Debian port: bootupd upstream reads the rpm database for bootloader
+      # package metadata (packagesystem::query_files); Debian has none. Patch it
+      # to fall back to dpkg so the BIOS component's generate-update-metadata
+      # works here instead of crashing. The rpm path stays intact for Fedora.
+      git -C /build/bootupd apply \
+        "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootupd-0.2.35-dpkg.patch"
+
       curl -fsSL \
         "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
         -o /tmp/bootupd-vendor.tar.zstd
@@ -255,6 +281,19 @@ packages:
 
       . ${RUSTUP_HOME}/env
       cargo build --release --manifest-path /build/bootupd/Cargo.toml
+
+      # Content check on the applied dpkg patch: the patch adds a unit test that
+      # exercises query_files_dpkg against a real dpkg-owned file, so a patch that
+      # compiles but behaves wrong fails HERE. Require it to actually run (>=1
+      # passed) so a vacuous "0 tests" can't pass silently. On failure the build
+      # aborts; CI then keeps the last-good bootupd deb and opens an issue instead
+      # of shipping a broken package.
+      chk=$(cargo test --release --manifest-path /build/bootupd/Cargo.toml \
+        query_files_dpkg 2>&1) || { printf '%s\n' "${chk}"; exit 1; }
+      printf '%s\n' "${chk}"
+      printf '%s\n' "${chk}" \
+        | grep -qE 'test result: ok\. [1-9][0-9]* passed' \
+        || { echo "ERROR: dpkg patch content check did not run" >&2; exit 1; }
 
       make -C /build/bootupd install-all DESTDIR=/output/bootupd
 
