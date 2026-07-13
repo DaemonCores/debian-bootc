@@ -34,5 +34,15 @@ case "$1" in
     mkdir -p /usr/lib/bootupd/updates
 
     bootupctl backend generate-update-metadata /
+
+    # generate-update-metadata re-stages the shim fallback fbx64.efi but not the
+    # BOOTX64.CSV it needs. Booted from the removable path \EFI\BOOT\BOOTX64.EFI
+    # with no NVRAM entry, shim runs fbx64, and without a CSV telling it which
+    # entry to (re)create it just resets the machine forever. Debian ships the
+    # CSV at /usr/lib/shim/BOOTX64.CSV; stage it in the vendor dir so bootupd lays
+    # it on the ESP and the fallback works as designed. After generate-update-
+    # metadata so it is not clobbered.
+    cp /usr/lib/shim/BOOTX64.CSV "${efidir}/debian/BOOTX64.CSV" \
+      2>/dev/null || true
     ;;
 esac
