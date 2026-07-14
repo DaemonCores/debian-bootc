@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# zz-bootc-finalize - autonomous bootc kernel finalizer.
+#
+# Shipped by debian-bootc's bootc package so that ANY Debian-based downstream
+# image (Proxmox-Atomic or otherwise) that installs or updates a kernel gets
+# that kernel relocated into /usr/lib/modules/<kver>/vmlinuz with a fresh dracut
+# initramfs - the layout ostree requires to deploy. This is what lets the base
+# integration propagate on its own: the downstream Containerfile does not need
+# to call anything, the standard Debian kernel-install machinery
+# (run-parts /etc/kernel/postinst.d) fires this hook automatically.
+#
+# run-parts invokes us with: $1 = kernel version, $2 = kernel image path. We let
+# bootc-finalize pick the newest installed kernel (the one just installed on an
+# upgrade), so the args are informational only.
+#
+# Defensive by design: during the base image's own build this hook may fire
+# while the bootc toolchain is only partially unpacked. If the finalizer's tools
+# are not yet available we defer silently - the bootc package postinst re-runs
+# bootc-finalize as an end-of-transaction backstop, and bootc-finalize is
+# idempotent, so the final state is always correct.
+set -e
+
+# The zz- prefix orders us last in /etc/kernel/postinst.d, after any
+# initramfs/bootloader hooks, so ours is the authoritative final layout.
+
+command -v dracut >/dev/null 2>&1 || exit 0
+command -v bootupctl >/dev/null 2>&1 || exit 0
+[ -x /usr/local/bin/bootc-finalize ] || exit 0
+
+exec /usr/local/bin/bootc-finalize

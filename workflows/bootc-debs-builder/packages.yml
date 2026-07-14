@@ -522,13 +522,21 @@ packages:
 
       chmod 755 \
         /output/bootc/DEBIAN/postinst \
-        /output/bootc/usr/local/bin/bootc-finalize
+        /output/bootc/usr/local/bin/bootc-finalize \
+        /output/bootc/etc/kernel/postinst.d/zz-bootc-finalize
 
-      # Content check: the bootc binary built and our finalize helper is valid.
+      # Content check: the bootc binary built and our finalize helper +
+      # autonomous kernel hook are valid. The hook is what makes the kernel
+      # relocation propagate to any downstream image with no Containerfile
+      # change, so a broken hook must fail the build.
       test -s /build/bootc/target/release/bootc \
         || { echo "ERROR: bootc binary not built" >&2; exit 1; }
       bash -n /output/bootc/usr/local/bin/bootc-finalize \
         || { echo "ERROR: bootc-finalize script broken" >&2; exit 1; }
+      sh -n /output/bootc/etc/kernel/postinst.d/zz-bootc-finalize \
+        || { echo "ERROR: zz-bootc-finalize kernel hook broken" >&2; exit 1; }
+      test -x /output/bootc/etc/kernel/postinst.d/zz-bootc-finalize \
+        || { echo "ERROR: zz-bootc-finalize kernel hook not executable" >&2; exit 1; }
 
       rm -f /output/bootc/debian
       dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
