@@ -112,7 +112,7 @@ RUN wget \
         /run/* \
         /usr/sbin/policy-rc.d
 
-COPY ./assets/banner/etc /etc/
+COPY ./src/debianpostinstall /
 
 # Fix ostree filesystem
 RUN mkdir -p /var/home \
