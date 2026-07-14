@@ -35,6 +35,14 @@ rm -rf /boot/*
 dracut --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"
 
 # Structure for bootupd.
+# This block is idempotent / re-entrant: the base image stages the shim and
+# GRUB EFI binaries here once, consuming the package-provided sources with `mv`.
+# A downstream rebuild (e.g. Proxmox-Atomic swapping in the pve-kernel) re-runs
+# bootc-finalize only to relocate its kernel and regenerate the initramfs; the
+# EFI binaries are already staged in /usr/lib/efi and carried forward, so their
+# sources are gone. Each staging step below is therefore guarded on its source
+# still being present. On the base build every source exists, so behaviour is
+# byte-identical to before; downstream it simply skips the already-staged EFI.
 SHIM_VER=$(dpkg-query -W -f='${Version}' shim-signed)
 GRUB_VER=$(dpkg-query -W -f='${Version}' grub-efi-amd64-signed)
 
@@ -44,21 +52,31 @@ mkdir -p \
   "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
 # GRUB EFI binary - custom Fedora build with blscfg embedded.
-mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-  "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+if [ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]; then
+  mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+fi
 
 # Shim in BOOT/ for UEFI firmware.
-mv /usr/lib/shim/shimx64.efi.signed \
-  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
+if [ -f /usr/lib/shim/shimx64.efi.signed ]; then
+  mv /usr/lib/shim/shimx64.efi.signed \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
+fi
 
 # Shim also in vendor dir - bootupd looks for shimx64.efi there.
-cp "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" \
-  "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
+if [ -f "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" ]; then
+  cp "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
+fi
 
 # Fallback and MokManager.
-mv /usr/lib/shim/fbx64.efi.signed \
-  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
-mv /usr/lib/shim/mmx64.efi.signed \
-  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
+if [ -f /usr/lib/shim/fbx64.efi.signed ]; then
+  mv /usr/lib/shim/fbx64.efi.signed \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
+fi
+if [ -f /usr/lib/shim/mmx64.efi.signed ]; then
+  mv /usr/lib/shim/mmx64.efi.signed \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
+fi
 
 bootupctl backend generate-update-metadata /
