@@ -1,9 +1,26 @@
 name: Full Pipeline
 
-# No concurrency lock: parallel runs are allowed and a cancel takes effect
-# immediately (the jobs below gate on !cancelled(), never always()).
+# Thin caller: this repo only declares its triggers and concurrency. The whole
+# job graph (change plan / auto-skip, env, debs, image, iso) lives in the shared
+# reusable workflow DaemonCores-CI/.github/workflows/full-pipeline.yml.
+#
+# Triggers:
+#   push (main)        full pipeline, but untouched stages auto-skip (the plan
+#                      job diffs the push) on top of the per-deb content cache.
+#   workflow_dispatch  the checkboxes decide, verbatim.
+#   schedule (monthly) rebuild everything.
+#
+# concurrency cancels an in-progress run when a newer push arrives (triggers and
+# concurrency must live in the caller — GitHub evaluates them here, not in the
+# reusable workflow).
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/workflows/docs-wiki-sync.yml'
   schedule:
     - cron: '0 4 1 * *'
   workflow_dispatch:
@@ -32,66 +49,16 @@ permissions:
   id-token: write
   issues: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  meta:
-      name: Compute product name
-      runs-on: ubuntu-latest
-      outputs:
-        product_name: ${{ steps.name.outputs.product_name }}
-      steps:
-        - id: name
-          run: |
-            name="${GITHUB_REPOSITORY##*/}"   # cut at the slash -> repo name
-            name="${name//-/ }"               # replace dashes with spaces
-            echo "product_name=$name" >> "$GITHUB_OUTPUT"
-
-  build_env:
-    name: Rebuild the deb-builder env image
-    # Monthly (schedule) or on demand via the checkbox. Dev runs otherwise reuse
-    # the cached :buildenv image (zero setup time).
-    if: ${{ github.event_name == 'schedule' || inputs.rebuild_env }}
-    uses: DaemonCores/DaemonCores-CI/.github/workflows/build-env.yml@main
-    secrets: inherit
-
-  debs:
-    name: Build .deb packages
-    needs: [build_env]
-    # !cancelled() lets debs run (but stops on cancel) even when build_env was skipped (dev runs).
-    if: |
-      !cancelled() &&
-      (github.event_name == 'schedule' || inputs.run_debs) &&
-      (needs.build_env.result == 'success' || needs.build_env.result == 'skipped')
-    uses: DaemonCores/DaemonCores-CI/.github/workflows/bootc-debs-builder.yml@main
-    secrets: inherit
-
-  image:
-    name: Build container image
-    needs: [debs]
-    # !cancelled() runs the job (but stops on cancel) even when the debs job was skipped.
-    # image runs if: checked AND (debs succeeded OR debs was skipped).
-    if: |
-      !cancelled() &&
-      (github.event_name == 'schedule' || inputs.run_image) &&
-      (needs.debs.result == 'success' || needs.debs.result == 'skipped')
-    uses: DaemonCores/DaemonCores-CI/.github/workflows/bootc-build.yml@main
+  run:
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/full-pipeline.yml@main
     with:
-      # Force a no-cache image rebuild when at least one .deb was rebuilt
-      # (schedule already forces no-cache inside bootc-build.yml).
-      force_no_cache: ${{ needs.debs.outputs.any_rebuilt == 'true' }}
-    secrets: inherit
-
-  iso:
-    name: Build ISO
-    needs: [debs, image, meta]
-    # !cancelled() runs the job (but stops on cancel) even when debs or image were skipped.
-    # iso runs if: checked AND (debs ok OR skipped) AND (image ok OR skipped).
-    if: |
-      !cancelled() &&
-      (github.event_name == 'schedule' || inputs.run_iso) &&
-      (needs.debs.result == 'success' || needs.debs.result == 'skipped') &&
-      (needs.image.result == 'success' || needs.image.result == 'skipped') &&
-      needs.meta.result == 'success'
-    uses: DaemonCores/DaemonCores-CI/.github/workflows/iso-builder.yml@main
-    with:
-      product_name: ${{ needs.meta.outputs.product_name }}
+      rebuild_env: ${{ inputs.rebuild_env }}
+      run_debs: ${{ inputs.run_debs }}
+      run_image: ${{ inputs.run_image }}
+      run_iso: ${{ inputs.run_iso }}
     secrets: inherit
