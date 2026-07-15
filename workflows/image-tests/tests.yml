@@ -6,6 +6,10 @@
 #   tests[].name   label shown in the CI log
 #   tests[].run    command executed on the VM; passes on exit 0
 #   tests[].expect optional: pass instead when this string is in the output
+#   tests[].diag   REQUIRED: command run over SSH when this test fails, to
+#                  capture the runtime state behind the failure. The harness
+#                  refuses to run (fails the build) if any test lacks a diag,
+#                  so a failure can never be undiagnosable.
 
 boot_timeout: 600
 
@@ -14,69 +18,137 @@ tests:
   - name: booted through bootc
     run: bootc status --format=json
     expect: booted
+    diag: |
+      bootc status 2>&1 | head -n 30
+      echo "--- boot journal tail ---"
+      journalctl -b --no-pager 2>&1 | tail -n 30
   - name: bootc binary works
     run: bootc --version
+    diag: |
+      bootc --version 2>&1; ldd "$(command -v bootc)" 2>&1 | head -n 15
   - name: ostree deployment present
     run: test -d /ostree/deploy
+    diag: |
+      ls -la /ostree/deploy 2>&1
+      ostree admin status 2>&1 | head -n 20
   - name: root is a composefs/overlay mount
     run: findmnt -no FSTYPE / | grep -qiE 'overlay|composefs'
+    diag: |
+      findmnt / 2>&1; echo '--- cmdline ---'; cat /proc/cmdline 2>&1
   - name: /usr is read-only
     run: "! touch /usr/.rw-probe 2>/dev/null"
+    diag: |
+      findmnt /usr 2>&1; mount 2>&1 | grep -i ' /usr '
   - name: /etc is writable
     run: touch /etc/.rw-probe && rm -f /etc/.rw-probe
+    diag: |
+      findmnt /etc 2>&1; ls -ld /etc 2>&1
   - name: /var is writable
     run: touch /var/.rw-probe && rm -f /var/.rw-probe
+    diag: |
+      findmnt /var 2>&1; ls -ld /var 2>&1
   - name: no failed systemd units
     run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
+    diag: |
+      systemctl --failed --no-pager 2>&1
 
   # ── bootloader / secure boot ───────────────────────────────────────────
   - name: bootupd present
     run: command -v bootupctl
+    diag: |
+      command -v bootupctl 2>&1 || echo absent; dpkg -l 2>&1 | grep -i bootupd
   - name: bootupd metadata readable
     run: bootupctl status
+    diag: |
+      bootupctl status 2>&1 | head -n 20
+      ls -la /usr/lib/bootupd/updates/ 2>&1
   - name: signed GRUB EFI staged
     run: test -e /usr/lib/efi/grub2/*/EFI/debian/grubx64.efi
+    diag: |
+      ls -laR /usr/lib/efi/grub2/ 2>&1 | head -n 30
   - name: shim staged for firmware
     run: test -e /usr/lib/efi/shim/*/EFI/BOOT/BOOTX64.EFI
+    diag: |
+      ls -laR /usr/lib/efi/shim/ 2>&1 | head -n 30
   - name: Secure Boot signing cert shipped
     run: test -f /usr/share/debian-bootc/sb_signing.crt
+    diag: |
+      ls -la /usr/share/debian-bootc/ 2>&1
 
   # ── kernel / initramfs / dracut ────────────────────────────────────────
   - name: kernel modules tree present
     run: test -d /usr/lib/modules
+    diag: |
+      ls -la /usr/lib/modules/ 2>&1
   - name: initramfs generated (bootc-finalize ran)
     run: test -e /usr/lib/modules/*/initramfs.img
+    diag: |
+      ls -la /usr/lib/modules/*/ 2>&1 | head -n 30
+      echo "--- bootc-finalize log if present ---"; cat /tmp/bootc-finalize.log 2>&1 | tail -n 20
   - name: ostree dracut module baked into initramfs
     run: lsinitrd "$(ls /usr/lib/modules/*/initramfs.img | head -1)" | grep -qi ostree
+    diag: |
+      f=$(ls /usr/lib/modules/*/initramfs.img 2>/dev/null | head -1)
+      echo "initramfs = ${f:-NONE}"
+      [ -n "$f" ] && lsinitrd "$f" 2>&1 | grep -i ostree | head -n 10
   - name: btrfs dracut module baked into initramfs
     run: lsinitrd "$(ls /usr/lib/modules/*/initramfs.img | head -1)" | grep -qi btrfs
+    diag: |
+      f=$(ls /usr/lib/modules/*/initramfs.img 2>/dev/null | head -1)
+      echo "initramfs = ${f:-NONE}"
+      [ -n "$f" ] && lsinitrd "$f" 2>&1 | grep -i btrfs | head -n 10
 
   # ── filesystems ────────────────────────────────────────────────────────
   - name: btrfs-progs present
     run: command -v mkfs.btrfs
+    diag: |
+      command -v mkfs.btrfs 2>&1 || echo absent; dpkg -l 2>&1 | grep -i btrfs-progs
   - name: btrfs kernel module loads
     run: modprobe btrfs && lsmod | grep -q btrfs
+    diag: |
+      modprobe btrfs 2>&1 && echo "modprobe OK" || echo "modprobe FAILED"
+      lsmod 2>&1 | grep btrfs
+      ls /usr/lib/modules/*/kernel/fs/btrfs/ 2>&1 || echo "no btrfs module in tree"
 
   # ── podman (bootc imgstorage on upgrade) ───────────────────────────────
   - name: podman present
     run: command -v podman
+    diag: |
+      command -v podman 2>&1 || echo absent; dpkg -l 2>&1 | grep -i podman
   - name: podman graph driver resolvable
     run: podman info --format '{{.Store.GraphDriverName}}'
+    diag: |
+      podman info 2>&1 | head -n 40
 
   # ── networking / repacked packages ─────────────────────────────────────
   - name: ifupdown2 repacked (+bootc)
     run: dpkg-query -W -f='${Version}' ifupdown2
     expect: +bootc
+    diag: |
+      dpkg-query -W -f='${Version}\n' ifupdown2 2>&1; apt-cache policy ifupdown2 2>&1 | head -n 6
   - name: systemd-timesyncd repacked (+bootc)
     run: dpkg-query -W -f='${Version}' systemd-timesyncd
     expect: +bootc
+    diag: |
+      dpkg-query -W -f='${Version}\n' systemd-timesyncd 2>&1; apt-cache policy systemd-timesyncd 2>&1 | head -n 6
   - name: DNS resolution works
     run: getent hosts deb.debian.org
+    diag: |
+      cat /etc/resolv.conf 2>&1
+      getent hosts deb.debian.org 2>&1 || echo "resolution failed"
+      systemctl status systemd-resolved --no-pager -l 2>&1 | tail -n 8
   - name: sshd active
     run: systemctl is-active ssh
+    diag: |
+      systemctl status ssh --no-pager -l 2>&1 | tail -n 15
+      journalctl -b -u ssh --no-pager 2>&1 | tail -n 15
 
   # ── first-boot tooling shipped ─────────────────────────────────────────
   - name: firstboot wizard present
     run: test -x /usr/local/bin/firstboot-user-setup
+    diag: |
+      ls -la /usr/local/bin/firstboot-user-setup 2>&1
   - name: bootc-finalize helper present
     run: test -x /usr/local/bin/bootc-finalize
+    diag: |
+      ls -la /usr/local/bin/bootc-finalize 2>&1
