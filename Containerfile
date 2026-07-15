@@ -18,6 +18,10 @@ LABEL ostree.bootable=1
 # Update this value whenever the key at
 # https://daemoncores.github.io/debian-bootc/gpg.key is rotated.
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
+# Product display name, injected by the CI from the repo name (dashes -> spaces).
+# bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
+# /etc/os-release NAME.
+ARG PRODUCT_NAME=""
 # Setup all environement variables
 ENV DEBIAN_FRONTEND=noninteractive
 # Setup default shell with fail build on error
@@ -48,6 +52,9 @@ RUN wget \
         https://daemoncores.github.io/debian-bootc/gpg.key \
     && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
         | sha256sum -c - \
+    && mkdir -p /usr/lib/bootc \
+    && { [ -z "${PRODUCT_NAME}" ] \
+        || printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name; } \
     && apt update \
     && apt install -y \
         dkms \
