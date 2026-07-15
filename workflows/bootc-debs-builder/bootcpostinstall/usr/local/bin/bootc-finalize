@@ -80,3 +80,21 @@ if [ -f /usr/lib/shim/mmx64.efi.signed ]; then
 fi
 
 bootupctl backend generate-update-metadata /
+
+# Brand the shim fallback's boot entry with the product name so the firmware
+# NVRAM entry matches this image instead of a hardcoded distro. fbx64 reads
+# BOOTX64.CSV (UTF-16LE: "shimx64.efi,<label>,,<description>") to (re)create the
+# entry. The product name is injected at build time (PRODUCT_NAME build-arg ->
+# /usr/lib/bootc/product-name); we fall back to os-release NAME, then "Linux".
+# Written after generate-update-metadata so it is not regenerated away, into the
+# vendor dir bootupd lays onto the ESP. Runs in every image (base + any
+# downstream) via the autonomous finalize, so each brands its own entry.
+if [ -d "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" ]; then
+  product=$(cat /usr/lib/bootc/product-name 2>/dev/null || true)
+  if [ -z "${product}" ]; then
+    product=$(. /etc/os-release 2>/dev/null && printf '%s' "${NAME:-Linux}")
+  fi
+  printf 'shimx64.efi,%s,,This is the boot entry for %s\n' "${product}" "${product}" \
+    | iconv -f UTF-8 -t UTF-16LE \
+      > "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/BOOTX64.CSV"
+fi
