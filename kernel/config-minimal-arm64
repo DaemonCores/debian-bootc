@@ -1,0 +1,217 @@
+# kernel/config-minimal-arm64
+#
+# Fragment of kernel config options that DIFFER from the arm64 defconfig.
+# This file is NOT a full .config. It is meant to be merged into a defconfig
+# with:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config-minimal-arm64
+#     make olddefconfig
+#
+# Only options that change behaviour relative to defconfig are listed.
+# Every option has a one-line English comment explaining which SoC needs it
+# and why it is set (or unset) for the ultra-minimal multi-SBC bootc image.
+#
+# Supported SBCs via this single kernel:
+#   * Raspberry Pi 3 (BCM2710), Pi 4 (BCM2711), Pi 5 (BCM2712)
+#   * Rockchip RK3399, RK3568, RK3588 (Pine64, Radxa, Orange Pi)
+#   * Allwinner H6, H616 (Orange Pi, various TV boxes)
+#   * Amlogic S905, S922X, SM1 (Odroid, Khadas, LibreTech)
+#
+# Conventions:
+#   # reason in English — which SoC needs it
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# SoC platform support — built-in. The kernel must know about the SoC before
+# it can parse the device tree, so these are built-in rather than modules.
+# =============================================================================
+
+# BCM2835: Broadcom BCM2837 (Raspberry Pi 3) base SoC family. Built-in.
+CONFIG_ARCH_BCM2835=y
+
+# BCM2711: Raspberry Pi 4 SoC. Built-in.
+CONFIG_ARCH_BCM2711=y
+
+# BCM2712: Raspberry Pi 5 SoC. Built-in.
+CONFIG_ARCH_BCM2712=y
+
+# Rockchip: RK3399, RK3568, RK3588 platform support. Built-in.
+CONFIG_ARCH_ROCKCHIP=y
+
+# Allwinner: sun50i H6, H616 platform support. Built-in.
+CONFIG_ARCH_SUNXI=y
+
+# Amlogic: meson-g12a/g12b/sm1 (S905, S922X, SM1) platform support.
+# Built-in.
+CONFIG_ARCH_MESON=y
+
+# =============================================================================
+# Serial console — built-in. The console must be available before the
+# initramfs loads any module, or early boot panic traces are lost.
+# =============================================================================
+
+# 8250 UART: built-in. Used by Allwinner, some Rockchip boards, and many
+#            Amlogic boards that expose a 16550-compatible UART.
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# AMBA PL011 UART: built-in. Used by Raspberry Pi 3/4/5 (BCM2837/2711/2712),
+#                  Rockchip RK3588, and several Amlogic boards. The PL011 is
+#                  the ARM PrimeCell UART.
+CONFIG_SERIAL_AMBA_PL011=y
+CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
+
+# =============================================================================
+# MMC / SD / eMMC — built-in. Most SBCs boot from SD or eMMC; the bootc
+# rootfs will live on this storage, so the kernel must be able to read it
+# without a module load step.
+# =============================================================================
+
+# SDHCI core: built-in. Base for SDHCI platform drivers below.
+CONFIG_MMC_SDHCI=y
+
+# SDHCI platform glue: built-in. Used by Rockchip (sdhci-of-arasan) and
+#                      Allwinner (sunxi-mmc) platform drivers.
+CONFIG_MMC_SDHCI_PLTFM=y
+
+# Broadcom SDHCI: built-in. Raspberry Pi 3/4/5 use a custom SDHCI controller
+#                 (sdhost). Required to boot from the SD card on the Pi.
+# (CONFIG_MMC_BCM2835 covers the sdhost; the standard sdhci-pltfm driver
+# covers the emmc on the Pi 4/5.)
+CONFIG_MMC_BCM2835=y
+
+# =============================================================================
+# Ethernet — built-in. Network must come up at boot so bootc can fetch the
+# next deployment (and so the system is reachable on first boot). Each SoC
+# has its own Ethernet MAC/PHY; we include all of them.
+# =============================================================================
+
+# BCMGENET: built-in. Broadcom GENET Ethernet controller, used on the
+#           Raspberry Pi 3B+/4/5 (the wired Ethernet port).
+CONFIG_BCMGENET=y
+
+# DWMAC_DWC_QOS_ETH: built-in. Synopsys DWMAC QoS Ethernet, used by
+#                    Allwinner H6/H616 (sun8i/sun50i eth).
+CONFIG_DWMAC_DWC_QOS_ETH=y
+
+# DWMAC_GENERIC: built-in. Generic DWMAC platform driver, used by
+#                Rockchip (RK3399, RK3568, RK3588) and Amlogic (meson-g12a,
+#                meson-sm1) for their GMAC.
+CONFIG_DWMAC_GENERIC=y
+
+# STMMAC_ETH: built-in. The stmmac core driver required by DWMAC_DWC_QOS
+#             and DWMAC_GENERIC above.
+CONFIG_STMMAC_ETH=y
+
+# MESON_GXL_PHY: built-in. Amlogic GXL internal PHY, used on some Amlogic
+#                boards (e.g. Odroid C2/N2). The phy driver must be built-in
+#                to bring up the link early.
+CONFIG_MESON_GXL_PHY=y
+
+# =============================================================================
+# USB — built-in. USB is used on several SBCs as the only way to attach a
+# keyboard for emergency console access, and as a storage path on some
+# boards. Building it in avoids the chicken-and-egg problem of a USB storage
+# module living on a USB storage device.
+# =============================================================================
+
+# DWC3: built-in. Synopsys DesignWare USB3 controller, used by Rockchip
+#       RK3568/RK3588 and by Raspberry Pi 4 (via the VL805).
+CONFIG_USB_DWC3=y
+
+# XHCI: built-in. USB 3.0 host controller. Used by Amlogic (meson-g12a),
+#       Rockchip RK3399/3588, and Pi 4.
+CONFIG_USB_XHCI_HCD=y
+
+# EHCI: built-in. USB 2.0 host controller. Used by Allwinner H6/H616 and
+#       older Rockchip.
+CONFIG_USB_EHCI_HCD=y
+
+# OHCI: built-in. USB 1.1 host controller. Kept for completeness on old
+#       Allwinner boards that expose a single OHCI port.
+CONFIG_USB_OHCI_HCD=y
+
+# =============================================================================
+# Filesystems — built-in for the root filesystem types bootc/ostree may use.
+# =============================================================================
+
+# ext4: built-in. Default rootfs for many SBC bootc deployments.
+CONFIG_EXT4_FS=y
+
+# XFS: built-in. Parity with the x86_64 minimal config — some bootc/ostree
+# deployments use XFS for the root filesystem (XFS is the default for
+# ostree-based systems on some tooling). Building it in avoids an initramfs
+# module load step on XFS-rooted SBCs. Fixes N4 (missing CONFIG_XFS_FS on
+# arm64).
+CONFIG_XFS_FS=y
+
+# BTRFS: built-in. Parity with the x86_64 minimal config — btrfs is a
+# supported bootc/ostree root filesystem and some SBC deployments use it
+# for the snapshot/rollback story. Building it in avoids an initramfs module
+# load step. Fixes N4 (missing CONFIG_BTRFS_FS on arm64).
+CONFIG_BTRFS_FS=y
+
+# tmpfs: built-in. systemd requires tmpfs for /run, /tmp, /dev/shm.
+CONFIG_TMPFS=y
+
+# =============================================================================
+# RTC — built-in. Most SBCs have a RTC. Without the driver, systemd-timesyncd
+# has no fallback time and bootc rollback ordering can break (two deployments
+# with the "same" timestamp). We include the three RTC drivers that cover
+# the SoCs we support.
+# =============================================================================
+
+# RTC_CLASS: built-in. The RTC subsystem core.
+CONFIG_RTC_CLASS=y
+
+# RTC_DRV_PL031: built-in. ARM PrimeCell RTC, used by Rockchip RK3568/3588
+#                and by several Amlogic boards.
+CONFIG_RTC_DRV_PL031=y
+
+# RTC_DRV_SUN6I: built-in. Allwinner H6/H616 RTC.
+CONFIG_RTC_DRV_SUN6I=y
+
+# RTC_DRV_MESON: built-in. Amlogic Meson RTC.
+CONFIG_RTC_DRV_MESON=y
+
+# =============================================================================
+# Virtio — built-in. For ARM64 VMs (qemu, libvirt) so a minimal guest image
+# can boot from virtio-blk + virtio-net without module loading in the
+# initramfs.
+# =============================================================================
+
+# VIRTIO_PCI: built-in. Required to enumerate virtio devices on the PCI bus.
+CONFIG_VIRTIO_PCI=y
+
+# VIRTIO_BLK: built-in. virtio block device, used by ARM64 VMs.
+CONFIG_VIRTIO_BLK=y
+
+# VIRTIO_NET: built-in. virtio network device, used by ARM64 VMs.
+CONFIG_VIRTIO_NET=y
+
+# =============================================================================
+# Disable — subsystems that have no use on the multi-SBC minimal target.
+# Disabling at the kernel level removes the drivers AND the subsystem core
+# code, saving flash and RAM.
+# =============================================================================
+
+# SND: disable the entire sound subsystem. No audio hardware used on the
+# minimal target.
+# CONFIG_SOUND is not set
+
+# DRM: disable the Direct Rendering Manager subsystem. No display on the
+# minimal target; the console is serial or framebuffer-only. Disabling DRM
+# removes the RPi V3D, Rockchip VOP, Allwinner DE2, and Amlogic HDMI
+# drivers as well.
+# CONFIG_DRM is not set
+
+# BT: disable Bluetooth. No BT hardware used.
+# CONFIG_BT is not set
+
+# WLAN: disable the wireless LAN subsystem. No WiFi on the minimal target;
+#       downstream layers that need WiFi on a specific SBC can add the
+#       driver back (e.g. brcmfmac for RPi, rtw88 for Rockchip).
+# CONFIG_WIRELESS is not set
+# CONFIG_CFG80211 is not set
+# CONFIG_MAC80211 is not set

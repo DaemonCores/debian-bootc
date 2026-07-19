@@ -1,0 +1,347 @@
+#####################################################################################
+# Containerfile.minimal.x86_64
+#
+# Ultra-minimal bootc/ostree image for x86_64 (AMD64).
+# Target: < 10M RAM at idle.
+#
+# Strategy:
+#   - debian:trixie base (no -slim variant: not published for trixie as of 2025)
+#   - debootstrap minbase package set (essential + apt only)
+#   - single kernel (linux-image-amd64), no headers, no DKMS, no microcode
+#   - systemd-networkd replaces ifupdown2 (smaller footprint, native systemd)
+#   - systemd-timesyncd for NTP (already in the systemd stack)
+#   - journald Storage=none (no persistent logging)
+#   - aggressive service masking (cron, getty tty2-6, apt-daily, rsyslog, etc.)
+#   - kernel cmdline: quiet init_on_alloc=0 (reduce runtime memory overhead)
+#
+# Trade-offs (documented in docs/minimal.md):
+#   - No SSH server (use console or downstream layer to add openssh-server)
+#   - No man pages, no nano, no bash-completion
+#   - No logging persistence (journald volatile only)
+#   - No getty on tty2-6 (single tty1 console)
+#
+# This file intentionally does NOT touch the original Containerfile.
+# #####################################################################################
+
+# Base image: Debian Trixie. No -slim variant is published for trixie in the
+# official docker.io/library/debian repository as of 2025; trixie itself is
+# already leaner than stable because it has not accumulated cruft.
+FROM debian:trixie
+
+# STOPSIGNAL SIGRTMIN+3 is required for systemd-in-container compatibility:
+# it is the signal systemd uses for clean shutdown when PID 1 is systemd.
+STOPSIGNAL SIGRTMIN+3
+
+# OCI labels: identify the image and declare bootc/ostree bootability.
+LABEL org.opencontainers.image.title="Debian Trixie bootc minimal (x86_64)"
+LABEL org.opencontainers.image.description="Ultra-minimal Debian 13 Trixie bootc/ostree image for x86_64. Target: < 10M RAM idle."
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
+LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
+
+# SHA-256 checksum of the bootc APT repository signing key fetched below.
+# Update this value whenever the key at
+# https://daemoncores.github.io/debian-bootc/gpg.key is rotated.
+# (Mirrors the value from the main Containerfile so both images trust the
+# same APT repo for bootc / dracut / grub-efi-signed packages.)
+ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
+
+# Product display name, injected by the CI from the repo name (dashes -> spaces).
+# bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
+# /etc/os-release NAME.
+ARG PRODUCT_NAME=""
+
+# Non-interactive frontend: prevent any debconf prompt from blocking the build.
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Fail-fast shell: any unset variable or any command failure aborts the build.
+# pipefail ensures a failing command inside a pipeline fails the whole pipeline.
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# -----------------------------------------------------------------------------
+# Phase 1: SSL prerequisites + APT https rewrite
+# -----------------------------------------------------------------------------
+# We install the bare minimum to talk HTTPS to APT repositories:
+#   - ca-certificates: root CA bundle so apt can validate TLS certificates
+#   - openssl:         needed by some apt transport helpers and by bootc crypto
+#   - git:             required by the bootc postinst hook (bootc-finalize shells
+#                      out to git to discover repo metadata in some setups)
+#   - curl:            used to download the bootc APT signing key below
+#   - wget:            fallback fetcher used by the bootc keyring step
+# No other packages here: this phase only prepares APT for the real install.
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        ca-certificates \
+        openssl \
+        git \
+        curl \
+        wget \
+    # Rewrite APT sources from http:// to https:// to avoid plaintext fallback.
+    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
+    # Remove the known-broken NetLock Arany certificate (same workaround as the
+    # main Containerfile; the cert was revoked upstream and breaks TLS on trixie).
+    && rm -f \
+        "/etc/ssl/certs/988a38cb.0" \
+        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
+        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
+
+# -----------------------------------------------------------------------------
+# Phase 2: Trust the bootc APT repository
+# -----------------------------------------------------------------------------
+# Download the bootc APT signing key to the system keyring, then verify its
+# SHA-256 against the pinned value. If the key is rotated upstream, the build
+# fails loudly here instead of silently trusting a different key.
+RUN wget \
+        -O /usr/share/keyrings/debian-bootc-keyring.gpg \
+        https://daemoncores.github.io/debian-bootc/gpg.key \
+    && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
+        | sha256sum -c - \
+    # /usr/lib/bootc/product-name is read by bootc-finalize to brand the UEFI
+    # boot entry. Empty PRODUCT_NAME falls back to /etc/os-release NAME.
+    && mkdir -p /usr/lib/bootc \
+    && { [ -z "${PRODUCT_NAME}" ] \
+        || printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name; }
+
+# Phase 2: Enable the debian-bootc APT repository.
+# This copies the .sources file that references the GPG keyring fetched above.
+# The directory ./src/bootcpreinstall/ contains ONLY
+#   etc/apt/sources.list.d/debian-bootc.sources
+# i.e. the APT source stanza — no dracut configuration is shipped here. The
+# bootc, dracut (with its bootc/ostree modules), and grub-efi-amd64 packages
+# come from this third-party repository (daemoncores.github.io/debian-bootc);
+# they are not available in Debian main. The dracut bootc/ostree module
+# configuration arrives as part of the `dracut` package installed in Phase 3,
+# not via this COPY.
+# Without this .sources file apt cannot resolve bootc / dracut / grub-efi-amd64.
+# Mirrors the main Containerfile's `COPY ./src/bootcpreinstall /` step.
+# Fixes B1 (bootc APT repo not configured).
+COPY ./src/bootcpreinstall /
+
+# -----------------------------------------------------------------------------
+# Phase 3: Install the ultra-minimal package set
+# -----------------------------------------------------------------------------
+# Every package here is load-bearing. Comments explain WHY each is needed.
+# Anything not listed is intentionally omitted to hit the < 10M RAM idle target.
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        # --- Kernel ----------------------------------------------------------
+        # linux-image-amd64: the Debian generic AMD64 kernel. Required to boot.
+        # No linux-headers-* (no DKMS, no out-of-tree modules in the minimal
+        # image; downstream layers that need DKMS can install headers later).
+        # No intel-microcode / amd64-microcode: microcode updates add ~2M to the
+        # boot image and are not required for the minimal target. Downstream
+        # layers on bare metal can add them.
+        linux-image-amd64 \
+        # --- Boot stack ------------------------------------------------------
+        # bootc: atomic OS management on top of ostree. The whole point of this
+        #        image. Pulls in ostree, composefs, bootupd as dependencies.
+        # dracut: initramfs generator with native bootc/ostree/lvm modules.
+        #         Replaces initramfs-tools (see docs/justifications.md).
+        # grub-efi-amd64: Fedora rhboot fork with BLS (blscfg/blsuki) modules
+        #                 required by ostree/bootc. Held (not auto-upgraded) to
+        #                 match the signed grub-efi-amd64-signed package below.
+        bootc \
+        dracut \
+        grub-efi-amd64 \
+        # --- Networking ------------------------------------------------------
+        # iproute2: the `ip` command. Required for any manual network debugging
+        #           and by several boot scripts. Tiny footprint.
+        # systemd-networkd: native systemd network manager. Replaces ifupdown2
+        #                   (smaller, no extra daemon, integrates with systemd
+        #                   already in the base). Pulled in via systemd itself
+        #                   but we install it explicitly to be sure the unit
+        #                   files are present.
+        # systemd-timesyncd: NTP client. Already part of systemd; we install it
+        #                    explicitly so the repacked version with the
+        #                    network-online drop-in is pulled from the bootc APT
+        #                    repo (same rationale as the main Containerfile).
+        iproute2 \
+        # systemd-networkd is NOT a separate package on Debian Trixie: the
+        # binary ships inside the systemd package itself. Listing it here
+        # makes apt fail with "Unable to locate package systemd-networkd".
+        # Fixes B3 (apt install systemd-networkd fails on Debian Trixie).
+        # systemd-timesyncd is kept: it is a real separate package on Trixie
+        # and the bootc APT repo ships a repacked version with the
+        # network-online drop-in.
+        systemd-timesyncd \
+        # --- TLS -------------------------------------------------------------
+        # ca-certificates: already installed in Phase 1 but re-listed here so a
+        #                  future apt upgrade keeps it (apt marks it manual).
+        #                  Required for HTTPS to APT, GHCR, and any downstream
+        #                  container registry.
+        ca-certificates \
+    # Hold grub-efi-amd64-signed so it is not auto-upgraded independently of the
+    # unsigned grub-efi-amd64 we just installed (mirrors the main Containerfile;
+    # the signed package is not installed here but the hold prevents a later
+    # downstream layer from pulling it in without coordination).
+    # NOTE (N7): the main Containerfile runs `apt-mark hold grub-efi-amd64-signed`
+    # because it installs the signed package. The minimal image installs only
+    # the unsigned `grub-efi-amd64`, so the hold on the non-installed signed
+    # package is a no-op here and is removed to avoid apt-mark warnings. A
+    # downstream layer that installs grub-efi-amd64-signed should re-add the
+    # hold itself.
+    && rm -rf \
+        /tmp/* \
+        /var/tmp/* \
+        /run/* \
+        /usr/sbin/policy-rc.d
+
+# -----------------------------------------------------------------------------
+# Phase 4: ostree filesystem migration
+# -----------------------------------------------------------------------------
+# bootc/ostree requires a specific filesystem layout: /home, /root, /mnt, /srv,
+# /opt must be symlinks into /var so that the read-only /usr tree can be swapped
+# atomically while mutable state persists in /var. This mirrors the main
+# Containerfile exactly; do NOT change the layout or bootc will fail to deploy.
+RUN mkdir -p /var/home \
+        /var/roothome \
+        /var/mnt \
+        /var/srv \
+        /var/opt \
+        /var/usr/lib/locale \
+        /sysroot/ostree \
+    # Copy locale data into /var before the symlink replaces /usr/lib/locale.
+    # Use `|| true` (not `| true`): a pipe to `true` masks a cp failure that
+    # we actually want to ignore (empty /usr/lib/locale on a fresh base is
+    # valid). `|| true` is the idiomatic form and does not swallow stdout.
+    # Fixes A2 (`cp ... | true` not idiomatic).
+    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
+    && rm -rf /home /root /mnt /srv /opt /usr/lib/locale \
+    && ln -s var/home /home \
+    && ln -s var/mnt /mnt \
+    && ln -s var/srv /srv \
+    && ln -s var/opt /opt \
+    && ln -s var/roothome /root \
+    && ln -s sysroot/ostree /ostree \
+    # The locale data lives in /var/usr/lib/locale (created above). The symlink
+    # /usr/lib/locale must therefore point to var/usr/lib/locale, NOT to
+    # var/lib/locale (which does not exist on this image). The previous value
+    # `var/lib/locale` produced a dangling symlink and broke `locale -a`.
+    # Fixes A1 (locale symlink target incorrect).
+    && ln -s var/usr/lib/locale /usr/lib/locale
+
+# -----------------------------------------------------------------------------
+# Phase 5: journald configuration — Storage=none
+# -----------------------------------------------------------------------------
+# journald by default persists logs to /var/log/journal, which means:
+#   - a journald process running at all times
+#   - disk I/O on every log line
+#   - a growing /var/log/journal that eats RAM via page cache
+# For the minimal target we set Storage=none: journald drops log lines after
+# they are forwarded to the socket (and to the kernel log if any). This removes
+# the single largest always-on userspace memory consumer after systemd itself.
+# Trade-off: no log persistence across boots. See docs/minimal.md for how to
+# re-enable logging.
+RUN mkdir -p /etc/systemd/journald.conf.d \
+    && printf '[Journal]\nStorage=none\n' \
+        > /etc/systemd/journald.conf.d/00-minimal.conf
+
+# -----------------------------------------------------------------------------
+# Phase 6: GRUB kernel command line
+# -----------------------------------------------------------------------------
+# Set the kernel command line used by GRUB for the bootc-managed BLS entries.
+#   quiet:               suppress kernel boot messages (reduces console output,
+#                        tiny memory saving from printk ring buffer)
+#   init_on_alloc=0:     disable the default-on init_on_alloc hardening. This
+#                       zeroes newly allocated pages for security; on a minimal
+#                       image with no untrusted workload, the runtime cost
+#                       (measurable on every page allocation) is not justified.
+#                       Saves ~1-3% of allocation overhead under load.
+# We write to /etc/default/grub so bootc-finalize picks it up when it regenerates
+# the BLS entries. The GRUB_DEFAULT line is left untouched.
+# Use sed to replace an existing GRUB_CMDLINE_LINUX_DEFAULT line in-place, or
+# append the line if /etc/default/grub does not yet contain one. A bare
+# `printf ... >>` would duplicate the directive on every rebuild that re-runs
+# this layer (and on downstream layers inheriting the image), producing a
+# duplicate-key file that grub-mkconfig warns about.
+# Fixes A3 (GRUB_CMDLINE_LINUX_DEFAULT appending may duplicate line).
+RUN if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub; then \
+        sed -i \
+            's|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0"|' \
+            /etc/default/grub; \
+    else \
+        printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0"\n' \
+            >> /etc/default/grub; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Phase 6.1: Enable systemd-networkd and ship a default DHCP .network
+# -----------------------------------------------------------------------------
+# systemd-networkd is shipped by the systemd package but is DISABLED by
+# default on Debian. Without enabling the socket+service and without a
+# .network file, the image boots with no network configuration and bootc
+# cannot fetch the next deployment (nor is the host reachable on first boot).
+# Fixes B4 (no network at boot: systemd-networkd not enabled, no .network).
+RUN mkdir -p /etc/systemd/network \
+    && printf '[Match]\nName=en*\nName=eth*\n\n[Network]\nDHCP=yes\n' \
+        > /etc/systemd/network/20-wired.network \
+    && systemctl enable systemd-networkd.service \
+    && systemctl enable systemd-networkd.socket \
+    # Explicitly enable systemd-timesyncd so NTP starts on first boot
+    # (the package is installed in Phase 3 but the unit is not enabled by
+    # default on Debian). Fixes N5 (systemctl enable systemd-timesyncd).
+    && systemctl enable systemd-timesyncd.service
+
+# -----------------------------------------------------------------------------
+# Phase 7: Service masking
+# -----------------------------------------------------------------------------
+# Each masked service is listed with a one-line reason. Masking (not just
+# disabling) prevents the unit from being started manually or pulled in by
+# dependencies. Use `systemctl unmask <name>` to re-enable (see docs/minimal.md).
+RUN systemctl mask -- \
+        # cron.service: no scheduled jobs on the minimal image; cron would keep
+        # a process resident at all times. Downstream layers needing cron can
+        # unmask or install a dedicated timer.
+        cron.service \
+        # getty@tty2..tty6: a getty on every VT costs ~1M RAM each (process +
+        # TTY buffer). We keep only tty1 (the active console). The template
+        # unit getty@.service is NOT masked (so tty1 still works), only the
+        # instantiated tty2-6 are.
+        getty@tty2.service \
+        getty@tty3.service \
+        getty@tty4.service \
+        getty@tty5.service \
+        getty@tty6.service \
+        # apt-daily.timer + apt-daily-upgrade.timer: automatic APT runs would
+        # wake the system, run dpkg, and consume memory + CPU. The minimal
+        # image is updated atomically via bootc, never via apt in-place.
+        apt-daily.timer \
+        apt-daily-upgrade.timer \
+        apt-daily.service \
+        apt-daily-upgrade.service \
+        # rsyslog.service: not installed (we install no syslog daemon), but
+        # masking it prevents a downstream layer from accidentally starting it
+        # via a dependency. journald already covers kernel + userspace logs.
+        rsyslog.service \
+        # man-db.timer: man-db rebuilds the whatis database daily. No man pages
+        # are installed on the minimal image, so the timer is pure overhead.
+        man-db.timer \
+        man-db.service \
+        # console-setup.service: console font/keymap setup. Not needed on a
+        # headless minimal image (we use the kernel default console). Saves
+        # the setup step and the font files in RAM.
+        console-setup.service \
+        keyboard-setup.service \
+        # e2scrub_all.timer: ext4 filesystem periodic check. bootc/ostree uses
+        # its own deployment integrity (composefs + fs-verity), so the ext4
+        # scrub timer is redundant and runs a heavyweight check.
+        e2scrub_all.timer \
+        e2scrub_all.service \
+        # fstrim.timer: periodic SSD TRIM. Not harmful but spawns a process
+        # every week. Downstream layers with SSDs can unmask.
+        fstrim.timer \
+        fstrim.service \
+        # logrotate.timer: no persistent logs (journald Storage=none) and no
+        # /var/log/*.log files to rotate. Pure overhead here.
+        logrotate.timer \
+        logrotate.service
+
+# -----------------------------------------------------------------------------
+# Phase 8: Healthcheck
+# -----------------------------------------------------------------------------
+# bootc images are updated in-place via ostree; no runtime healthcheck applies.
+# A healthcheck would spawn a process on a schedule, defeating the minimal RAM
+# target.
+HEALTHCHECK NONE
