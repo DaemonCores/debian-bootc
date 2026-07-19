@@ -1,0 +1,310 @@
+#####################################################################################
+# Containerfile.minimal.arm64
+#
+# Ultra-minimal bootc/ostree image for ARM64 (AArch64).
+# Target: < 10M RAM at idle.
+#
+# Multi-SBC strategy:
+#   - debian:trixie base
+#   - linux-image-arm64: the Debian generic ARM64 kernel with all upstream
+#     device trees integrated. This single kernel supports:
+#       * Raspberry Pi 3 (BCM2837/BCM2710), Pi 4 (BCM2711), Pi 5 (BCM2712)
+#       * Rockchip RK3399, RK3568, RK3588 ( Pine64, Radxa, Orange Pi )
+#       * Allwinner H6, H616 (Orange Pi, various TV boxes)
+#       * Amlogic S905, S922X (Odroid, Khadas)
+#     via the device-tree blobs shipped inside linux-image-arm64.
+#   - u-boot-tools instead of GRUB: most ARM64 SBCs use U-Boot, not GRUB.
+#     The bootc stack on ARM64 typically chains U-Boot -> EFI shim -> GRUB
+#     when Secure Boot is desired, but for the minimal SBC target we ship
+#     u-boot-tools (fw_printenv / fw_setenv / mkimage) and let the bootloader
+#     on the board load the kernel + DTB directly.
+#   - firmware-linux-free + firmware-misc-nonfree: minimal firmware blobs for
+#     the SBCs we support (e.g. Amlogic GX blob, Rockchip BT/WiFi firmware).
+#     We do NOT install firmware-linux (the full nonfree metapackage) to keep
+#     the image small; only the misc-nonfree blobs required by the SBCs are
+#     included.
+#
+# Trade-offs (documented in docs/minimal.md):
+#   - No WiFi driver (WLAN disabled in the kernel config; see kernel/config-minimal-arm64)
+#   - No Bluetooth driver (BT disabled in the kernel config)
+#   - No GPU driver (DRM disabled in the kernel config; console is serial or
+#     framebuffer-only)
+#   - No SSH server (use serial console or downstream layer)
+#
+# This file intentionally does NOT touch the original Containerfile.
+# #####################################################################################
+
+# Base image: Debian Trixie. No -slim variant published for trixie.
+FROM debian:trixie
+
+# STOPSIGNAL SIGRTMIN+3 is required for systemd-in-container compatibility.
+STOPSIGNAL SIGRTMIN+3
+
+# OCI labels: identify the image and declare bootc/ostree bootability.
+LABEL org.opencontainers.image.title="Debian Trixie bootc minimal (arm64)"
+LABEL org.opencontainers.image.description="Ultra-minimal Debian 13 Trixie bootc/ostree image for ARM64 multi-SBC. Target: < 10M RAM idle."
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
+LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
+
+# SHA-256 of the bootc APT repository signing key (same as the main Containerfile).
+ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
+
+# Product display name, injected by the CI.
+ARG PRODUCT_NAME=""
+
+# Non-interactive frontend and fail-fast shell.
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# -----------------------------------------------------------------------------
+# Phase 1: SSL prerequisites + APT https rewrite + non-free-firmware
+# -----------------------------------------------------------------------------
+# Same minimal HTTPS bootstrap as the x86_64 image:
+#   - ca-certificates: TLS root CAs for apt
+#   - openssl:         crypto used by apt transport and bootc
+#   - git:             required by bootc postinst hook
+#   - curl, wget:      fetch the bootc APT signing key
+# The ARM64 image installs firmware-misc-nonfree, which lives in the
+# non-free-firmware component. The stock debian:trixie base ships a
+# debian.sources with only `Components: main`, so we copy the project's
+# pre-built sources file (which already adds `non-free-firmware non-free`
+# AND switches to https://) over the base one before any apt install.
+# Fixes B2 (Sources APT non-free-firmware not activated on arm64).
+COPY ./src/debianpreinstall /
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        ca-certificates \
+        openssl \
+        git \
+        curl \
+        wget \
+    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
+    && rm -f \
+        "/etc/ssl/certs/988a38cb.0" \
+        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
+        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
+
+# -----------------------------------------------------------------------------
+# Phase 2: Trust the bootc APT repository
+# -----------------------------------------------------------------------------
+RUN wget \
+        -O /usr/share/keyrings/debian-bootc-keyring.gpg \
+        https://daemoncores.github.io/debian-bootc/gpg.key \
+    && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
+        | sha256sum -c - \
+    && mkdir -p /usr/lib/bootc \
+    && { [ -z "${PRODUCT_NAME}" ] \
+        || printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name; }
+
+# Phase 2: Enable the debian-bootc APT repository.
+# This copies the .sources file that references the GPG keyring fetched above.
+# The directory ./src/bootcpreinstall/ contains ONLY
+#   etc/apt/sources.list.d/debian-bootc.sources
+# i.e. the APT source stanza — no dracut configuration is shipped here. The
+# bootc, dracut (with its bootc/ostree modules), and (on UEFI ARM64 servers)
+# grub-efi-arm64 packages come from this third-party repository
+# (daemoncores.github.io/debian-bootc); they are not available in Debian main.
+# The dracut bootc/ostree module configuration arrives as part of the `dracut`
+# package installed in Phase 3, not via this COPY.
+# Without this .sources file apt cannot resolve bootc / dracut.
+# Mirrors the main Containerfile's `COPY ./src/bootcpreinstall /` step.
+# Fixes B1 (bootc APT repo not configured).
+COPY ./src/bootcpreinstall /
+
+# -----------------------------------------------------------------------------
+# Phase 3: Install the ultra-minimal ARM64 package set
+# -----------------------------------------------------------------------------
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        # --- Kernel ----------------------------------------------------------
+        # linux-image-arm64: Debian generic ARM64 kernel. Includes all upstream
+        # device trees for the supported SoCs:
+        #   * bcm2710-rpi-3-b.dtb, bcm2711-rpi-4-b.dtb, bcm2712-rpi-5-b.dtb
+        #     (Raspberry Pi 3, 4, 5)
+        #   * rk3399-*.dtb, rk3568-*.dtb, rk3588-*.dtb (Rockchip)
+        #   * sun50i-h6-*.dtb, sun50i-h616-*.dtb (Allwinner)
+        #   * meson-g12a-*.dtb, meson-g12b-*.dtb, meson-sm1-*.dtb (Amlogic)
+        # No linux-headers, no DKMS: the minimal image ships no out-of-tree
+        # modules.
+        linux-image-arm64 \
+        # --- Firmware blobs --------------------------------------------------
+        # firmware-linux-free: free-firmware blobs shipped by Debian (e.g.
+        #                     some ATI radeon regs, bnx2). Small, DFSG-free.
+        # firmware-misc-nonfree: non-free blobs required by several SBC
+        #                        peripherals (e.g. Amlogic GX video decoder,
+        #                        some Rockchip WiFi/BT modules even though the
+        #                        drivers are disabled in the kernel config,
+        #                        because the bootloader may need them).
+        # We deliberately do NOT install firmware-linux (the full nonfree
+        # metapackage): it pulls in many large blobs for hardware we do not
+        # support on the minimal image.
+        firmware-linux-free \
+        firmware-misc-nonfree \
+        # --- Boot stack ------------------------------------------------------
+        # bootc:  atomic OS management on top of ostree.
+        # dracut: initramfs generator with native bootc/ostree/lvm modules.
+        # u-boot-tools: mkimage, fw_printenv, fw_setenv. ARM64 SBCs use U-Boot,
+        #               not GRUB. mkimage is needed to wrap the kernel + DTB
+        #               into a U-Boot image for the board's bootloader. We do
+        #               NOT install grub-efi-arm64 here because most SBCs do not
+        #               have a UEFI firmware; downstream layers that target
+        #               UEFI ARM64 servers can install grub-efi-arm64.
+        bootc \
+        dracut \
+        u-boot-tools \
+        # --- Networking ------------------------------------------------------
+        # iproute2: the `ip` command, required for manual network debugging
+        #           and by several boot scripts.
+        # systemd-networkd: native systemd network manager. Replaces ifupdown2
+        #                   (smaller, no extra daemon).
+        # systemd-timesyncd: NTP client (repacked version with network-online
+        #                    drop-in from the bootc APT repo).
+        iproute2 \
+        # systemd-networkd is NOT a separate package on Debian Trixie: the
+        # binary ships inside the systemd package itself. Listing it here
+        # makes apt fail with "Unable to locate package systemd-networkd".
+        # Fixes B3 (apt install systemd-networkd fails on Debian Trixie).
+        # systemd-timesyncd is kept: it is a real separate package on Trixie
+        # and the bootc APT repo ships a repacked version with the
+        # network-online drop-in.
+        systemd-timesyncd \
+        # --- TLS -------------------------------------------------------------
+        # ca-certificates: HTTPS to APT / GHCR / downstream registries.
+        ca-certificates \
+    && rm -rf \
+        /tmp/* \
+        /var/tmp/* \
+        /run/* \
+        /usr/sbin/policy-rc.d
+
+# -----------------------------------------------------------------------------
+# Phase 4: ostree filesystem migration
+# -----------------------------------------------------------------------------
+# Identical to the x86_64 image. See the comment block there for the rationale
+# of each symlink. Do NOT change this layout or bootc will fail to deploy.
+RUN mkdir -p /var/home \
+        /var/roothome \
+        /var/mnt \
+        /var/srv \
+        /var/opt \
+        /var/usr/lib/locale \
+        /sysroot/ostree \
+    # Copy locale data into /var before the symlink replaces /usr/lib/locale.
+    # Use `|| true` (not `| true`): a pipe to `true` masks a cp failure that
+    # we actually want to ignore (empty /usr/lib/locale on a fresh base is
+    # valid). `|| true` is the idiomatic form and does not swallow stdout.
+    # Fixes A2 (`cp ... | true` not idiomatic).
+    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
+    && rm -rf /home /root /mnt /srv /opt /usr/lib/locale \
+    && ln -s var/home /home \
+    && ln -s var/mnt /mnt \
+    && ln -s var/srv /srv \
+    && ln -s var/opt /opt \
+    && ln -s var/roothome /root \
+    && ln -s sysroot/ostree /ostree \
+    # The locale data lives in /var/usr/lib/locale (created above). The symlink
+    # /usr/lib/locale must therefore point to var/usr/lib/locale, NOT to
+    # var/lib/locale (which does not exist on this image). The previous value
+    # `var/lib/locale` produced a dangling symlink and broke `locale -a`.
+    # Fixes A1 (locale symlink target incorrect).
+    && ln -s var/usr/lib/locale /usr/lib/locale
+
+# -----------------------------------------------------------------------------
+# Phase 5: journald configuration — Storage=none
+# -----------------------------------------------------------------------------
+# Same rationale as the x86_64 image: removes the single largest always-on
+# userspace memory consumer after systemd. No log persistence across boots.
+RUN mkdir -p /etc/systemd/journald.conf.d \
+    && printf '[Journal]\nStorage=none\n' \
+        > /etc/systemd/journald.conf.d/00-minimal.conf
+
+# -----------------------------------------------------------------------------
+# Phase 6: Kernel command line for the multi-SBC case
+# -----------------------------------------------------------------------------
+# On ARM64 SBCs the kernel command line is usually set in the U-Boot env or in
+# the DTB chosen/bootargs node, not in /etc/default/grub. We still write a
+# default here so that if a downstream layer uses GRUB (UEFI ARM64 server) the
+# same minimal flags apply.
+#   quiet:           suppress kernel boot messages
+#   init_on_alloc=0: disable zero-on-alloc hardening (same rationale as x86_64)
+#   console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200:
+#     serial consoles covering the most common ARM64 SBC UARTs:
+#       * ttyAMA0  — PL011 UART (Raspberry Pi 3/4/5, some Rockchip RK3588,
+#                    several Amlogic boards)
+#       * ttyS0    — 8250/16550 UART (Allwinner, some Rockchip, many Amlogic)
+#       * ttyAML0  — Amlogic meson-uart (Odroid C2/N2, Khadas Vim)
+#     The kernel silently ignores consoles that do not exist on the board, so
+#     listing all three is safe and gives early-boot output on every supported
+#     SBC without per-board cmdline edits. If your board uses a different UART
+#     (e.g. ttyS2, ff150000.serial), add it in a downstream layer or via the
+#     U-Boot bootargs env. Fixes A5 (ttyAMA0 alone is not universal).
+# Use sed to replace an existing GRUB_CMDLINE_LINUX_DEFAULT line in-place, or
+# append the line if /etc/default/grub does not yet contain one. A bare
+# `printf ... >>` would duplicate the directive on every rebuild that re-runs
+# this layer (and on downstream layers inheriting the image), producing a
+# duplicate-key file that grub-mkconfig warns about. Fixes A3 (appending may
+# duplicate line).
+RUN if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub; then \
+        sed -i \
+            's|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0 console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200"|' \
+            /etc/default/grub; \
+    else \
+        printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0 console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200"\n' \
+            >> /etc/default/grub; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Phase 6.1: Enable systemd-networkd and ship a default DHCP .network
+# -----------------------------------------------------------------------------
+# systemd-networkd is shipped by the systemd package but is DISABLED by
+# default on Debian. Without enabling the socket+service and without a
+# .network file, the image boots with no network configuration and bootc
+# cannot fetch the next deployment (nor is the host reachable on first boot).
+# Fixes B4 (no network at boot: systemd-networkd not enabled, no .network).
+RUN mkdir -p /etc/systemd/network \
+    && printf '[Match]\nName=en*\nName=eth*\n\n[Network]\nDHCP=yes\n' \
+        > /etc/systemd/network/20-wired.network \
+    && systemctl enable systemd-networkd.service \
+    && systemctl enable systemd-networkd.socket \
+    # Explicitly enable systemd-timesyncd so NTP starts on first boot
+    # (the package is installed in Phase 3 but the unit is not enabled by
+    # default on Debian). Fixes N5 (systemctl enable systemd-timesyncd).
+    && systemctl enable systemd-timesyncd.service
+
+# -----------------------------------------------------------------------------
+# Phase 7: Service masking
+# -----------------------------------------------------------------------------
+# Same masking list as the x86_64 image. ARM64 SBCs have the same systemd unit
+# set as x86_64 once the Debian userspace is installed, so the same masking
+# applies. See Containerfile.minimal.x86_64 for per-service rationale.
+RUN systemctl mask -- \
+        cron.service \
+        getty@tty2.service \
+        getty@tty3.service \
+        getty@tty4.service \
+        getty@tty5.service \
+        getty@tty6.service \
+        apt-daily.timer \
+        apt-daily-upgrade.timer \
+        apt-daily.service \
+        apt-daily-upgrade.service \
+        rsyslog.service \
+        man-db.timer \
+        man-db.service \
+        console-setup.service \
+        keyboard-setup.service \
+        e2scrub_all.timer \
+        e2scrub_all.service \
+        fstrim.timer \
+        fstrim.service \
+        logrotate.timer \
+        logrotate.service
+
+# -----------------------------------------------------------------------------
+# Phase 8: Healthcheck
+# -----------------------------------------------------------------------------
+# No runtime healthcheck (same rationale as x86_64).
+HEALTHCHECK NONE
