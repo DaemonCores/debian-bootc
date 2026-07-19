@@ -1,0 +1,143 @@
+# kernel/config-minimal-x86_64
+#
+# Fragment of kernel config options that DIFFER from the x86_64 defconfig.
+# This file is NOT a full .config. It is meant to be merged into a defconfig
+# with:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config-minimal-x86_64
+#     make olddefconfig
+#
+# Only options that change behaviour relative to defconfig are listed.
+# Every option has a one-line English comment explaining why it is set (or
+# unset) for the ultra-minimal bootc image.
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# Block / storage — built-in so the initramfs can find the rootfs without
+# needing to load a module. bootc/ostree rootfs may be on NVMe, SATA, or a
+# virtio-blk device depending on the deployment target (bare metal, VM, CI).
+# =============================================================================
+
+# NVMe SSDs: built-in so a bootc install on an NVMe drive can boot without
+# an initramfs module load step.
+CONFIG_BLK_DEV_NVME=y
+
+# SATA AHCI: built-in for bare-metal deployments on classic SATA SSDs/HDDs.
+CONFIG_SATA_AHCI=y
+
+# virtio-blk: built-in. bootc images are commonly tested in libvirt / qemu
+# with virtio disks; building it in avoids a module load race in the
+# initramfs.
+CONFIG_VIRTIO_BLK=y
+
+# virtio-pci: built-in. Required to enumerate the virtio-blk device on the
+# PCI bus in the first place.
+CONFIG_VIRTIO_PCI=y
+
+# =============================================================================
+# Network — modules, so they are only loaded when the corresponding hardware
+# is present. Avoids pinning driver memory on hardware that does not need it.
+# Hotplug handles module loading at runtime.
+# =============================================================================
+
+# e1000: Intel 82540/82545/82546 — common in older Intel NICs and in qemu
+#        when virtio-net is not available. Module to save RAM on non-Intel.
+CONFIG_E1000=m
+
+# e1000e: Intel PCIe Gigabit NIC (82571..82583, I218). Module for the same
+#         reason as e1000.
+CONFIG_E1000E=m
+
+# virtio-net: virtio network device. Module so it only loads in VMs that
+#             actually present a virtio-net NIC.
+CONFIG_VIRTIO_NET=m
+
+# igb: Intel I210/I350 Gigabit. Common on server bare metal. Module.
+CONFIG_IGB=m
+
+# r8169: Realtek 8168/8169/8111 — the most common consumer onboard NIC.
+#        Module.
+CONFIG_R8169=m
+
+# =============================================================================
+# Console — built-in. The kernel MUST be able to emit to the serial/8250
+# console before any module loading happens, or panic traces are lost.
+# =============================================================================
+
+# 8250 UART: built-in. The standard PC serial port and the qemu serial
+# console both rely on 8250.
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# =============================================================================
+# Filesystems — built-in for the root filesystem types bootc/ostree may use.
+# Building them in avoids a chicken-and-egg problem where the rootfs module
+# lives on the rootfs.
+# =============================================================================
+
+# ext4: built-in. Default rootfs for many bootc deployments on ext4.
+CONFIG_EXT4_FS=y
+
+# XFS: built-in. bootc default on RHEL-derived setups is XFS.
+CONFIG_XFS_FS=y
+
+# Btrfs: built-in. bootc supports btrfs as a root filesystem with
+#        subvolume-based deployments.
+CONFIG_BTRFS_FS=y
+
+# tmpfs: built-in. systemd REQUIRES tmpfs for /run, /tmp, /dev/shm. This is
+#        almost always already on in defconfig; we restate it to be safe.
+CONFIG_TMPFS=y
+
+# =============================================================================
+# Disable — subsystems that have no use on a headless minimal server image.
+# Disabling at the kernel level removes the driver modules from the build
+# AND removes the core subsystem code from the vmlinux, saving both flash
+# and RAM (no allocated structures for these subsystems).
+# =============================================================================
+
+# SND: disable the entire sound subsystem. No audio hardware used.
+# CONFIG_SOUND is not set
+
+# DRM: disable the Direct Rendering Manager subsystem. No display on a
+# headless image. Removes the i915, amdgpu, nouveau, etc. drivers as well
+# (they depend on DRM).
+# CONFIG_DRM is not set
+
+# BT: disable Bluetooth. No BT hardware on the minimal target.
+# CONFIG_BT is not set
+
+# WLAN: disable the wireless LAN (mac80211 + cfg80211) subsystem. No WiFi
+# on the minimal target; saves the entire wireless stack.
+# CONFIG_WIRELESS is not set
+# CONFIG_CFG80211 is not set
+# CONFIG_MAC80211 is not set
+
+# USB_HID: disable the USB HID core. The minimal image has no need for USB
+# keyboards or mice at runtime (console is serial or KVM). A USB keyboard
+# can still be used if the user adds the module back via a downstream
+# layer.
+# CONFIG_USB_HID is not set
+
+# INPUT_JOYSTICK: disable joystick subsystem.
+# CONFIG_INPUT_JOYSTICK is not set
+
+# INPUT_TABLET: disable tablet subsystem.
+# CONFIG_INPUT_TABLET is not set
+
+# =============================================================================
+# Keep as module — USB host controllers. Needed if a USB keyboard has to be
+# attached for emergency console access. Module so they are not loaded on
+# hardware without USB.
+# =============================================================================
+
+# USB XHCI: USB 3.0 host controller. Module — loaded only when USB is
+#           plugged in (hotplug).
+CONFIG_USB_XHCI_HCD=m
+
+# USB EHCI: USB 2.0 host controller. Same rationale.
+CONFIG_USB_EHCI_HCD=m
