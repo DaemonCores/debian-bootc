@@ -1,0 +1,86 @@
+# modules-kernel/x86_64
+#
+# Per-device MODULE overlay for x86_64. Applied on top of the base
+# kernel/config:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/x86_64
+#     make olddefconfig
+#
+# This file is NOT a full .config. It lists ONLY options that are specific
+# to the x86_64 device class — everything shared across all devices
+# (filesystems, virtio, serial console, the disabled subsystems) lives in
+# kernel/config and is NOT repeated here. The modules built from this overlay
+# are OPTIONAL; the base image (linux-image-common) works without them.
+#
+# Device: x86_64 PC / server / VM (amd64). No SoC platform option is needed
+# (the x86 defconfig already enables the PC platform).
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# Block / storage — built-in so the initramfs can find the rootfs without
+# needing to load a module. bootc/ostree rootfs may be on NVMe or SATA on
+# bare-metal x86_64 deployments.
+# =============================================================================
+
+# NVMe SSDs: built-in so a bootc install on an NVMe drive can boot without
+# an initramfs module load step.
+CONFIG_BLK_DEV_NVME=y
+
+# SATA AHCI: built-in for bare-metal deployments on classic SATA SSDs/HDDs.
+CONFIG_SATA_AHCI=y
+
+# =============================================================================
+# Network — modules, so they are only loaded when the corresponding hardware
+# is present. Avoids pinning driver memory on hardware that does not need it.
+# Hotplug handles module loading at runtime. virtio-net (for VMs) is built-in
+# in config-common; here are the physical NIC drivers.
+# =============================================================================
+
+# e1000: Intel 82540/82545/82546 — common in older Intel NICs and in qemu
+#        when virtio-net is not available. Module to save RAM on non-Intel.
+CONFIG_E1000=m
+
+# e1000e: Intel PCIe Gigabit NIC (82571..82583, I218). Module for the same
+#         reason as e1000.
+CONFIG_E1000E=m
+
+# igb: Intel I210/I350 Gigabit. Common on server bare metal. Module.
+CONFIG_IGB=m
+
+# r8169: Realtek 8168/8169/8111 — the most common consumer onboard NIC.
+#        Module.
+CONFIG_R8169=m
+
+# =============================================================================
+# USB host controllers — modules. Needed if a USB keyboard has to be
+# attached for emergency console access. Module so they are not loaded on
+# hardware without USB.
+# =============================================================================
+
+# USB XHCI: USB 3.0 host controller. Module — loaded only when USB is
+#           plugged in (hotplug).
+CONFIG_USB_XHCI_HCD=m
+
+# USB EHCI: USB 2.0 host controller. Same rationale.
+CONFIG_USB_EHCI_HCD=m
+
+# =============================================================================
+# Disable — x86_64-specific input subsystems that have no use on a headless
+# minimal server image. (The shared disable block — SOUND/DRM/BT/WLAN —
+# lives in config-common and is not repeated here.)
+# =============================================================================
+
+# USB_HID: disable the USB HID core. The minimal image has no need for USB
+# keyboards or mice at runtime (console is serial or KVM). A USB keyboard
+# can still be used if the user adds the module back via a downstream layer.
+# CONFIG_USB_HID is not set
+
+# INPUT_JOYSTICK: disable joystick subsystem.
+# CONFIG_INPUT_JOYSTICK is not set
+
+# INPUT_TABLET: disable tablet subsystem.
+# CONFIG_INPUT_TABLET is not set
