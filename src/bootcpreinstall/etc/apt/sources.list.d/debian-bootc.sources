@@ -1,4 +1,5 @@
 Types: deb
+Architectures: {{ ARCH }}
 URIs: https://daemoncores.github.io/debian-bootc/
 Suites: trixie
 Components: main

@@ -1,0 +1,121 @@
+# modules-kernel/arm
+#
+# Per-arch MODULE overlay for generic ARM (arm64). Applied on top of the base
+# kernel/config:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/arm
+#     make olddefconfig
+#
+# This file is NOT a full .config. It lists ONLY options that are common to
+# ALL ARM devices — everything shared across all devices (filesystems, virtio,
+# the disabled subsystems) lives in kernel/config and is NOT repeated here.
+# Device-specific overlays (modules-kernel/rpi3, rpi4, rpi5, rk3588) are merged
+# AFTER this file and keep ONLY device-specific options (SoC platform, Ethernet
+# PHY, device-specific MMC controller, device-specific RTC driver). The modules
+# built from this overlay are OPTIONAL; the base image (linux-image-common)
+# works without them.
+#
+# Device class: ARM64 SoCs (Cortex-A53/A72/A76, Broadcom BCM27xx, Rockchip
+# RK3588). This overlay carries the ARM-generic subsystem cores + drivers that
+# every ARM device in the set needs before its device-specific overlay. The
+# device-specific overlays (rpi3/rpi4/rpi5/rk3588) depend on linux-modules-arm
+# (this package) rather than on linux-image directly, so the ARM-generic
+# options are built ONCE here and shared by every ARM device.
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# ARM64 — built-in. The 64-bit ARM architecture core. Every device in the ARM
+# set is arm64 (Cortex-A53/A72/A76), so this is common to all of them. The
+# defconfig for arm64 already sets this, but it is restated so the ARM base is
+# explicit and a downstream defconfig change cannot silently drop it.
+# =============================================================================
+
+# ARM64: built-in. The 64-bit ARM architecture.
+CONFIG_ARM64=y
+
+# =============================================================================
+# Kernel command line — built-in. The serial consoles used across the ARM
+# device set: ttyAMA0 is the AMBA PL011 UART (Raspberry Pi family + RK3588
+# debug UART), ttyS0 is the 8250 UART (used by some RK3588 board UARTs). Both
+# are listed so the kernel logs to whichever UART the board exposes, without
+# per-device CMDLINE overrides. The last console= that resolves to a real
+# device wins (kernel rule).
+# =============================================================================
+
+# CMDLINE: built-in. Serial console for the ARM device set.
+CONFIG_CMDLINE="console=ttyAMA0,115200 console=ttyS0,115200"
+
+# =============================================================================
+# Serial console — built-in. AMBA PL011 UART, used by the Raspberry Pi family
+# (3/4/5) and the RK3588 debug UART. Also restated in kernel/config (the base
+# covers every device's early console), but kept here so the ARM overlay is
+# self-describing — a downstream that uses this overlay without the full base
+# still has PL011. Harmless duplicate (same value, merge last-wins no-op).
+# =============================================================================
+
+# SERIAL_AMBA_PL011: built-in. ARM PrimeCell UART driver.
+CONFIG_SERIAL_AMBA_PL011=y
+
+# SERIAL_AMBA_PL011_CONSOLE: built-in. Early console on PL011.
+CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
+
+# =============================================================================
+# MMC / SD — built-in. Most ARM boards in the set boot from SD or eMMC; the
+# bootc rootfs lives on this storage, so the kernel must read it without an
+# initramfs module load step. The subsystem core + the SDHCI controller family
+# are common to rpi4/rpi5/rk3588 (rpi3 uses the bcm2835-specific sdhost
+# controller, which stays in its device overlay). Building the SDHCI core +
+# platform glue here means the device overlays only carry their device-specific
+# SDHCI variant (none — the base SDHCI driver covers the standard controllers).
+# =============================================================================
+
+# MMC: built-in. The MMC/SD/SDIO subsystem core. Required before any controller
+#      driver.
+CONFIG_MMC=y
+
+# MMC_SDHCI: built-in. The SDHCI host controller core. Base for the platform
+#            SDHCI drivers used by rpi4/rpi5/rk3588.
+CONFIG_MMC_SDHCI=y
+
+# MMC_SDHCI_PLTFM: built-in. The SDHCI platform glue (sdhci-pltfm), used by the
+#                  RK3588 sdhci-of-arasan and the Pi 4/5 eMMC controller.
+CONFIG_MMC_SDHCI_PLTFM=y
+
+# =============================================================================
+# USB — built-in. USB is used on every ARM board in the set as the only way to
+# attach a keyboard for emergency console access, and as a storage path. The
+# three host controller families (DWC3, XHCI, EHCI) cover the USB3/USB2
+# controllers found across the ARM boards (Pi 4 via VL805, RK3588 native).
+# rpi3 has no USB in its overlay, but the ARM base provides it so a USB
+# keyboard can be attached if needed.
+# =============================================================================
+
+# USB: built-in. The USB subsystem core. Required before any host controller
+#      driver.
+CONFIG_USB=y
+
+# USB_DWC3: built-in. Synopsys DesignWare USB3 controller, used by the Pi 4
+#           (via VL805) and the RK3588.
+CONFIG_USB_DWC3=y
+
+# USB_XHCI_HCD: built-in. USB 3.0 host controller, used by the Pi 4/5 and the
+#               RK3588.
+CONFIG_USB_XHCI_HCD=y
+
+# USB_EHCI_HCD: built-in. USB 2.0 host controller, used by the RK3588.
+CONFIG_USB_EHCI_HCD=y
+
+# =============================================================================
+# RTC — built-in. The RTC subsystem core. Without it, systemd-timesyncd has no
+# fallback time and bootc rollback ordering can break (two deployments with the
+# "same" timestamp). The subsystem core is common to all ARM boards; the
+# device-specific RTC driver (e.g. RTC_DRV_PL031 on the RK3588) stays in the
+# device overlay.
+# =============================================================================
+
+# RTC_CLASS: built-in. The RTC subsystem core.
+CONFIG_RTC_CLASS=y

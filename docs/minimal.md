@@ -2,20 +2,25 @@
 
 ## Overview
 
-The `debian-bootc-minimal` variants are ultra-lean bootc/ostree images derived
+The `debian-bootc-minimal` image is an ultra-lean bootc/ostree image derived
 from the same Debian Trixie base as the main `debian-bootc` image, but trimmed
 to a bare bootable minimum. The goal is **< 10 MB RAM at idle** on a system
 with no workload running.
 
-The two variants are:
+A single multi-arch **`Containerfile.minimal`** builds both x86_64 and ARM64
+images. BuildKit selects the architecture at build time via the standard
+`ARG TARGETARCH` (auto-injected, values `amd64` or `arm64`) and an optional
+`ARG TARGETVARIANT` (reserved for future size variants). There are no longer
+per-architecture Containerfiles — `Containerfile.minimal.x86_64` and
+`Containerfile.minimal.arm64` have been removed.
 
-- **`Containerfile.minimal.x86_64`** — for VMs and bare-metal x86_64 hosts.
-- **`Containerfile.minimal.arm64`** — a single multi-SBC image for the most
+- **x86_64 (`TARGETARCH=amd64`)** — for VMs and bare-metal x86_64 hosts.
+- **ARM64 (`TARGETARCH=arm64`)** — a single multi-SBC image for the most
   common ARM64 single-board computers (Raspberry Pi 3/4/5, Rockchip,
   Allwinner, Amlogic).
 
-Both images share the same bootc/ostree/composefs/dracut stack as the main
-image. They intentionally omit:
+Both architectures share the same bootc/ostree/composefs/dracut stack as the
+main image. They intentionally omit:
 
 - the SSH server (use the serial console, or add `openssh-server` in a
   downstream layer),
@@ -31,16 +36,24 @@ hardware.
 
 ### Kernel packages are rolling, not pinned
 
-Both minimal images install the Debian meta-packages `linux-image-amd64`
-(x86_64) and `linux-image-arm64` (arm64). These meta-packages always track
-the latest Debian kernel for the suite (`trixie`) and are **not** pinned to
-a specific upstream version. Each image rebuild picks up whatever version
-the meta-package currently points to. This is intentional (security updates
-flow automatically) but means that two rebuilds a few weeks apart can ship
-different kernel versions. If reproducibility matters, pin the kernel
-explicitly in a downstream layer (`apt install linux-image-6.12.22-1-amd64`)
-or build a custom kernel from the fragments in `kernel/` (see
+The default `KERNEL_VARIANT=stock` install uses the Debian meta-packages
+`linux-image-amd64` (x86_64) and `linux-image-arm64` (arm64). These
+meta-packages always track the latest Debian kernel for the suite
+(`trixie`) and are **not** pinned to a specific upstream version. Each image
+rebuild picks up whatever version the meta-package currently points to.
+This is intentional (security updates flow automatically) but means that two
+rebuilds a few weeks apart can ship different kernel versions. If
+reproducibility matters, pin the kernel explicitly in a downstream layer
+(`apt install linux-image-6.12.22-1-amd64`) or build a custom kernel from
+the fragments in `kernel/` (see
 [How to recompile the kernel](#how-to-recompile-the-kernel)).
+
+The opt-in `KERNEL_VARIANT=minimal` install uses the custom
+`linux-image-minimal` package built from the `kernel/config-minimal-<arch>`
+fragments by the `bootc-debs-builder` pipeline (see
+[Kernel Configuration](#kernel-configuration) below and P02 in
+`todo/registry.md`). That package is also rebuilt per Debian kernel
+release, so the same rolling reproducibility caveat applies.
 
 ## Architecture Support
 
@@ -62,7 +75,7 @@ come from the **third-party APT repository** at
 `https://daemoncores.github.io/debian-bootc/` (referenced by
 `src/bootcpreinstall/etc/apt/sources.list.d/debian-bootc.sources`). The
 signing key for that repository is fetched and SHA-256-pinned in the
-Containerfile (`BOOTC_GPG_SHA256`). Nothing in the minimal images is
+Containerfile (`BOOTC_GPG_SHA256`). Nothing in the minimal image is
 installed from an unverified source.
 
 ### ARM64
@@ -108,7 +121,7 @@ boot path. The cmdline must instead be set in one of:
 - a `boot.scr` / `extlinux.conf` file on the boot partition.
 
 The `/etc/default/grub` `GRUB_CMDLINE_LINUX_DEFAULT` line written by
-`Containerfile.minimal.arm64` Phase 6 only applies to boards that chain
+`Containerfile.minimal` Phase 6 only applies to boards that chain
 through a UEFI GRUB (typically ARM64 servers, or SBCs running a UEFI
 firmware like EDK2). For the common U-Boot SBC case, adjust the cmdline in
 the U-Boot env or DTB instead. The default cmdline shipped by the image
@@ -118,14 +131,18 @@ uses; the kernel silently ignores consoles that do not exist.
 
 ## Package List by Image
 
-The table below compares the package set installed by each minimal image.
-Packages not listed here are pulled in as dependencies by `apt`; only
-top-level explicitly installed packages are shown.
+The table below compares the package set installed by the minimal image for
+each architecture. Packages not listed here are pulled in as dependencies by
+`apt`; only top-level explicitly installed packages are shown. The kernel row
+reflects the default `KERNEL_VARIANT=stock` — when `KERNEL_VARIANT=minimal`
+is passed at build time, `linux-image-minimal` replaces both stock
+metapackages (see [Build arguments](#build-arguments)).
 
 | Package               | x86_64 | arm64 | Purpose                                                            |
 |-----------------------|:------:|:-----:|--------------------------------------------------------------------|
-| `linux-image-amd64`   |   x    |       | Debian generic AMD64 kernel                                       |
-| `linux-image-arm64`   |        |   x   | Debian generic ARM64 kernel with all upstream DTBs                 |
+| `linux-image-amd64`   |   x    |       | Debian generic AMD64 kernel (`KERNEL_VARIANT=stock`)              |
+| `linux-image-arm64`   |        |   x   | Debian generic ARM64 kernel with all upstream DTBs (`KERNEL_VARIANT=stock`) |
+| `linux-image-minimal` | opt    | opt   | Custom kernel built from `kernel/config-minimal-<arch>` (`KERNEL_VARIANT=minimal`) |
 | `firmware-linux-free` |        |   x   | DFSG-free firmware blobs needed by some ARM64 SBC peripherals      |
 | `firmware-misc-nonfree` |      |   x   | Minimal non-free blobs (Amlogic GX, some Rockchip peripherals)     |
 | `bootc`               |   x    |   x   | Atomic OS management on top of ostree                             |
@@ -133,7 +150,7 @@ top-level explicitly installed packages are shown.
 | `grub-efi-amd64`      |   x    |       | Fedora rhboot GRUB fork with BLS modules for bootc                |
 | `u-boot-tools`        |        |   x   | `mkimage` / `fw_printenv` / `fw_setenv` for ARM64 SBC bootloaders  |
 | `iproute2`            |   x    |   x   | The `ip` command, for network debugging and boot scripts          |
-| `systemd-networkd`   |   x    |   x   | Native systemd network manager (replaces `ifupdown2`) (shipped by `systemd`, not a separate package)             |
+| `systemd-networkd`  |   x    |   x   | Native systemd network manager (replaces `ifupdown2`) — shipped by the `systemd` package on Trixie, not a separate package |
 | `systemd-timesyncd`  |   x    |   x   | NTP client (repacked with network-online drop-in)                 |
 | `ca-certificates`     |   x    |   x   | Root CAs for HTTPS to APT / registries                            |
 | `openssl`             |   x    |   x   | Crypto used by apt transport and bootc                            |
@@ -142,7 +159,7 @@ top-level explicitly installed packages are shown.
 | `wget`                |   x    |   x   | Fetch the bootc APT signing key (fallback)                        |
 
 Packages present in the **main** image but **deliberately omitted** from
-both minimal images:
+the minimal image:
 
 `dkms`, `linux-headers-*`, `firmware-linux` (full nonfree metapackage),
 `intel-microcode`, `amd64-microcode`, `podman`, `adduser`, `sudo`,
@@ -158,9 +175,11 @@ both minimal images:
 
 ## Disabled Services
 
-The following systemd units are **masked** (not just disabled) in both
-minimal images. Masking prevents the unit from being started manually or
-pulled in by a dependency. To re-enable any of them:
+The following systemd units are **masked** (not just disabled) in the
+minimal image. Masking prevents the unit from being started manually or
+pulled in by a dependency. The masking list is identical on both
+architectures: once the Debian userspace is installed, x86_64 and arm64 have
+the same systemd unit set. To re-enable any of them:
 
 ```bash
 systemctl unmask <service>
@@ -194,7 +213,8 @@ systemctl enable --now <service>
 
 ## Kernel Configuration
 
-Both minimal images ship a kernel config fragment in `kernel/`:
+The minimal image ships a kernel config fragment per architecture in
+`kernel/`:
 
 - `kernel/config-minimal-x86_64` — options that differ from the x86_64 defconfig.
 - `kernel/config-minimal-arm64` — options that differ from the arm64 defconfig.
@@ -273,9 +293,12 @@ On x86_64 additionally:
 
 ### How to recompile the kernel
 
-The minimal images by default use the stock Debian `linux-image-amd64` /
-`linux-image-arm64` packages. The config fragments in `kernel/` are for
-users who want to build a custom kernel matching the minimal targets.
+The minimal image by default (`KERNEL_VARIANT=stock`) uses the stock Debian
+`linux-image-amd64` / `linux-image-arm64` packages. The config fragments in
+`kernel/` are used by the `bootc-debs-builder` pipeline to build the custom
+`linux-image-minimal` package installed when `KERNEL_VARIANT=minimal` is
+passed at build time, and are also provided for users who want to build a
+custom kernel themselves matching the minimal targets.
 
 Prerequisites:
 
@@ -320,7 +343,7 @@ To integrate the custom kernel into a bootc image, install the `.deb`
 files in a downstream `Containerfile`:
 
 ```dockerfile
-FROM ghcr.io/daemoncores/debian-bootc-minimal:x86_64
+FROM ghcr.io/daemoncores/debian-bootc-minimal:<version>_amd64
 COPY linux-image-*.deb /tmp/
 RUN dpkg -i /tmp/linux-image-*.deb && rm /tmp/*.deb
 ```
@@ -334,23 +357,23 @@ and are approximate (they vary with kernel version and workload).
 
 | Technique                                       | Approx. saving | Where applied                              |
 |-------------------------------------------------|----------------|--------------------------------------------|
-| `journald Storage=none`                         | 8–15 MB        | `Containerfile.minimal.*` Phase 5          |
-| Kernel cmdline `quiet`                           | < 1 MB         | `Containerfile.minimal.*` Phase 6          |
-| Kernel cmdline `init_on_alloc=0`                | 1–3 % of alloc throughput | `Containerfile.minimal.*` Phase 6 |
-| Masking `cron.service`                          | ~1 MB          | `Containerfile.minimal.*` Phase 7          |
-| Masking `getty@tty2..tty6` (5 gettys)            | ~5 MB          | `Containerfile.minimal.*` Phase 7          |
-| Masking `apt-daily*`                             | < 1 MB idle    | `Containerfile.minimal.*` Phase 7          |
-| Masking `man-db.timer`                          | < 1 MB idle    | `Containerfile.minimal.*` Phase 7          |
-| Masking `console-setup` + `keyboard-setup`     | < 1 MB         | `Containerfile.minimal.*` Phase 7          |
-| Masking `e2scrub_all` + `fstrim` + `logrotate` | < 1 MB idle    | `Containerfile.minimal.*` Phase 7          |
+| `journald Storage=none`                         | 8–15 MB        | `Containerfile.minimal` Phase 5            |
+| Kernel cmdline `quiet`                           | < 1 MB         | `Containerfile.minimal` Phase 6            |
+| Kernel cmdline `init_on_alloc=0`                | 1–3 % of alloc throughput | `Containerfile.minimal` Phase 6 |
+| Masking `cron.service`                          | ~1 MB          | `Containerfile.minimal` Phase 7            |
+| Masking `getty@tty2..tty6` (5 gettys)            | ~5 MB          | `Containerfile.minimal` Phase 7            |
+| Masking `apt-daily*`                             | < 1 MB idle    | `Containerfile.minimal` Phase 7            |
+| Masking `man-db.timer`                          | < 1 MB idle    | `Containerfile.minimal` Phase 7            |
+| Masking `console-setup` + `keyboard-setup`     | < 1 MB         | `Containerfile.minimal` Phase 7            |
+| Masking `e2scrub_all` + `fstrim` + `logrotate` | < 1 MB idle    | `Containerfile.minimal` Phase 7            |
 | Omitting `openssh-server`                       | ~3 MB          | Phase 3 package list                       |
 | Omitting `podman`                               | ~10 MB at idle | Phase 3 package list                       |
 | Omitting `man-db`, `manpages`, `groff-base`    | ~2 MB          | Phase 3 package list                       |
 | Omitting `ifupdown2` (using `systemd-networkd`) | ~1 MB          | Phase 3 package list                       |
 | Omitting `linux-headers-*` + `dkms`            | ~30 MB disk (not RAM)   | Phase 3 package list                       |
 | Omitting microcode packages                     | ~2 MB boot image        | Phase 3 package list                       |
-| Kernel config: `SND`, `DRM`, `BT`, `WLAN` off  | 5–20 MB        | `kernel/config-minimal-*`                 |
-| Kernel config: `USB_HID` off (x86_64)          | ~1 MB          | `kernel/config-minimal-x86_64`             |
+| Kernel config: `SND`, `DRM`, `BT`, `WLAN` off  | 5–20 MB        | `kernel/config-minimal-*` (only built when `KERNEL_VARIANT=minimal`) |
+| Kernel config: `USB_HID` off (x86_64)          | ~1 MB          | `kernel/config-minimal-x86_64` (only built when `KERNEL_VARIANT=minimal`) |
 
 The biggest single win is `journald Storage=none`, which removes the
 largest always-on userspace memory consumer after systemd itself. The
@@ -361,13 +384,13 @@ structures at boot even when no hardware is present.
 ## How to Re-enable Features
 
 All of the following assume you are writing a downstream `Containerfile`
-`FROM` one of the minimal images. The minimal images never re-enable
-features at runtime by themselves.
+`FROM` the minimal image. The minimal image never re-enable
+features at runtime by itself.
 
 ### SSH
 
 ```dockerfile
-FROM ghcr.io/daemoncores/debian-bootc-minimal:x86_64
+FROM ghcr.io/daemoncores/debian-bootc-minimal:<version>_amd64
 RUN apt update && apt install -y openssh-server \
     && systemctl enable ssh.service \
     && rm -rf /var/lib/apt/lists/*
@@ -409,11 +432,15 @@ RUN systemctl unmask getty@tty2.service getty@tty3.service \
 
 ### WiFi (ARM64 only)
 
-WiFi drivers are disabled in `kernel/config-minimal-arm64`. To re-enable
-WiFi on a specific SBC you must either:
+WiFi drivers are disabled in `kernel/config-minimal-arm64`, which only
+ships in the image when `KERNEL_VARIANT=minimal` is passed (the default
+`KERNEL_VARIANT=stock` install uses the stock Debian `linux-image-arm64`
+metapackage, which has WiFi enabled). To re-enable WiFi on a specific SBC
+with the minimal kernel you must either:
 
-1. Use the stock Debian `linux-image-arm64` (which has WiFi enabled) by
-   overriding the kernel in a downstream layer, **or**
+1. Switch the image to `KERNEL_VARIANT=stock` (use the stock Debian
+   `linux-image-arm64`, which has WiFi enabled) — either rebuild with the
+   default `KERNEL_VARIANT` or override the kernel in a downstream layer, **or**
 2. Build a custom kernel from the minimal config with the wireless
    subsystem re-enabled:
 
@@ -431,48 +458,98 @@ make olddefconfig
 
 ### Bluetooth (ARM64 only)
 
-Same approach as WiFi: either use the stock Debian kernel or rebuild the
-minimal kernel with `CONFIG_BT=y` and the appropriate driver.
+Same approach as WiFi: either switch to `KERNEL_VARIANT=stock` (stock
+Debian kernel, BT enabled) or rebuild the minimal kernel with
+`CONFIG_BT=y` and the appropriate driver.
 
 ## Build Instructions
+
+The minimal image is defined by a single multi-arch `Containerfile.minimal`.
+BuildKit selects the architecture via the standard `--platform` /
+`--arch` flags, which auto-inject `TARGETARCH` (and `TARGETVARIANT`) into
+the build. There is no per-architecture Containerfile anymore.
+
+### Build arguments
+
+The Containerfile exposes five build-time `ARG`s. None are mandatory; the
+defaults reproduce the previous single-arch behaviour with zero regression.
+
+| ARG              | Default   | Values           | Effect |
+|------------------|-----------|------------------|--------|
+| `TARGETARCH`     | (auto)    | `amd64` \| `arm64` | BuildKit auto-injects the build architecture. Selects the kernel, boot stack and firmware packages. |
+| `TARGETVARIANT`  | (auto)    | (usually empty)  | Reserved for future size variants. BuildKit auto-injects it; the Containerfile does not currently branch on it. |
+| `KERNEL_VARIANT` | `stock`   | `stock` \| `minimal` | `stock` installs the Debian `linux-image-stock-<arch>` metapackage. `minimal` installs the custom `linux-image-minimal-<arch>` package built from `kernel/config-minimal-<arch>` by the `bootc-debs-builder` pipeline (disabled subsystems: `SND`, `DRM`, `BT`, `WLAN`, `USB_HID`). The CI builds the .deb with the matching `linux-image-${KERNEL_VARIANT}-${ARCH}` name, so the Containerfile installs it directly with no if/else. A full kernel build adds ~30-90 min to the pipeline. |
+| `AUTOUPDATE`     | `1`       | `1` \| `0`       | `1` writes `1` to `/usr/lib/bootc/autoupdate` so bootc performs automated ostree upgrades (the `_autoupdate` tag variant). `0` writes `0` to the same file, disabling auto-update for the `_lock` tag variant (minimal RAM, no background upgrade overhead). bootc reads the file content (`0` = disabled); presence alone is not sufficient. |
+| `DEVICE`         | `generic` | `generic` \| `rpi3` \| `rpi4` \| `rpi5` \| `rk3588` \| `x86_64` | Selects the per-device kernel modules overlay (`modules-kernel/<device>`) installed on top of the kernel package as `linux-modules-${DEVICE}`. The default `generic` installs `linux-modules-generic`, a harmless empty meta-package (no modules) built from the empty `modules-kernel/generic` overlay, so the apt install line always names a real package. The modules are OPTIONAL — the base image works without them. The CI matrix tags the resulting image with a device suffix: `:latest_<device>`. |
+
+Pass a non-default value with `--build-arg`, e.g.:
+
+```bash
+podman build \
+    -f Containerfile.minimal \
+    --build-arg KERNEL_VARIANT=minimal \
+    --build-arg AUTOUPDATE=0 \
+    -t debian-bootc-minimal:custom_lock .
+```
 
 ### Build the x86_64 minimal image
 
 ```bash
+# Native build on an x86_64 host (recommended: no QEMU emulation).
 podman build \
-    -f Containerfile.minimal.x86_64 \
-    -t debian-bootc-minimal:x86_64 .
+    -f Containerfile.minimal \
+    --platform=linux/amd64 \
+    -t debian-bootc-minimal:amd64 .
 ```
 
 ### Build the arm64 minimal image (native, on an ARM64 host)
 
 ```bash
+# Native build on an ARM64 host (recommended: no QEMU emulation).
 podman build \
-    -f Containerfile.minimal.arm64 \
+    -f Containerfile.minimal \
+    --platform=linux/arm64 \
     -t debian-bootc-minimal:arm64 .
 ```
 
 ### Cross-build the arm64 image from an x86_64 host
 
 ```bash
+# QEMU user-mode emulation: correct image, slower build.
 podman build \
+    -f Containerfile.minimal \
     --arch arm64 \
-    -f Containerfile.minimal.arm64 \
     -t debian-bootc-minimal:arm64 .
 ```
 
 > `podman` uses qemu user-mode emulation when `--arch` differs from the
-> host. Builds are slower than native but produce a correct image.
+> host. Builds are slower than native but produce a correct image. The
+> project CI builds each arch natively on its matching GitHub runner
+> (`ubuntu-latest` for amd64, `ubuntu-24.04-arm` for arm64) so the
+> published images are never QEMU-emulated.
+
+### Build a multi-arch manifest list
+
+```bash
+# Build both arches and merge them into a single manifest-list tag.
+# The consumer pulls :latest and the runtime selects the right arch.
+podman buildx build \
+    -f Containerfile.minimal \
+    --platform=linux/amd64,linux/arm64 \
+    -t debian-bootc-minimal:latest \
+    --manifest debian-bootc-minimal:latest .
+```
 
 ### Build a custom-kernel variant
 
 ```bash
-# 1. Build the custom kernel .deb (see "How to recompile the kernel")
+# 1. Build the custom kernel .deb (see "How to recompile the kernel"),
+#    or use the linux-image-minimal .deb produced by bootc-debs-builder.
 make -j"$(nproc)" bindeb-pkg
 
 # 2. Write a downstream Containerfile
 cat > Containerfile.custom <<'EOF'
-FROM localhost/debian-bootc-minimal:x86_64
+FROM localhost/debian-bootc-minimal:<version>_amd64
 COPY linux-image-*.deb /tmp/
 RUN dpkg -i /tmp/linux-image-*.deb && rm -f /tmp/*.deb
 EOF
@@ -481,20 +558,51 @@ EOF
 podman build -f Containerfile.custom -t debian-bootc-minimal:custom .
 ```
 
+### Image tag scheme
+
+The shared CI workflow owns the `docker buildx build --tag ... --push`
+step. The caller (`.github/workflows/pipeline.yml`) declares the intent
+via a `tag_suffix` input so the shared workflow can emit the right tags.
+The scheme (documented in `pipeline.yml`):
+
+| Tag                                  | Kind                | Auto-update | Notes |
+|--------------------------------------|---------------------|:-----------:|-------|
+| `:latest`                            | multi-arch manifest | yes         | Floating tag, auto-selects arch via Docker manifest. Maps to `latest_autoupdate`. |
+| `:<version>`                         | multi-arch manifest | yes         | Pinned to a build (`git describe --tags` or the GHCR digest). Maps to `<version>_autoupdate`. |
+| `:latest_<suffix>`                   | multi-arch manifest | per suffix  | Floating tag for a given variant. `<suffix>` = `autoupdate` \| `lock`. |
+| `:<version>_<suffix>`                 | multi-arch manifest | per suffix  | Pinned multi-arch manifest for a given variant. |
+| `:<version>_amd64`                   | per-arch            | yes         | Single-architecture tag for amd64. Maps to the `_autoupdate` default suffix (`AUTOUPDATE=1`). |
+| `:<version>_arm64`                   | per-arch            | yes         | Single-architecture tag for arm64. Maps to the `_autoupdate` default suffix (`AUTOUPDATE=1`). |
+| `:<version>_<arch>_<suffix>`         | per-arch-per-variant| per suffix  | Per-push manifest entry; one per arch × variant. |
+
+Where:
+
+- `<arch>` = `amd64` \| `arm64`
+- `<suffix>` = `autoupdate` (built with `AUTOUPDATE=1`) \| `lock` (built with `AUTOUPDATE=0`)
+- `<version>` = `git describe --tags` or the GHCR image digest, set by the shared workflow
+
+The `_lock` variant is built from the **same** `Containerfile.minimal` via
+`AUTOUPDATE=0` — there is no separate Containerfile. The `_autoupdate`
+variant is the default (matches the previous single-arch behaviour with
+zero regression).
+
 ### Push to a registry
 
 ```bash
-podman push debian-bootc-minimal:x86_64 \
-    ghcr.io/youruser/debian-bootc-minimal:x86_64
+podman push debian-bootc-minimal:amd64 \
+    ghcr.io/youruser/debian-bootc-minimal:<version>_amd64
 podman push debian-bootc-minimal:arm64 \
-    ghcr.io/youruser/debian-bootc-minimal:arm64
+    ghcr.io/youruser/debian-bootc-minimal:<version>_arm64
 ```
 
 ### Deploy to a host
 
 ```bash
-# On the target host, install via bootc
-sudo bootc switch ghcr.io/youruser/debian-bootc-minimal:x86_64
+# On the target host, install via bootc. The multi-arch manifest tag
+# auto-selects the right arch at pull time.
+sudo bootc switch ghcr.io/youruser/debian-bootc-minimal:<version>
+# or, for the lock variant (auto-update disabled):
+sudo bootc switch ghcr.io/youruser/debian-bootc-minimal:<version>_lock
 ```
 
 ## Known Limitations
@@ -511,17 +619,22 @@ sudo bootc switch ghcr.io/youruser/debian-bootc-minimal:x86_64
   installed. Re-add them in a downstream layer if needed.
 - **No `bash-completion`, `nano`, `less`.** The minimal image ships only
   the busybox-style essentials. Downstream layers can add any editor.
-- **ARM64: no WiFi.** The wireless subsystem is disabled in the kernel
-  config fragment. Use the stock Debian kernel or rebuild the minimal
-  kernel with WiFi re-enabled for a specific SBC.
-- **ARM64: no Bluetooth.** Same as WiFi.
-- **ARM64: no GPU.** DRM is disabled in the kernel config; the console is
-  serial or framebuffer-only. Re-enable DRM in the kernel config for a
-  desktop SBC use case.
+- **ARM64: no WiFi.** The wireless subsystem is disabled in the
+  `kernel/config-minimal-arm64` fragment, which only ships in the image when
+  `KERNEL_VARIANT=minimal`. The default `KERNEL_VARIANT=stock` install uses
+  the Debian `linux-image-arm64` metapackage (WiFi enabled). To get WiFi on a
+  minimal-kernel build, either switch back to `KERNEL_VARIANT=stock` in a
+  downstream layer or rebuild the minimal kernel with WiFi re-enabled for a
+  specific SBC.
+- **ARM64: no Bluetooth.** Same as WiFi — disabled in
+  `kernel/config-minimal-arm64` (only when `KERNEL_VARIANT=minimal`).
+- **ARM64: no GPU.** DRM is disabled in `kernel/config-minimal-arm64` (only
+  when `KERNEL_VARIANT=minimal`); the console is serial or framebuffer-only.
+  Re-enable DRM in the kernel config for a desktop SBC use case.
 - **No microcode updates (x86_64).** `intel-microcode` and `amd64-microcode`
   are not installed. Re-add them in a downstream layer for bare-metal
   deployments that need CPU errata patches.
-- **No Secure Boot MOK support (x86_64).** The minimal x86_64 image
+- **No Secure Boot MOK support (x86_64).** The minimal image
   installs the **unsigned** `grub-efi-amd64` package (the Fedora rhboot
   fork with BLS modules). It does **not** install
   `grub-efi-amd64-signed` or the `shim-signed` MOK chain. As a result the
@@ -539,16 +652,23 @@ sudo bootc switch ghcr.io/youruser/debian-bootc-minimal:x86_64
 
 - [`README.md`](../README.md) — Project overview, quick start, technical stack.
 - [`docs/architecture.md`](architecture.md) — Full architecture of the
-  main `debian-bootc` image (the minimal images share the bootc/ostree/
+  main `debian-bootc` image (the minimal image shares the bootc/ostree/
   composefs/dracut stack documented there).
 - [`docs/justifications.md`](justifications.md) — Honest justifications for
-  the design choices of the main image; the minimal images inherit most of
+  the design choices of the main image; the minimal image inherits most of
   them (dracut over initramfs-tools, trixie base, etc.).
-- [`Containerfile.minimal.x86_64`](../Containerfile.minimal.x86_64) — x86_64
-  image definition, line-by-line commented.
-- [`Containerfile.minimal.arm64`](../Containerfile.minimal.arm64) — ARM64
-  image definition, line-by-line commented.
+- [`Containerfile.minimal`](../Containerfile.minimal) — Multi-arch
+  (x86_64 + ARM64) image definition, line-by-line commented.
+- [`.github/workflows/pipeline.yml`](../.github/workflows/pipeline.yml) —
+  CI caller workflow that declares the `tag_suffix` input and the
+  multi-arch matrix consumed by the shared workflow.
+- [`workflows/bootc-debs-builder/packages.yml`](../workflows/bootc-debs-builder/packages.yml) —
+  Builds the custom `linux-image-minimal` .deb installed when
+  `KERNEL_VARIANT=minimal` is passed.
+- [`todo/registry.md`](../todo/registry.md) — Phase-by-phase task registry
+  documenting the multi-arch merge, the custom kernel wiring (P02) and the
+  tag scheme (P04).
 - [`kernel/config-minimal-x86_64`](../kernel/config-minimal-x86_64) — x86_64
-  kernel config fragment.
+  kernel config fragment (used by `KERNEL_VARIANT=minimal`).
 - [`kernel/config-minimal-arm64`](../kernel/config-minimal-arm64) — ARM64
-  kernel config fragment.
+  kernel config fragment (used by `KERNEL_VARIANT=minimal`).
