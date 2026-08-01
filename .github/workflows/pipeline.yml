@@ -41,6 +41,14 @@ on:
         description: 'Build container image'
         type: boolean
         default: true
+      run_img_rpi:
+        description: 'Build Raspberry Pi .img (arm64 only)'
+        type: boolean
+        default: false
+      run_img_gallium:
+        description: 'Build Linux Gallium .img (arm64 only) — disabled for this repo'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -61,4 +69,10 @@ jobs:
       run_debs: ${{ inputs.run_debs }}
       run_image: ${{ inputs.run_image }}
       run_iso: ${{ inputs.run_iso }}
+      # Forward the rpi disk-image opt-in to the shared workflow.
+      # run_img_gallium is intentionally NOT forwarded: this repo
+      # (debian-bootc) does not ship a Gallium phone target, so the
+      # Gallium .img build is disabled here. The shared workflow
+      # keeps its own default ('false') for run_img_gallium.
+      run_img_rpi: ${{ inputs.run_img_rpi }}
     secrets: inherit

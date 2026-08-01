@@ -1,0 +1,79 @@
+# modules-kernel/rk3588
+#
+# Per-device MODULE overlay for the Rockchip RK3588. Applied on top of the
+# base kernel/config THEN the ARM-generic overlay modules-kernel/arm:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/arm modules-kernel/rk3588
+#     make olddefconfig
+#
+# This file is NOT a full .config. It lists ONLY options that are specific
+# to the RK3588 — everything shared across all devices (filesystems, virtio,
+# serial console, the disabled subsystems) lives in kernel/config, and
+# everything shared across all ARM devices (ARM64, CMDLINE, PL011, MMC/USB/RTC
+# subsystem cores) lives in modules-kernel/arm. Neither is repeated here. The
+# modules built from this overlay are OPTIONAL; the base image
+# (linux-image-common) works without them.
+#
+# Device: Rockchip RK3588 (4x Cortex-A76 + 4x Cortex-A55). Boards: Orange
+# Pi 5, Radxa Rock 5, Pine64 QuartzModel-A, NanoPi R6S, etc.
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# SoC platform support — built-in. The kernel must know about the SoC before
+# it can parse the device tree, so this is built-in rather than a module.
+# =============================================================================
+
+# Rockchip: RK3588 platform support. Built-in.
+CONFIG_ARCH_ROCKCHIP=y
+
+# =============================================================================
+# MMC / SD / eMMC — built-in. Most RK3588 boards boot from SD or eMMC; the
+# bootc rootfs will live on this storage, so the kernel must be able to read
+# it without a module load step. The SDHCI core + platform glue + USB host
+# controllers + RTC subsystem core are shared across all ARM devices and live
+# in modules-kernel/arm; this overlay keeps ONLY the RK3588-specific SDHCI
+# platform variant (none — the base SDHCI + sdhci-of-arasan is covered by
+# MMC_SDHCI_PLTFM in modules-kernel/arm).
+# =============================================================================
+
+# (No device-specific MMC option here: the RK3588 sdhci-of-arasan controller
+#  is covered by CONFIG_MMC_SDHCI + CONFIG_MMC_SDHCI_PLTFM in modules-kernel/arm.)
+
+# =============================================================================
+# Ethernet — built-in. Network must come up at boot so bootc can fetch the
+# next deployment.
+# =============================================================================
+
+# DWMAC_GENERIC: built-in. Generic DWMAC platform driver, used by the RK3588
+#                for its GMAC.
+CONFIG_DWMAC_GENERIC=y
+
+# STMMAC_ETH: built-in. The stmmac core driver required by DWMAC_GENERIC
+#             above.
+CONFIG_STMMAC_ETH=y
+
+# =============================================================================
+# USB — built-in. USB is used on several RK3588 boards as the only way to
+# attach a keyboard for emergency console access, and as a storage path. The
+# DWC3 + XHCI + EHCI host controllers are shared across all ARM devices and
+# live in modules-kernel/arm.
+# =============================================================================
+
+# (No device-specific USB option here: CONFIG_USB_DWC3 + CONFIG_USB_XHCI_HCD
+#  + CONFIG_USB_EHCI_HCD are in modules-kernel/arm.)
+
+# =============================================================================
+# RTC — built-in. The RK3588 has an internal RTC. Without the driver,
+# systemd-timesyncd has no fallback time and bootc rollback ordering can
+# break (two deployments with the "same" timestamp). The RTC subsystem core
+# (CONFIG_RTC_CLASS) is shared across all ARM devices and lives in
+# modules-kernel/arm; this overlay keeps ONLY the RK3588-specific RTC driver.
+# =============================================================================
+
+# RTC_DRV_PL031: built-in. ARM PrimeCell RTC, used by the RK3588.
+#                (CONFIG_RTC_CLASS is in modules-kernel/arm.)
+CONFIG_RTC_DRV_PL031=y

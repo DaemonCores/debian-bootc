@@ -17,6 +17,7 @@ packages:
     env:
       FIRSTBOOT_VER: "1.0.2"
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
 
       cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/firstbootpostinstall/* \
@@ -38,11 +39,709 @@ packages:
       dpkg-deb --build /output/firstboot-user-setup \
         /debs/firstboot-user-setup_${FIRSTBOOT_VER}_all.deb
 
+  # ===========================================================================
+  # Kernel packages — SPLIT into ONE base image entry + ONE ARM-generic modules
+  # entry + ONE modules entry per device. The kernel image (vmlinuz + common
+  # modules) is compiled ONCE in the `linux-image` entry; `linux-modules-arm`
+  # depends on it and builds the ARM-generic options (ARM64, CMDLINE, PL011,
+  # MMC/USB/RTC subsystem cores) ONCE; each `linux-modules-<device>` entry then
+  # depends on `linux-modules-arm` and rebuilds ONLY its per-device modules from
+  # the arm overlay + its specific device overlay. This saves N-1 full kernel
+  # rebuilds AND lets the builder skip a device entirely when that device's
+  # overlay is unchanged (the monolithic entry rebuilt everything whenever ANY
+  # overlay changed).
+  #
+  # Wave layout (computed by the setup job from the `deps:` fields):
+  #   wave 0: linux-image             (no deps, full bindeb-pkg once)
+  #   wave 1: linux-modules-arm,      (deps: [linux-image]; modules-only,
+  #           linux-modules-generic,           run in parallel)
+  #           linux-modules-x86_64)
+  #   wave 2: linux-modules-rpi3,     (deps: [linux-modules-arm]; modules-only,
+  #           linux-modules-rpi4,              run in parallel)
+  #           linux-modules-rpi5,
+  #           linux-modules-rk3588
+  #
+  # The modules packages are OPTIONAL — the base image (linux-image-common)
+  # works without them. They carry device-specific SoC / Ethernet PHY / MMC /
+  # USB / RTC drivers and must be installed alongside linux-image-common. The
+  # ARM device modules (rpi3/rpi4/rpi5/rk3588) install transitively via apt:
+  # linux-modules-<device> Depends on linux-modules-arm which Depends on
+  # linux-image-common, so apt pulls the whole chain.
+  # ===========================================================================
+
+  # linux-image: the ONE full kernel build. Merges the BASE config
+  # (kernel/config — filesystems, virtio, serial, disables, the common
+  # networking/cgroup/namespace set) into the Debian defconfig, then
+  # `make bindeb-pkg` produces the vmlinuz + common modules as
+  # linux-image-common_<ver>_<arch>.deb. sources: lists ONLY kernel/config
+  # so changing a per-device overlay does NOT invalidate this package's
+  # cache (the common image is independent of the overlays).
+  - name: linux-image
+    deb-glob: "linux-image-common_*"
+    sources:
+      # Only the base config feeds this package's content hash. A per-device
+      # overlay change must NOT trigger a full kernel rebuild — it only
+      # rebuilds that device's modules entry.
+      - ../../kernel/config
+    env:
+      # KCONFIG_VER is a rolling tag; the builder pins the exact Debian kernel
+      # source via `apt-get source linux-image-$(dpkg --print-architecture)`,
+      # so this is only the OUTPUT version label for the produced .deb.
+      KCONFIG_VER: "1.0"
+    build: |
+      set -euo pipefail
+
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+
+      # Install kernel build deps (build-essential + the kernel's own
+      # build-deps). libncurses-dev/bc are required by the kconfig merge.
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      # Download the Debian kernel source matching the installed kernel.
+      cd /tmp
+      apt-get source linux-image-$(dpkg --print-architecture)
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+
+      # Start from the Debian config for this arch.
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+
+      # Merge the base config (filesystems, virtio, serial, disables — the
+      # base for every device). merge_config.sh -m merges in place.
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}"
+      make olddefconfig
+
+      # Build the kernel + modules as a Debian binary package. bindeb-pkg
+      # produces linux-image-*.deb and linux-modules-*.deb in /tmp (one
+      # above the source dir).
+      make -j"$(nproc)" bindeb-pkg
+
+      # Find the produced image deb (exclude debug debs).
+      COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
+        ! -name 'linux-image-*-dbg*' | head -1)
+      test -n "${COMMON_IMAGE_DEB}" \
+        || { echo "ERROR: linux-image-common deb not built" >&2; exit 1; }
+
+      BUILT_VER=$(dpkg-deb -f "${COMMON_IMAGE_DEB}" Version)
+
+      cp "${COMMON_IMAGE_DEB}" "/debs/linux-image-common_${BUILT_VER}_${ARCH}.deb"
+      test -s "/debs/linux-image-common_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-image-common deb empty" >&2; exit 1; }
+
+  # linux-modules-arm: ARM-generic modules — the ARM base layer. Depends on
+  # linux-image (the common kernel image built in wave 0). Builds ONLY modules
+  # from kernel/config + modules-kernel/arm and packages them as
+  # linux-modules-arm_<ver>_<arch>.deb. The ARM device modules (rpi3/rpi4/rpi5/
+  # rk3588) depend on THIS package (transitively on linux-image via it) and add
+  # their device-specific overlay on top of the arm overlay. The modules are
+  # OPTIONAL — the base image works without them. This entry carries the
+  # ARM64 core, the kernel command line, the PL011 UART, and the MMC/USB/RTC
+  # subsystem cores shared by every ARM device.
+  - name: linux-modules-arm
+    deps:
+      - linux-image
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/arm
+    build: |
+      set -euo pipefail
+      DEVICE=arm
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      # The linux-image wave installed linux-image-common_<ver>_<arch>.deb
+      # into the build container (via the deps install step). Derive the
+      # exact version + kernel version string from it so the module source
+      # download matches.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+
+      # Install kernel build deps (build-essential + the kernel's own
+      # build-deps). libncurses-dev/bc are required by the kconfig merge.
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      # Download the Debian kernel source matching the installed common
+      # kernel (KVER pins the exact source version).
+      cd /tmp
+      apt-get source "linux-image-${KVER}"
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+
+      # Start from the Debian config for this arch, then merge the base
+      # config THEN the arm overlay (overlay wins on conflicts — last
+      # merge wins).
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
+      make olddefconfig
+
+      # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
+      # the N-1 rebuild saving: modules are an order of magnitude faster
+      # than a full kernel build.
+      make -j"$(nproc)" modules
+
+      # Install the modules into a DESTDIR packaging tree, then build a
+      # Debian package from that tree. The modules dir name matches the
+      # common image's /lib/modules/<KVER> so modprobe on the target
+      # resolves them under the running kernel.
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      # Generate the Debian control file. The arm modules package depends on
+      # the common image (which carries the matching vmlinuz). The ARM device
+      # modules packages will in turn depend on THIS package.
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-image-common (= ${BUILT_VER})
+      Description: ARM-generic kernel modules
+       This package contains the kernel modules common to all ARM devices
+       (ARM64 core, kernel command line, PL011 UART, MMC/USB/RTC subsystem
+       cores). It is built on top of linux-image-common and must be installed
+       alongside it. The ARM device-specific modules packages
+       (linux-modules-rpi3/rpi4/rpi5/rk3588) depend on this package.
+      EOF
+
+      # Regenerate md5sums for the installed module files.
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      # Build the modules deb.
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+
+      # Content check: the output deb exists and is non-empty.
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
+  # linux-modules-generic: the DEFAULT device class — an empty meta-package.
+  # Depends on linux-image (the common kernel image built in wave 0). Produces
+  # a valid `linux-modules-generic_<ver>_<arch>.deb` that carries NO modules;
+  # its only purpose is to satisfy the `linux-modules-${DEVICE}` apt install
+  # line in Containerfile.minimal when DEVICE=generic (the default), so the
+  # install line always names a real package instead of relying on apt
+  # silently ignoring an empty `linux-modules-` package name. The overlay in
+  # modules-kernel/generic is a header-only stub (no CONFIG_ options), so the
+  # build skips the kernel source download + module compilation entirely and
+  # just assembles the empty .deb with a Depends on linux-image-common.
+  - name: linux-modules-generic
+    deps:
+      - linux-image
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/generic
+    build: |
+      set -euo pipefail
+      DEVICE=generic
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      # The linux-image wave installed linux-image-common_<ver>_<arch>.deb
+      # into the build container (via the deps install step). Derive the exact
+      # version from it so the empty generic package declares the matching
+      # Depends constraint.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+
+      # Assemble an EMPTY modules package. The generic overlay carries no
+      # CONFIG_ options, so there is no kernel source download, no module
+      # compilation — just the packaging tree with a control file declaring
+      # Depends: linux-image-common. The empty /lib/modules/<KVER> dir is kept
+      # so the package layout matches the other modules packages (dpkg-deb
+      # accepts an empty payload dir).
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-image-common (= ${BUILT_VER})
+      Description: Empty kernel modules meta-package (generic device class)
+       This package contains NO kernel modules. It exists so the
+       linux-modules-${DEVICE} apt install line in Containerfile.minimal
+       resolves to a real package name when DEVICE=generic (the default),
+       instead of relying on apt silently ignoring an empty package name. It
+       Depends on linux-image-common so apt pulls the common kernel image
+       transitively.
+      EOF
+
+      # No payload files -> no md5sums file (dpkg-deb accepts a package with
+      # only a control file). Build the empty modules deb.
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+
+      # Content check: the output deb exists and is non-empty.
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
+  # linux-modules-rpi3: device-specific modules for the Raspberry Pi 3
+  # (Broadcom BCM2837 / BCM2710). Depends on linux-modules-arm (the ARM-generic
+  # modules built in wave 1, which itself depends on linux-image). Builds ONLY
+  # modules from kernel/config + modules-kernel/arm + modules-kernel/rpi3 and
+  # packages them as linux-modules-rpi3_<ver>_<arch>.deb. The modules are
+  # OPTIONAL — the base image works without them.
+  - name: linux-modules-rpi3
+    deps:
+      - linux-modules-arm
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/arm
+      - ../../modules-kernel/rpi3
+    build: |
+      set -euo pipefail
+      DEVICE=rpi3
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${ARM_OVERLAY}" \
+        || { echo "ERROR: modules-kernel/arm overlay missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      # The linux-modules-arm wave installed linux-image-common_<ver>_<arch>.deb
+      # + linux-modules-arm_<ver>_<arch>.deb into the build container (via the
+      # transitive deps install step). Derive the exact version + kernel
+      # version string from the common image deb so the module source
+      # download matches.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+
+      # Install kernel build deps (build-essential + the kernel's own
+      # build-deps). libncurses-dev/bc are required by the kconfig merge.
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      # Download the Debian kernel source matching the installed common
+      # kernel (KVER pins the exact source version).
+      cd /tmp
+      apt-get source "linux-image-${KVER}"
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+
+      # Start from the Debian config for this arch, then merge the base
+      # config THEN the arm overlay THEN the device overlay (last merge wins
+      # on conflicts — device overlay wins over arm, arm wins over base).
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
+      make olddefconfig
+
+      # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
+      # the N-1 rebuild saving: modules are an order of magnitude faster
+      # than a full kernel build.
+      make -j"$(nproc)" modules
+
+      # Install the modules into a DESTDIR packaging tree, then build a
+      # Debian package from that tree. The modules dir name matches the
+      # common image's /lib/modules/<KVER> so modprobe on the target
+      # resolves them under the running kernel.
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      # Generate the Debian control file. The device modules package depends
+      # on linux-modules-arm (which itself depends on linux-image-common), so
+      # apt pulls the whole chain transitively.
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-modules-arm (= ${BUILT_VER})
+      Description: Device-specific kernel modules for ${DEVICE}
+       This package contains the kernel modules specific to the ${DEVICE}
+       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
+       of linux-modules-arm (ARM-generic modules) and must be installed
+       alongside it.
+      EOF
+
+      # Regenerate md5sums for the installed module files.
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      # Build the modules deb.
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+
+      # Content check: the output deb exists and is non-empty.
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
+  # linux-modules-rpi4: device-specific modules for the Raspberry Pi 4
+  # (Broadcom BCM2711). Same shape as rpi3 (deps on linux-modules-arm).
+  - name: linux-modules-rpi4
+    deps:
+      - linux-modules-arm
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/arm
+      - ../../modules-kernel/rpi4
+    build: |
+      set -euo pipefail
+      DEVICE=rpi4
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${ARM_OVERLAY}" \
+        || { echo "ERROR: modules-kernel/arm overlay missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      cd /tmp
+      apt-get source "linux-image-${KVER}"
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
+      make olddefconfig
+      make -j"$(nproc)" modules
+
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-modules-arm (= ${BUILT_VER})
+      Description: Device-specific kernel modules for ${DEVICE}
+       This package contains the kernel modules specific to the ${DEVICE}
+       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
+       of linux-modules-arm (ARM-generic modules) and must be installed
+       alongside it.
+      EOF
+
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
+  # linux-modules-rpi5: device-specific modules for the Raspberry Pi 5
+  # (Broadcom BCM2712). Same shape as rpi3 (deps on linux-modules-arm).
+  - name: linux-modules-rpi5
+    deps:
+      - linux-modules-arm
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/arm
+      - ../../modules-kernel/rpi5
+    build: |
+      set -euo pipefail
+      DEVICE=rpi5
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${ARM_OVERLAY}" \
+        || { echo "ERROR: modules-kernel/arm overlay missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      cd /tmp
+      apt-get source "linux-image-${KVER}"
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
+      make olddefconfig
+      make -j"$(nproc)" modules
+
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-modules-arm (= ${BUILT_VER})
+      Description: Device-specific kernel modules for ${DEVICE}
+       This package contains the kernel modules specific to the ${DEVICE}
+       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
+       of linux-modules-arm (ARM-generic modules) and must be installed
+       alongside it.
+      EOF
+
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
+  # linux-modules-rk3588: device-specific modules for the Rockchip RK3588
+  # SoC. Same shape as rpi3 (deps on linux-modules-arm).
+  - name: linux-modules-rk3588
+    deps:
+      - linux-modules-arm
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/arm
+      - ../../modules-kernel/rk3588
+    build: |
+      set -euo pipefail
+      DEVICE=rk3588
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${ARM_OVERLAY}" \
+        || { echo "ERROR: modules-kernel/arm overlay missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      cd /tmp
+      apt-get source "linux-image-${KVER}"
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
+      make olddefconfig
+      make -j"$(nproc)" modules
+
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-modules-arm (= ${BUILT_VER})
+      Description: Device-specific kernel modules for ${DEVICE}
+       This package contains the kernel modules specific to the ${DEVICE}
+       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
+       of linux-modules-arm (ARM-generic modules) and must be installed
+       alongside it.
+      EOF
+
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
+  # linux-modules-x86_64: device-specific modules for x86_64 PCs / servers /
+  # VMs (NVMe, AHCI, physical NIC drivers, USB host controllers as modules).
+  # Same shape as the other device entries. x86_64 is NOT ARM, so it depends
+  # on linux-image directly (wave 1) rather than on linux-modules-arm.
+  - name: linux-modules-x86_64
+    deps:
+      - linux-image
+    sources:
+      - ../../kernel/config
+      - ../../modules-kernel/x86_64
+    build: |
+      set -euo pipefail
+      DEVICE=x86_64
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+      test -f "${OVERLAY}" \
+        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      test -n "${COMMON_DEB}" \
+        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
+      apt-get install -y "${COMMON_DEB}"
+      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev
+
+      cd /tmp
+      apt-get source "linux-image-${KVER}"
+      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
+      test -n "${SRCDIR}" \
+        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      cd "${SRCDIR}"
+      make mrproper
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
+      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
+      make olddefconfig
+      make -j"$(nproc)" modules
+
+      DESTDIR="/output/linux-modules-${DEVICE}"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      cat > "${DESTDIR}/DEBIAN/control" <<EOF
+      Package: linux-modules-${DEVICE}
+      Version: ${BUILT_VER}
+      Architecture: ${ARCH}
+      Depends: linux-image-common (= ${BUILT_VER})
+      Description: Device-specific kernel modules for ${DEVICE}
+       This package contains the kernel modules specific to the ${DEVICE}
+       device overlay (NVMe, AHCI, physical NIC drivers, USB host
+       controllers). It is built on top of linux-image-common and must be
+       installed alongside it.
+      EOF
+
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+
   - name: ifupdown2
     upstream: ifupdown2
     sources:
       - ifupdown2postinstall
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
 
       apt update
@@ -80,13 +779,14 @@ packages:
       done
 
       dpkg-deb --build /output/ifupdown2 \
-        /debs/ifupdown2_${ORIG_VER}+bootc1_all.deb
+        /debs/ifupdown2_${ORIG_VER}+bootc2_all.deb
 
   - name: systemd-timesyncd
     upstream: systemd-timesyncd
     sources:
       - timesyncpostinstall
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
 
       apt update
@@ -119,7 +819,17 @@ packages:
       dpkg-deb --build /output/systemd-timesyncd \
         /debs/systemd-timesyncd_${ORIG_VER}+bootc1_${ARCH}.deb
 
+  # grub-efi-amd64-signed is x86_64-only by nature (it builds the amd64 EFI
+  # GRUB binary signed for Secure Boot). On an arm64 runner the package is
+  # SKIPPED via the `when:` arch gate below, so the arm64 build does not fail
+  # on a missing SB_SIGNING_KEY or an amd64-only configure target. The main
+  # (non-minimal) Containerfile is x86_64-only and always runs this package
+  # on an amd64 runner — zero regression.
   - name: grub-efi-amd64-signed
+    when:
+      # Build only when the runner's native arch is amd64. The build-env image
+      # exports ARCH=$(dpkg --print-architecture) for this gate.
+      arch: amd64
     sources:
       - preinstall/output/grub-efi-amd64-signed
     env:
@@ -130,7 +840,9 @@ packages:
       SB_SIGNING_KEY: SB_SIGNING_KEY
       SB_SIGNING_CERT: SB_SIGNING_CERT
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
       trap 'rm -f /tmp/sb.key /tmp/sb.crt' EXIT
 
       git clone --branch "${GRUB_FEDORA_BRANCH}" \
@@ -284,7 +996,7 @@ packages:
 
       chmod 755 /output/grub-efi-amd64-signed/DEBIAN/postinst
       dpkg-deb --build /output/grub-efi-amd64-signed \
-        /debs/grub-efi-amd64-signed_${GRUB_VER}_amd64.deb
+        /debs/grub-efi-amd64-signed_${GRUB_VER}_${ARCH}.deb
 
   - name: bootupd
     sources:
@@ -296,7 +1008,9 @@ packages:
       BOOTUPD_VER: "v0.2.35"
       BOOTUPD_VENDOR_SHA256: "7ada7d0c9d1facb4c5a138e1b014191971b8e97a2fca690b86357e9888584e8b"
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
       rm -rf /build/vendor && mkdir /build/vendor
 
       git clone --depth=1 --branch "${BOOTUPD_VER}" \
@@ -309,7 +1023,7 @@ packages:
       git -C /build/bootupd apply \
         "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootupd-0.2.35-dpkg.patch"
 
-      curl -fsSL \
+      curl --retry 3 -fsSL \
         "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
         -o /tmp/bootupd-vendor.tar.zstd
       printf '%s  /tmp/bootupd-vendor.tar.zstd\n' "${BOOTUPD_VENDOR_SHA256}" \
@@ -354,7 +1068,7 @@ packages:
         || { echo "ERROR: bootupd binary missing from output" >&2; exit 1; }
 
       rm -f /output/bootupd/debian
-      dpkg-deb --build /output/bootupd /debs/bootupd_${BOOTUPD_VER#v}_amd64.deb
+      dpkg-deb --build /output/bootupd /debs/bootupd_${BOOTUPD_VER#v}_${ARCH}.deb
 
   - name: libcomposefs
     sources:
@@ -362,6 +1076,8 @@ packages:
     env:
       COMPOSEFS_VER: "v1.0.8"
     build: |
+      set -euo pipefail
+      ARCH=$(dpkg --print-architecture)
       git clone --depth=1 --branch "${COMPOSEFS_VER}" \
         https://github.com/composefs/composefs.git /build/composefs
 
@@ -400,11 +1116,11 @@ packages:
 
       rm -f debian
       dpkg-deb --build /output/libcomposefs \
-        /debs/libcomposefs_${COMPOSEFS_VER#v}_amd64.deb
+        /debs/libcomposefs_${COMPOSEFS_VER#v}_${ARCH}.deb
 
       # Install into the build environment so dpkg-shlibdeps can resolve libcomposefs
       # when building the ostree package in the next step.
-      apt install -y /debs/libcomposefs_${COMPOSEFS_VER#v}_amd64.deb
+      apt install -y /debs/libcomposefs_${COMPOSEFS_VER#v}_${ARCH}.deb
 
   - name: ostree
     deps:
@@ -418,7 +1134,9 @@ packages:
       RUSTUP_HOME: "/build/rust"
       OSTREE_VER: "2026.1"
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
       rm -rf /build/vendor && mkdir /build/vendor
 
       curl -fsSL \
@@ -469,8 +1187,8 @@ packages:
       cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
 
       rm -f /output/ostree/debian
-      dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_amd64.deb
-      apt install -y /debs/libostree_${OSTREE_VER}_amd64.deb
+      dpkg-deb --build /output/ostree /debs/libostree_${OSTREE_VER}_${ARCH}.deb
+      apt install -y /debs/libostree_${OSTREE_VER}_${ARCH}.deb
 
   - name: bootc
     deps:
@@ -484,7 +1202,9 @@ packages:
       BOOTC_VER: "v1.16.2"
       BOOTC_VENDOR_SHA256: "53d759ca521144a675af67e68d23c3f5f18dca784e4e900052d0cfdc4467732b"
     build: |
+      set -euo pipefail
       SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
       rm -rf /build/vendor && mkdir /build/vendor
 
       git clone --depth=1 --branch "${BOOTC_VER}" \
@@ -539,5 +1259,5 @@ packages:
         || { echo "ERROR: zz-bootc-finalize kernel hook not executable" >&2; exit 1; }
 
       rm -f /output/bootc/debian
-      dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_amd64.deb
+      dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_${ARCH}.deb
 
