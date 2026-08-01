@@ -1,0 +1,49 @@
+# modules-kernel/rpi3
+#
+# Per-device MODULE overlay for the Raspberry Pi 3 (BCM2710 / BCM2837).
+# Applied on top of the base kernel/config THEN the ARM-generic overlay
+# modules-kernel/arm:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/arm modules-kernel/rpi3
+#     make olddefconfig
+#
+# This file is NOT a full .config. It lists ONLY options that are specific
+# to the Raspberry Pi 3 — everything shared across all devices (filesystems,
+# virtio, serial console, the disabled subsystems) lives in kernel/config, and
+# everything shared across all ARM devices (ARM64, CMDLINE, PL011, MMC/USB/RTC
+# subsystem cores) lives in modules-kernel/arm. Neither is repeated here. The
+# modules built from this overlay are OPTIONAL; the base image
+# (linux-image-common) works without them.
+#
+# Device: Raspberry Pi 3 / 3B+ (Broadcom BCM2710, ARM Cortex-A53).
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# SoC platform support — built-in. The kernel must know about the SoC before
+# it can parse the device tree, so this is built-in rather than a module.
+# =============================================================================
+
+# BCM2835: Broadcom BCM2837 (Raspberry Pi 3) base SoC family. Built-in.
+CONFIG_ARCH_BCM2835=y
+
+# =============================================================================
+# MMC / SD — built-in. The Pi boots from the SD card, so the kernel must be
+# able to read it without a module load step.
+# =============================================================================
+
+# Broadcom SDHCI: built-in. Raspberry Pi 3 uses a custom SDHCI controller
+#                 (sdhost). Required to boot from the SD card on the Pi.
+CONFIG_MMC_BCM2835=y
+
+# =============================================================================
+# Ethernet — built-in. Network must come up at boot so bootc can fetch the
+# next deployment.
+# =============================================================================
+
+# BCMGENET: built-in. Broadcom GENET Ethernet controller, used on the
+#           Raspberry Pi 3B+ (the wired Ethernet port).
+CONFIG_BCMGENET=y
