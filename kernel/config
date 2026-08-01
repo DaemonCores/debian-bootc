@@ -1,0 +1,283 @@
+# kernel/config
+#
+# The BASE kernel config, shared by ALL devices. This is the foundation for
+# the `linux-image-common` Debian package: a single kernel image built ONCE
+# from this fragment, on top of which per-device `linux-modules-<device>`
+# packages are produced (modules only, no kernel rebuild per device).
+#
+# This file is NOT a full .config. It is meant to be merged into a defconfig
+# with:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config
+#     make olddefconfig
+#
+# Per-device fragments (modules-kernel/rpi3, modules-kernel/rpi4,
+# modules-kernel/rpi5, modules-kernel/rk3588, modules-kernel/x86_64) are
+# applied as OVERLAYS on top of kernel/config. They keep ONLY device-specific
+# options (SoC, Ethernet PHY, MMC, USB, RTC) and are merged AFTER kernel/config,
+# so a same-symbol option in the overlay wins (kernel kconfig last-wins on
+# merge). The modules are OPTIONAL — the base image works without them.
+#
+# Only options that change behaviour relative to defconfig are listed. Every
+# option has a one-line English comment explaining why it is set (or unset)
+# for the ultra-minimal bootc image.
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# Filesystems — built-in for the root filesystem types bootc/ostree may use.
+# Building them in avoids a chicken-and-egg problem where the rootfs module
+# lives on the rootfs. Shared by ALL devices.
+# =============================================================================
+
+# ext4: built-in. Default rootfs for many bootc deployments.
+CONFIG_EXT4_FS=y
+
+# XFS: built-in. bootc default on RHEL-derived setups is XFS.
+CONFIG_XFS_FS=y
+
+# Btrfs: built-in. bootc supports btrfs as a root filesystem with
+#        subvolume-based deployments.
+CONFIG_BTRFS_FS=y
+
+# tmpfs: built-in. systemd REQUIRES tmpfs for /run, /tmp, /dev/shm. This is
+#        almost always already on in defconfig; we restate it to be safe.
+CONFIG_TMPFS=y
+
+# =============================================================================
+# Virtio — built-in. For VMs (qemu, libvirt) on every arch, so a minimal guest
+# image can boot from virtio-blk + virtio-net without module loading in the
+# initramfs. Shared by ALL devices (every arch runs in VMs for CI/testing).
+# =============================================================================
+
+# VIRTIO_PCI: built-in. Required to enumerate virtio devices on the PCI bus.
+CONFIG_VIRTIO_PCI=y
+
+# VIRTIO_BLK: built-in. virtio block device, used by VMs.
+CONFIG_VIRTIO_BLK=y
+
+# VIRTIO_NET: built-in. virtio network device, used by VMs. Built-in (not =m
+#             as the prior x86_64 fragment had it) so the bootc fetch path
+#             never races on an initramfs module load. Device-specific
+#             physical NIC drivers stay as modules in the per-device
+#             overlays (e.g. e1000/e1000e/igb/r8169 on x86_64).
+CONFIG_VIRTIO_NET=y
+
+# =============================================================================
+# Basic networking — built-in. bootc fetches deployments over the network
+# (HTTP from a registry or ostree repo), so the core networking stack must
+# be present before any module load. These are almost always default=y in
+# every arch's defconfig; restated here so the common base is explicit and
+# a downstream defconfig change cannot silently drop networking.
+# =============================================================================
+
+# NET: built-in. The core socket layer. Without it nothing networked works.
+CONFIG_NET=y
+
+# INET: built-in. The TCP/IP stack (AF_INET). bootc/ostree pulls over HTTP.
+CONFIG_INET=y
+
+# UNIX: built-in. AF_UNIX sockets — used by systemd, dbus, podman, bootc
+#       itself for local IPC. Always on in defconfig; restated for safety.
+CONFIG_UNIX=y
+
+# PACKET: built-in. AF_PACKET socket family — used by dhcp clients and by
+#         network bootstrapping tools that need raw link-layer access.
+CONFIG_PACKET=y
+
+# =============================================================================
+# Cgroups — built-in. systemd manages units via cgroups v2; bootc rollback
+# ordering and resource limits depend on them. These are default=y in modern
+# defconfigs; restated so the common base is explicit and cannot regress.
+# =============================================================================
+
+# CGROUPS: built-in. The cgroup subsystem core (v2 unified hierarchy).
+CONFIG_CGROUPS=y
+
+# CGROUP sub-controllers used by systemd + bootc + container runtimes
+# (podman/criu). Each is built-in so the controller is always available.
+CONFIG_CGROUP_BPF=y
+CONFIG_CGROUP_FREEZER=y
+CONFIG_CPUSETS=y
+CONFIG_CGROUP_DEVICE=y
+CONFIG_CGROUP_SCHED=y
+CONFIG_CGROUP_PIDS=y
+CONFIG_MEMCG=y
+CONFIG_BLK_CGROUP=y
+
+# =============================================================================
+# Namespaces — built-in. Container runtimes (podman, runc, k8s) and bootc's
+# own image builds use PID/NET/UTS/IPC/USER namespaces. Default=y in modern
+# defconfigs; restated so the common base is explicit.
+# =============================================================================
+
+# NAMESPACES: built-in. The namespace core.
+CONFIG_NAMESPACES=y
+
+# UTS_NS: built-in. Hostname / domainname isolation.
+CONFIG_UTS_NS=y
+
+# IPC_NS: built-in. SysV IPC / POSIX message queue isolation.
+CONFIG_IPC_NS=y
+
+# USER_NS: built-in. UID/GID mapping — required by rootless podman and
+#          by bootc's unprivileged image build paths.
+CONFIG_USER_NS=y
+
+# PID_NS: built-in. Process-ID isolation.
+CONFIG_PID_NS=y
+
+# NET_NS: built-in. Network-stack isolation (loopback, routes, iptables
+#         per namespace). Required by container networking.
+CONFIG_NET_NS=y
+
+# =============================================================================
+# Serial console — built-in. The kernel MUST be able to emit to the serial
+# console before any module loading happens, or panic traces are lost. Both
+# UART families that appear across the supported devices are built in here
+# so common covers every device's early console; a device whose SoC uses
+# neither (none in the current set) would add its UART in its overlay.
+# =============================================================================
+
+# 8250 UART: built-in. The standard PC serial port and the qemu serial
+# console both rely on 8250. Used by x86_64 and by the RK3588 board UARTs
+# (16550-compatible).
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# AMBA PL011 UART: built-in. ARM PrimeCell UART, used by the Raspberry Pi
+#                  family (3/4/5) and the RK3588 debug UART.
+CONFIG_SERIAL_AMBA_PL011=y
+CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
+
+# =============================================================================
+# Disable — subsystems that have no use on a headless minimal server image.
+# Disabling at the kernel level removes the driver modules from the build
+# AND removes the core subsystem code from the vmlinux, saving both flash
+# and RAM. Shared by ALL devices; a downstream layer that needs one of these
+# (e.g. WiFi on an RPi) can re-enable it in its own overlay.
+# =============================================================================
+
+# SND: disable the entire sound subsystem. No audio hardware used.
+# CONFIG_SOUND is not set
+
+# DRM: disable the Direct Rendering Manager subsystem. No display on a
+# headless image. Removes the i915, amdgpu, nouveau, V3D, VOP, etc. drivers
+# as well (they depend on DRM).
+# CONFIG_DRM is not set
+
+# BT: disable Bluetooth. No BT hardware on the minimal target.
+# CONFIG_BT is not set
+
+# WLAN: disable the wireless LAN (mac80211 + cfg80211) subsystem. No WiFi
+# on the minimal target; saves the entire wireless stack.
+# CONFIG_WIRELESS is not set
+# CONFIG_CFG80211 is not set
+# CONFIG_MAC80211 is not set
+
+# =============================================================================
+# Seccomp — built-in. podman/bootc/runc install a syscall sandbox filter on
+# every container; without seccomp the container runtimes refuse to start or
+# run unfiltered. Shared by ALL devices.
+# =============================================================================
+
+# SECCOMP: built-in. The seccomp framework core.
+CONFIG_SECCOMP=y
+
+# SECCOMP_FILTER: built-in. BPF-filtered seccomp (the mode podman/bootc use).
+CONFIG_SECCOMP_FILTER=y
+
+# =============================================================================
+# Linux Security Modules — built-in. AppArmor + Landlock + Yama + BPF LSM
+# provide MAC and per-container sandboxing. bootc/podman rely on these for
+# defence-in-depth around container workloads. Shared by ALL devices.
+# =============================================================================
+
+# SECURITY: built-in. The LSM framework core.
+CONFIG_SECURITY=y
+
+# SECURITY_APPARMOR: built-in. Path-based MAC; Debian default LSM.
+CONFIG_SECURITY_APPARMOR=y
+
+# SECURITY_LANDLOCK: built-in. Unprivileged fine-grained sandboxing.
+CONFIG_SECURITY_LANDLOCK=y
+
+# SECURITY_YAMA: built-in. ptrace scope restriction.
+CONFIG_SECURITY_YAMA=y
+
+# BPF_LSM: built-in. Allows BPF programs to implement LSM hooks.
+CONFIG_BPF_LSM=y
+
+# LOCK_DOWN_KERNEL: built-in. Enables the kernel lockdown mechanism.
+CONFIG_LOCK_DOWN_KERNEL=y
+
+# LOCKDOWN_LSM: built-in. The lockdown LSM (protects /dev/mem, ioports).
+CONFIG_LOCKDOWN_LSM=y
+
+# LSM: ordered list of active LSMs — landlock,lockdown,yama,apparmor,bpf.
+CONFIG_LSM="landlock,lockdown,yama,apparmor,bpf"
+
+# =============================================================================
+# Namespace completeness — built-in. CGROUP_NS and TIME_NS complete the
+# container namespace set expected by podman/bootc/runc. Default=y in modern
+# defconfigs; restated so the common base is explicit and cannot regress.
+# =============================================================================
+
+# CGROUP_NS: built-in. Per-container cgroup namespace (virtualises /sys/fs/cgroup).
+CONFIG_CGROUP_NS=y
+
+# TIME_NS: built-in. Per-container monotonic clock virtualisation.
+CONFIG_TIME_NS=y
+
+# =============================================================================
+# Cgroups v2 — built-in. systemd and bootc require the unified cgroup v2
+# hierarchy; the controllers above are mounted under /sys/fs/cgroup/ only when
+# v2 is the default. Shared by ALL devices.
+# =============================================================================
+
+# CGROUP_V2: built-in. The unified cgroup hierarchy.
+CONFIG_CGROUP_V2=y
+
+# CGROUP_DEFAULT_V2: built-in. Boot into cgroup v2 by default.
+CONFIG_CGROUP_DEFAULT_V2=y
+
+# =============================================================================
+# Hardening — built-in. Defends against common kernel exploit classes (RWX
+# pages, predictable layout, stack overflow, heap grooming). Default=y on
+# most arches; restated so the minimal image keeps them explicit.
+# =============================================================================
+
+# STRICT_KERNEL_RWX: built-in. Forbid writable+executable kernel pages.
+CONFIG_STRICT_KERNEL_RWX=y
+
+# STRICT_MODULE_RWX: built-in. Forbid writable+executable module pages.
+CONFIG_STRICT_MODULE_RWX=y
+
+# RANDOMIZE_BASE: built-in. KASLR — randomise kernel base address.
+CONFIG_RANDOMIZE_BASE=y
+
+# STACKPROTECTOR: built-in. Stack canaries on kernel functions.
+CONFIG_STACKPROTECTOR=y
+
+# STACKPROTECTOR_STRONG: built-in. Stronger canary coverage.
+CONFIG_STACKPROTECTOR_STRONG=y
+
+# SLAB_FREELIST_RANDOM: built-in. Randomise slab freelist order.
+CONFIG_SLAB_FREELIST_RANDOM=y
+
+# SHUFFLE_PAGE_ALLOCATOR: built-in. Randomise free page order.
+CONFIG_SHUFFLE_PAGE_ALLOCATOR=y
+
+# INIT_ON_ALLOC_DEFAULT_ON: built-in. Zero new allocations by default.
+CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y
+
+# =============================================================================
+# Network hardening — built-in. SYN cookies mitigate SYN-flood DoS at the
+# kernel level before any userland helper runs. Shared by ALL devices.
+# =============================================================================
+
+# SYN_COOKIES: built-in. SYN-flood protection on the listen path.
+CONFIG_SYN_COOKIES=y

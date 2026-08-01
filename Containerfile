@@ -14,6 +14,27 @@ LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
 
+# Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
+# Drives kernel/headers package names: linux-image-${ARCH}, linux-headers-${ARCH}
+# (Debian upstream kernel metapackages). The boot stack uses ${BOOT_PKG} (a
+# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
+ARG ARCH=amd64
+# Boot stack: grub-efi-amd64 (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
+# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern.
+ARG BOOT_PKG=grub-efi-amd64
+# Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
+ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
+# Package(s) to hold from auto-upgrade: grub-efi-amd64-signed (x86_64); empty on arm64.
+ARG APT_HOLD_PKG=grub-efi-amd64-signed
+# Per-device kernel modules overlay. `generic` (default) installs
+# linux-modules-generic — a harmless empty meta-package (no modules) built
+# from the empty overlay in modules-kernel/generic. When set to a device name
+# present in modules-kernel/ (rpi3, rpi4, rpi5, rk3588, x86_64), the image
+# installs the matching linux-modules-<device> deb on top of the upstream
+# Debian kernel. The modules are OPTIONAL — the base image works without
+# them. Mirrors Containerfile.minimal (see P02 in todo/registry.md). The CI
+# matrix tags the resulting image with a device suffix: :latest_<device>.
+ARG DEVICE=generic
 # SHA-256 checksum of the bootc APT repository signing key fetched below.
 # Update this value whenever the key at
 # https://daemoncores.github.io/debian-bootc/gpg.key is rotated.
@@ -27,12 +48,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Setup default shell with fail build on error
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
-# Bootc filesystem migrations
-# All symlink require relative path because anaconda setup mount root disk in /mnt insted of /
-# Install SSL dependencies before use apt with https for fix ssl error
+# -----------------------------------------------------------------------------
+# Phase 1: SSL prerequisites + APT sources (debianpreinstall)
+# -----------------------------------------------------------------------------
 COPY ./src/debianpreinstall /
 RUN apt update \
-    && apt install -y \
+    && apt install -y --no-install-recommends \
         ca-certificates \
         openssl \
         git \
@@ -44,27 +65,42 @@ RUN apt update \
         "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
         "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
 
-# Install bootc and kernel for baseimage
-# Clean and purge image
-COPY ./src/bootcpreinstall /  
-RUN wget \
+# -----------------------------------------------------------------------------
+# Phase 2: Trust the bootc APT repository
+# -----------------------------------------------------------------------------
+COPY ./src/bootcpreinstall /
+RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
+        /etc/apt/sources.list.d/debian-bootc.sources \
+    && wget \
         -O /usr/share/keyrings/debian-bootc-keyring.gpg \
         https://daemoncores.github.io/debian-bootc/gpg.key \
     && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
         | sha256sum -c - \
     && mkdir -p /usr/lib/bootc \
-    && { [ -z "${PRODUCT_NAME}" ] \
-        || printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name; } \
-    && apt update \
+    && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name
+
+# -----------------------------------------------------------------------------
+# Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
+# -----------------------------------------------------------------------------
+# Arch-specific packages (kernel/headers) use the Debian upstream naming pattern
+# linux-image-${ARCH}, linux-headers-${ARCH}, so there is no if/else on ARCH
+# here. apt installs the upstream Debian kernel metapackage directly. DEVICE
+# (default `generic`) installs linux-modules-${DEVICE} on top of the upstream
+# kernel; the modules are OPTIONAL — the base image works without them. The
+# default `generic` installs linux-modules-generic, a harmless empty
+# meta-package (no modules), so the install line always resolves to a real
+# package name. The boot stack uses ${BOOT_PKG} (separate ARG because arm64
+# does NOT follow grub-efi-${ARCH}). broadcom-sta-dkms is amd64-only and absent
+# from Containerfile.minimal, so it is dropped here for parity. FIRMWARE_PKGS
+# and APT_HOLD_PKG stay separate ARGs because they do NOT follow the
+# name-${ARCH} pattern.
+RUN apt update \
     && apt install -y \
         dkms \
-        linux-image-amd64 \
-        linux-headers-amd64 \
-        firmware-linux-free \
-        firmware-linux \
-        firmware-misc-nonfree \
-        intel-microcode \
-        amd64-microcode \
+        linux-image-${ARCH} \
+        linux-headers-${ARCH} \
+        linux-modules-${DEVICE} \
+        ${FIRMWARE_PKGS} \
         bootc \
         podman \
         adduser \
@@ -109,19 +145,22 @@ RUN wget \
         dhcpcd \
         isc-dhcp-client \
         wpasupplicant \
-        broadcom-sta-dkms \
         firstboot-user-setup \
-    && apt-mark hold \
-        grub-efi-amd64-signed \
+        ${BOOT_PKG} \
+    && apt-mark hold ${APT_HOLD_PKG} || true \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
         /run/* \
         /usr/sbin/policy-rc.d
 
+# -----------------------------------------------------------------------------
+# Phase 4: ostree filesystem migration
+# -----------------------------------------------------------------------------
+# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
+# read-only /usr tree can be swapped atomically while mutable state persists in /var.
+# Mirrors the main Containerfile exactly; do NOT change the layout or bootc fails.
 COPY ./src/debianpostinstall /
-
-# Fix ostree filesystem
 RUN mkdir -p /var/home \
         /var/roothome \
         /var/mnt \
@@ -129,7 +168,7 @@ RUN mkdir -p /var/home \
         /var/opt \
         /var/usr/lib/locale \
         /sysroot/ostree \
-    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ | true \
+    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
     && rm -rf /home \
         /root \
         /mnt \
@@ -142,7 +181,7 @@ RUN mkdir -p /var/home \
     && ln -s var/opt / \
     && ln -s var/roothome /root \
     && ln -s sysroot/ostree /ostree \
-    && ln -s var/lib/locale /usr/lib/locale
+    && ln -s var/usr/lib/locale /usr/lib/locale
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE

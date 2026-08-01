@@ -10,6 +10,11 @@
 #                  capture the runtime state behind the failure. The harness
 #                  refuses to run (fails the build) if any test lacks a diag,
 #                  so a failure can never be undiagnosable.
+#   tests[].arch   optional: `amd64` or `arm64` to run the test ONLY on that
+#                  arch. Absent = run on both. Used for UEFI/GRUB/shim tests
+#                  that are x86_64-only, and for U-Boot tests that are
+#                  arm64-only. The harness skips a test whose arch does not
+#                  match the running arch (reports SKIP, not FAIL).
 
 boot_timeout: 600
 
@@ -54,26 +59,43 @@ tests:
 
   # ── bootloader / secure boot ───────────────────────────────────────────
   - name: bootupd present
+    # bootupd is x86_64-only in this repo's build (the grub-efi-amd64-signed
+    # package gates it). On arm64 the minimal image uses U-Boot, not bootupd.
+    arch: amd64
     run: command -v bootupctl
     diag: |
       command -v bootupctl 2>&1 || echo absent; dpkg -l 2>&1 | grep -i bootupd
   - name: bootupd metadata readable
+    arch: amd64
     run: bootupctl status
     diag: |
       bootupctl status 2>&1 | head -n 20
       ls -la /usr/lib/bootupd/updates/ 2>&1
   - name: signed GRUB EFI staged
+    arch: amd64
     run: test -e /usr/lib/efi/grub2/*/EFI/debian/grubx64.efi
     diag: |
       ls -laR /usr/lib/efi/grub2/ 2>&1 | head -n 30
   - name: shim staged for firmware
+    arch: amd64
     run: test -e /usr/lib/efi/shim/*/EFI/BOOT/BOOTX64.EFI
     diag: |
       ls -laR /usr/lib/efi/shim/ 2>&1 | head -n 30
   - name: Secure Boot signing cert shipped
+    arch: amd64
     run: test -f /usr/share/debian-bootc/sb_signing.crt
     diag: |
       ls -la /usr/share/debian-bootc/ 2>&1
+  # arm64: U-Boot tooling replaces GRUB/shim. Verify the U-Boot tools are
+  # present on an arm64 build (mkimage, fw_printenv, fw_setenv). Skipped on
+  # amd64 where the minimal image uses GRUB instead.
+  - name: u-boot-tools present (arm64 boot stack)
+    arch: arm64
+    run: command -v mkimage && command -v fw_printenv && command -v fw_setenv
+    diag: |
+      command -v mkimage 2>&1 || echo absent
+      command -v fw_printenv 2>&1 || echo absent
+      dpkg -l 2>&1 | grep -i u-boot
 
   # ── kernel / initramfs / dracut ────────────────────────────────────────
   - name: kernel modules tree present
@@ -99,11 +121,15 @@ tests:
       [ -n "$f" ] && lsinitrd "$f" 2>&1 | grep -i btrfs | head -n 10
 
   # ── filesystems ────────────────────────────────────────────────────────
+  # btrfs-progs is installed in the MAIN image (x86_64) but NOT in the minimal
+  # image (omitted to hit the RAM target). Gate to amd64 (main is x86_64-only).
   - name: btrfs-progs present
+    arch: amd64
     run: command -v mkfs.btrfs
     diag: |
       command -v mkfs.btrfs 2>&1 || echo absent; dpkg -l 2>&1 | grep -i btrfs-progs
   - name: btrfs kernel module loads
+    arch: amd64
     run: modprobe btrfs && lsmod | grep -q btrfs
     diag: |
       modprobe btrfs 2>&1 && echo "modprobe OK" || echo "modprobe FAILED"
@@ -111,17 +137,26 @@ tests:
       ls /usr/lib/modules/*/kernel/fs/btrfs/ 2>&1 || echo "no btrfs module in tree"
 
   # ── podman (bootc imgstorage on upgrade) ───────────────────────────────
+  # podman is installed in the MAIN image (x86_64) but NOT in the minimal
+  # image (omitted to hit the RAM target). Gate to amd64: the main image is
+  # x86_64-only today, and the minimal image (both arches) ships no podman.
   - name: podman present
+    arch: amd64
     run: command -v podman
     diag: |
       command -v podman 2>&1 || echo absent; dpkg -l 2>&1 | grep -i podman
   - name: podman graph driver resolvable
+    arch: amd64
     run: podman info --format '{{.Store.GraphDriverName}}'
     diag: |
       podman info 2>&1 | head -n 40
 
   # ── networking / repacked packages ─────────────────────────────────────
+  # ifupdown2 is repacked and installed in the MAIN image only; the minimal
+  # image uses systemd-networkd instead. Gate to amd64 (main image is
+  # x86_64-only today).
   - name: ifupdown2 repacked (+bootc)
+    arch: amd64
     run: dpkg-query -W -f='${Version}' ifupdown2
     expect: +bootc
     diag: |
@@ -137,7 +172,10 @@ tests:
       cat /etc/resolv.conf 2>&1
       getent hosts deb.debian.org 2>&1 || echo "resolution failed"
       systemctl status systemd-resolved --no-pager -l 2>&1 | tail -n 8
+  # sshd is installed in the MAIN image (x86_64) but NOT in the minimal image
+  # (omitted to hit the RAM target). Gate to amd64.
   - name: sshd active
+    arch: amd64
     run: systemctl is-active ssh
     diag: |
       systemctl status ssh --no-pager -l 2>&1 | tail -n 15

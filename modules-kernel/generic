@@ -1,0 +1,34 @@
+# modules-kernel/generic
+#
+# Empty MODULE overlay — the DEFAULT device class. Applied on top of the base
+# kernel/config:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/generic
+#     make olddefconfig
+#
+# This file is NOT a full .config. It lists ONLY options that are specific to
+# the generic device class — and the generic class adds NONE. The base
+# kernel/config already carries the filesystems, virtio, serial console and
+# the disabled subsystems shared across every device, so the generic overlay
+# needs no CONFIG_ options of its own. It exists so the bootc-debs-builder
+# pipeline can produce a real `linux-modules-generic_<ver>_<arch>.deb` (an
+# empty package that satisfies the `linux-modules-${DEVICE}` dependency in the
+# Containerfile) instead of relying on apt silently ignoring an empty package
+# name. The modules built from this overlay are OPTIONAL — the base image
+# (linux-image-common) works without them.
+#
+# Device class: generic (no SoC, no device-specific drivers). The default
+# DEVICE value in Containerfile.minimal; resolves to a harmless empty
+# meta-package so the apt install line always names a real package.
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# No device-specific options. The generic overlay intentionally carries zero
+# CONFIG_ directives — every option shared across all devices lives in
+# kernel/config. This file is a header-only stub so the builder produces a
+# valid (empty) linux-modules-generic .deb.
+# =============================================================================
