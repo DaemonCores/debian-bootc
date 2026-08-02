@@ -1,5 +1,15 @@
 # debian-bootc
 
+> **⚠️ Work in Progress**
+>
+> This repository is still under development.
+>
+> A stable release (or a separate stable branch) is not available yet, so please expect bugs and breaking changes.
+>
+> The documentation (README and other files) currently reflects the original goals of the project more than its current state, so it may not always match the code. Feedback and reports about any inconsistencies are always welcome.
+>
+> A development version is already available. Thanks to everyone who takes the time to test it and share feedback—it's greatly appreciated! :)
+
 **The first fully integrated, production-ready Debian 13 (Trixie) bootc image.**
 
 Every previous attempt to run bootc on Debian either stopped at a proof-of-concept
