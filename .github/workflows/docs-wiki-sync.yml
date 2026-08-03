@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths: ['docs/**']
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   sync:
     uses: DaemonCores/DaemonCores-CI/.github/workflows/docs-wiki-sync.yml@main
