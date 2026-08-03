@@ -26,15 +26,11 @@ ARG BOOT_PKG=grub-efi-amd64
 ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
 # Package(s) to hold from auto-upgrade: grub-efi-amd64-signed (x86_64); empty on arm64.
 ARG APT_HOLD_PKG=grub-efi-amd64-signed
-# Per-device kernel modules overlay. `generic` (default) installs
-# linux-modules-generic — a harmless empty meta-package (no modules) built
-# from the empty overlay in modules-kernel/generic. When set to a device name
-# present in modules-kernel/ (rpi3, rpi4, rpi5, rk3588, x86_64), the image
-# installs the matching linux-modules-<device> deb on top of the upstream
-# Debian kernel. The modules are OPTIONAL — the base image works without
-# them. Mirrors Containerfile.minimal (see P02 in todo/registry.md). The CI
-# matrix tags the resulting image with a device suffix: :latest_<device>.
-ARG DEVICE=generic
+# Per-arch kernel modules. The image installs ALL modules matching the
+# target arch in a separate conditional RUN block below (after the main apt
+# install): x86_64 -> linux-modules-x86_64; arm64 -> linux-modules-arm plus the
+# SBC overlays (rpi3/rpi4/rpi5/rk3588). The modules are OPTIONAL — the base image
+# works without them.
 # SHA-256 checksum of the bootc APT repository signing key fetched below.
 # Update this value whenever the key at
 # https://daemoncores.github.io/debian-bootc/gpg.key is rotated.
@@ -84,22 +80,21 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # -----------------------------------------------------------------------------
 # Arch-specific packages (kernel/headers) use the Debian upstream naming pattern
 # linux-image-${ARCH}, linux-headers-${ARCH}, so there is no if/else on ARCH
-# here. apt installs the upstream Debian kernel metapackage directly. DEVICE
-# (default `generic`) installs linux-modules-${DEVICE} on top of the upstream
-# kernel; the modules are OPTIONAL — the base image works without them. The
-# default `generic` installs linux-modules-generic, a harmless empty
-# meta-package (no modules), so the install line always resolves to a real
-# package name. The boot stack uses ${BOOT_PKG} (separate ARG because arm64
-# does NOT follow grub-efi-${ARCH}). broadcom-sta-dkms is amd64-only and absent
-# from Containerfile.minimal, so it is dropped here for parity. FIRMWARE_PKGS
-# and APT_HOLD_PKG stay separate ARGs because they do NOT follow the
-# name-${ARCH} pattern.
+# here. apt installs the upstream Debian kernel metapackage directly. The
+# per-arch kernel modules are installed in a separate conditional RUN block
+# below (after the main apt install) so each arch gets ALL its SBC-relevant
+# modules in one go: amd64 -> linux-modules-x86_64; arm64 ->
+# linux-modules-arm + rpi3/rpi4/rpi5/rk3588 overlays. The modules are OPTIONAL —
+# the base image works without them. The boot stack uses ${BOOT_PKG} (separate
+# ARG because arm64 does NOT follow grub-efi-${ARCH}). broadcom-sta-dkms is
+# amd64-only and absent from Containerfile.minimal, so it is dropped here for
+# parity. FIRMWARE_PKGS and APT_HOLD_PKG stay separate ARGs because they do NOT
+# follow the name-${ARCH} pattern.
 RUN apt update \
     && apt install -y \
         dkms \
         linux-image-${ARCH} \
         linux-headers-${ARCH} \
-        linux-modules-${DEVICE} \
         ${FIRMWARE_PKGS} \
         bootc \
         podman \
@@ -153,6 +148,32 @@ RUN apt update \
         /var/tmp/* \
         /run/* \
         /usr/sbin/policy-rc.d
+
+# -----------------------------------------------------------------------------
+# Phase 3.1: Per-arch kernel modules (optional)
+# -----------------------------------------------------------------------------
+# Install ALL modules matching the target arch. amd64 gets the x86_64 module
+# set; arm64 gets the arm64 module set PLUS the Raspberry Pi 3/4/5 and Rockchip
+# RK3588 SBC overlays so a single arm64 image boots on every SBC the project
+# targets. The modules are OPTIONAL — the base kernel works without them, so a
+# failure to find a module package (rare on non-SBC arm64 hosts) is tolerated.
+# Replaces the previous per-device DEVICE build-arg + linux-modules-${DEVICE}
+# pattern: the device dimension is now collapsed into the arch dimension.
+RUN if [ "${ARCH}" = "amd64" ]; then \
+        apt update \
+        && apt install -y --no-install-recommends \
+            linux-modules-x86_64 \
+        && rm -rf /var/lib/apt/lists/*; \
+    else \
+        apt update \
+        && apt install -y --no-install-recommends \
+            linux-modules-arm \
+            linux-modules-rpi3 \
+            linux-modules-rpi4 \
+            linux-modules-rpi5 \
+            linux-modules-rk3588 \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # -----------------------------------------------------------------------------
 # Phase 4: ostree filesystem migration
