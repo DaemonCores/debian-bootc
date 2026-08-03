@@ -35,18 +35,15 @@
 #   name, so the Containerfile installs it directly with no if/else.
 #   See P02 in todo/registry.md and docs/minimal.md#kernel.
 #
-# Per-device modules (optional):
-#   ARG DEVICE (default `generic` = no extra modules). When set to a device
-#   name present in modules-kernel/ (rpi3, rpi4, rpi5, rk3588, x86_64), the
-#   image installs the matching linux-modules-<device> deb built by the
-#   bootc-debs-builder pipeline from the overlay in modules-kernel/<device>.
-#   The modules are optional — the base image (linux-image-common) works
-#   without them. The default `generic` installs `linux-modules-generic`, a
-#   harmless empty meta-package (no modules) built from the empty overlay in
-#   modules-kernel/generic; this avoids the empty-package-name edge case that
-#   relied on apt silently ignoring `linux-modules-`. The CI matrix builds one
-#   image per DEVICE value and tags it with a device suffix:
-#   :latest_rpi4, :latest_rk3588, etc.
+# Per-arch kernel modules (optional):
+#   The image installs ALL modules matching the target arch in a separate
+#   conditional RUN block below (after the main apt install): x86_64 ->
+#   linux-modules-x86_64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/rk3588
+#   overlays so a single arm64 image boots on every SBC the project targets.
+#   The modules are optional — the base kernel (linux-image-common) works
+#   without them. Replaces the previous per-device DEVICE build-arg +
+#   linux-modules-${DEVICE} pattern: the device dimension is collapsed into the
+#   arch dimension.
 #
 # Auto-update variant:
 #   ARG AUTOUPDATE=1 writes `1` to /usr/lib/bootc/autoupdate. Set AUTOUPDATE=0 to
@@ -72,6 +69,13 @@ LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-boo
 LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
+# Declares that this Containerfile produces both autoupdate (1) and lock (0)
+# variants. The CI discover job reads this LABEL and emits two matrix entries
+# (autoupdate=1 and autoupdate=0) for each arch, producing both the _autoupdate
+# and _lock tag families plus a :<tag>_lock multi-arch manifest list.
+# Containerfile (the main one) does NOT carry this LABEL, so it only builds the
+# autoupdate variant (no _lock manifest list).
+LABEL org.daemoncores.autoupdate-variants="lock,autoupdate"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
@@ -98,14 +102,6 @@ ARG KERNEL_VARIANT=stock
 # overhead). bootc reads the file content (0 = disabled); presence alone is not
 # sufficient. See P04 in todo/registry.md.
 ARG AUTOUPDATE=1
-# Per-device kernel modules overlay. `generic` (default) installs
-# linux-modules-generic — a harmless empty meta-package (no modules) built
-# from the empty overlay in modules-kernel/generic. When set to a device name
-# present in modules-kernel/ (rpi3, rpi4, rpi5, rk3588, x86_64), the image
-# installs the matching linux-modules-<device> deb on top of the kernel
-# package. The modules are OPTIONAL — the base image works without them. The
-# CI matrix tags the resulting image with a device suffix: :latest_<device>.
-ARG DEVICE=generic
 # SHA-256 of the bootc APT repo signing key. Update when the key at
 # https://daemoncores.github.io/debian-bootc/gpg.key is rotated.
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
@@ -160,15 +156,13 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # here. The CI builds the matching .deb name, so apt installs it directly.
 # BOOT_PKG and FIRMWARE_PKGS stay separate ARGs because arm64 does NOT follow
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
-# DEVICE (default `generic`) installs linux-modules-${DEVICE} on top of the
-# kernel package; the modules are OPTIONAL — the base image works without
-# them. The default `generic` installs linux-modules-generic, a harmless empty
-# meta-package (no modules), so the install line always resolves to a real
-# package name (zero regression vs the previous empty-name edge case).
+# Per-arch kernel modules are installed in a separate conditional RUN block
+# below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
+# amd64 -> linux-modules-x86_64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
+# rk3588 overlays. The modules are OPTIONAL — the base image works without them.
 RUN apt update \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}-${ARCH} \
-        linux-modules-${DEVICE} \
         bootc \
         dracut \
         ${BOOT_PKG} \
@@ -181,6 +175,32 @@ RUN apt update \
         /var/tmp/* \
         /run/* \
         /usr/sbin/policy-rc.d
+
+# -----------------------------------------------------------------------------
+# Phase 3.1: Per-arch kernel modules (optional)
+# -----------------------------------------------------------------------------
+# Install ALL modules matching the target arch. amd64 gets the x86_64 module
+# set; arm64 gets the arm64 module set PLUS the Raspberry Pi 3/4/5 and Rockchip
+# RK3588 SBC overlays so a single arm64 image boots on every SBC the project
+# targets. The modules are OPTIONAL — the base kernel works without them, so a
+# failure to find a module package (rare on non-SBC arm64 hosts) is tolerated.
+# Replaces the previous per-device DEVICE build-arg + linux-modules-${DEVICE}
+# pattern: the device dimension is now collapsed into the arch dimension.
+RUN if [ "${ARCH}" = "amd64" ]; then \
+        apt update \
+        && apt install -y --no-install-recommends \
+            linux-modules-x86_64 \
+        && rm -rf /var/lib/apt/lists/*; \
+    else \
+        apt update \
+        && apt install -y --no-install-recommends \
+            linux-modules-arm \
+            linux-modules-rpi3 \
+            linux-modules-rpi4 \
+            linux-modules-rpi5 \
+            linux-modules-rk3588 \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # -----------------------------------------------------------------------------
 # Phase 4: ostree filesystem migration
