@@ -92,7 +92,8 @@ packages:
       set -euo pipefail
 
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
+      case "${DEB_ARCH}" in amd64) KARCH=x86 ;; *) KARCH="${DEB_ARCH}" ;; esac
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
@@ -102,7 +103,8 @@ packages:
       apt-get update
       apt-get install -y --no-install-recommends \
         build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-        rsync libudev-dev elfutils dpkg-dev
+        rsync libudev-dev elfutils dpkg-dev \
+        debhelper kmod libdw-dev
 
       # Download the Debian kernel source matching the installed kernel.
       cd /tmp
@@ -127,7 +129,7 @@ packages:
       # Build the kernel + modules as a Debian binary package. bindeb-pkg
       # produces linux-image-*.deb and linux-modules-*.deb in /tmp (one
       # above the source dir).
-      make -j"$(nproc)" bindeb-pkg
+      make ARCH="${KARCH}" -j"$(nproc)" bindeb-pkg
 
       # Find the produced image deb (exclude debug debs).
       COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
@@ -137,9 +139,46 @@ packages:
 
       BUILT_VER=$(dpkg-deb -f "${COMMON_IMAGE_DEB}" Version)
 
-      cp "${COMMON_IMAGE_DEB}" "/debs/linux-image-common_${BUILT_VER}_${ARCH}.deb"
-      test -s "/debs/linux-image-common_${BUILT_VER}_${ARCH}.deb" \
+      cp "${COMMON_IMAGE_DEB}" "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-image-common deb empty" >&2; exit 1; }
+
+      # Find and copy the linux-headers deb (built alongside the image deb
+      # by bindeb-pkg) to /debs/ so downstream layers can install headers.
+      HEADERS_DEB=$(find /tmp -maxdepth 1 -name 'linux-headers-*.deb' \
+        ! -name '*-dbg*' | head -1)
+      if test -n "${HEADERS_DEB}"; then
+        HEADERS_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
+        cp "${HEADERS_DEB}" "/debs/linux-headers_${HEADERS_VER}_${DEB_ARCH}.deb"
+        test -s "/debs/linux-headers_${HEADERS_VER}_${DEB_ARCH}.deb" \
+          || { echo "ERROR: output linux-headers deb empty" >&2; exit 1; }
+      fi
+
+      # Repack the linux-image-common deb with Provides + Conflicts on the
+      # stock Debian linux-image metapackages so our custom common image
+      # satisfies apt dependencies on linux-image-amd64 / linux-image-arm64
+      # without coinstall conflicts.
+      REPACK_DIR=/tmp/linux-image-common-repack
+      rm -rf "${REPACK_DIR}"
+      dpkg-deb -R "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
+      if grep -q '^Provides:' "${REPACK_DIR}/DEBIAN/control"; then
+        sed -i '/^Provides:/s/$/, linux-image-amd64, linux-image-arm64/' \
+          "${REPACK_DIR}/DEBIAN/control"
+      else
+        printf 'Provides: linux-image-amd64, linux-image-arm64\n' \
+          >> "${REPACK_DIR}/DEBIAN/control"
+      fi
+      if grep -q '^Conflicts:' "${REPACK_DIR}/DEBIAN/control"; then
+        sed -i '/^Conflicts:/s/$/, linux-image-amd64, linux-image-arm64/' \
+          "${REPACK_DIR}/DEBIAN/control"
+      else
+        printf 'Conflicts: linux-image-amd64, linux-image-arm64\n' \
+          >> "${REPACK_DIR}/DEBIAN/control"
+      fi
+      dpkg-deb -b "${REPACK_DIR}" \
+        "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: repacked linux-image-common deb empty" >&2; exit 1; }
 
   # linux-modules-arm: ARM-generic modules — the ARM base layer. Depends on
   # linux-image (the common kernel image built in wave 0). Builds ONLY modules

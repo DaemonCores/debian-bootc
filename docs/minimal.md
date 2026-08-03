@@ -304,18 +304,20 @@ Prerequisites:
 
 ```bash
 sudo apt install build-essential libncurses-dev bison flex libssl-dev \
-                 libelf-dev bc rsync
+                 libelf-dev bc rsync libudev-dev elfutils dpkg-dev
 ```
 
 Build steps:
 
 ```bash
 # 1. Get the kernel source matching the installed version
-apt source linux-image-$(uname -r)
+apt source linux
 cd linux-*/
 
 # 2. Start from the Debian config
-cp /boot/config-$(uname -r) .config
+cp /boot/config-$(uname -r) .config \
+  || cp debian/config/config .config \
+  || make defconfig
 
 # 3. Merge the minimal fragment
 scripts/kconfig/merge_config.sh -m .config kernel/config-minimal-x86_64
@@ -330,13 +332,16 @@ scripts/kconfig/merge_config.sh -m .config kernel/config-minimal-arm64
 make olddefconfig
 
 # 4. Tweak anything else interactively
-make menuconfig
+# Optional: make menuconfig (skipped in CI)
 
 # 5. Build the kernel and modules
+make mrproper
 make -j"$(nproc)" bindeb-pkg
 
 # 6. Install the resulting .deb files
-sudo dpkg -i ../linux-image-*.deb ../linux-headers-*.deb
+# Headers are built but not installed here (the minimal image omits them);
+# install linux-headers-*.deb manually if you need them for out-of-tree modules.
+sudo dpkg -i ../linux-image-*.deb
 ```
 
 To integrate the custom kernel into a bootc image, install the `.deb`
