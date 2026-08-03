@@ -93,7 +93,7 @@ packages:
 
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      case "${DEB_ARCH}" in amd64) KARCH=x86 ;; *) KARCH="${DEB_ARCH}" ;; esac
+      case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
@@ -129,7 +129,9 @@ packages:
       # Build the kernel + modules as a Debian binary package. bindeb-pkg
       # produces linux-image-*.deb and linux-modules-*.deb in /tmp (one
       # above the source dir).
-      make ARCH="${KARCH}" -j"$(nproc)" bindeb-pkg
+      # ARCH is set above from DEB_ARCH (x86 for amd64) so the kernel
+      # Makefile reads it from the environment; no make argument needed.
+      make -j"$(nproc)" bindeb-pkg
 
       # Find the produced image deb (exclude debug debs).
       COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
