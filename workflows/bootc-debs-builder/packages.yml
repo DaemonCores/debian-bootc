@@ -106,7 +106,7 @@ packages:
 
       # Download the Debian kernel source matching the installed kernel.
       cd /tmp
-      apt-get source linux-image-$(dpkg --print-architecture)
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
