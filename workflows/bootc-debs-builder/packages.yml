@@ -182,6 +182,11 @@ packages:
       test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: repacked linux-image-common deb empty" >&2; exit 1; }
 
+      # Free the ~10 GB kernel source tree now that all debs are copied to
+      # /debs. Without this the runner's /tmp fills up and starves parallel
+      # jobs (e.g. grub-efi-amd64-signed) of disk space.
+      rm -rf "${SRCDIR}" /tmp/linux-*
+
   # linux-modules-arm: ARM-generic modules — the ARM base layer. Depends on
   # linux-image (the common kernel image built in wave 0). Builds ONLY modules
   # from kernel/config + modules-kernel/arm and packages them as
