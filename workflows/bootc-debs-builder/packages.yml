@@ -1158,6 +1158,7 @@ packages:
 
       sed -i \
         -e "s|{{ VER }}|${COMPOSEFS_VER#v}|g" \
+        -e "s|{{ ARCH }}|${ARCH}|g" \
         DEBIAN/control
 
       rm -f debian

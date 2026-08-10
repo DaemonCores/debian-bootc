@@ -1,7 +1,7 @@
 Source: libcomposefs
 Package: libcomposefs
 Version: {{ VER }}
-Architecture: amd64
+Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: libs
