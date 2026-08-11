@@ -159,15 +159,21 @@ packages:
       # Repack the linux-image-common deb with Provides + Conflicts on the
       # stock Debian linux-image metapackages so our custom common image
       # satisfies apt dependencies on linux-image-amd64 / linux-image-arm64
-      # without coinstall conflicts.
+      # without coinstall conflicts. Also Provides the KERNEL_VARIANT virtual
+      # names (linux-image-stock-<arch>, linux-image-minimal-<arch>) so the
+      # Containerfile.minimal `linux-image-${KERNEL_VARIANT}-${ARCH}` apt
+      # install resolves to this custom kernel via the virtual package
+      # mechanism (the stock Debian archive has no
+      # linux-image-stock-<arch> package; only this Provides makes the name
+      # resolvable).
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
       dpkg-deb -R "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
       if grep -q '^Provides:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i '/^Provides:/s/$/, linux-image-amd64, linux-image-arm64/' \
+        sed -i '/^Provides:/s/$/, linux-image-amd64, linux-image-arm64, linux-image-stock-amd64, linux-image-stock-arm64, linux-image-minimal-amd64, linux-image-minimal-arm64/' \
           "${REPACK_DIR}/DEBIAN/control"
       else
-        printf 'Provides: linux-image-amd64, linux-image-arm64\n' \
+        printf 'Provides: linux-image-amd64, linux-image-arm64, linux-image-stock-amd64, linux-image-stock-arm64, linux-image-minimal-amd64, linux-image-minimal-arm64\n' \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
       if grep -q '^Conflicts:' "${REPACK_DIR}/DEBIAN/control"; then
@@ -218,7 +224,13 @@ packages:
       # into the build container (via the deps install step). Derive the
       # exact version + kernel version string from it so the module source
       # download matches.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -235,7 +247,12 @@ packages:
       # Download the Debian kernel source matching the installed common
       # kernel (KVER pins the exact source version).
       cd /tmp
-      apt-get source "linux-image-${KVER}"
+      # The Debian source package is always named `linux` regardless of the
+      # binary package name (linux-image-<kver> resolves to the linux-upstream
+      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
+      # uses the same `apt-get source linux` form; we match it here so the
+      # module builds download the real Debian kernel source.
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
@@ -327,7 +344,13 @@ packages:
       # into the build container (via the deps install step). Derive the exact
       # version from it so the empty generic package declares the matching
       # Depends constraint.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -400,7 +423,13 @@ packages:
       # transitive deps install step). Derive the exact version + kernel
       # version string from the common image deb so the module source
       # download matches.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -417,7 +446,12 @@ packages:
       # Download the Debian kernel source matching the installed common
       # kernel (KVER pins the exact source version).
       cd /tmp
-      apt-get source "linux-image-${KVER}"
+      # The Debian source package is always named `linux` regardless of the
+      # binary package name (linux-image-<kver> resolves to the linux-upstream
+      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
+      # uses the same `apt-get source linux` form; we match it here so the
+      # module builds download the real Debian kernel source.
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
@@ -500,7 +534,13 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
 
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -513,7 +553,12 @@ packages:
         rsync libudev-dev elfutils dpkg-dev
 
       cd /tmp
-      apt-get source "linux-image-${KVER}"
+      # The Debian source package is always named `linux` regardless of the
+      # binary package name (linux-image-<kver> resolves to the linux-upstream
+      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
+      # uses the same `apt-get source linux` form; we match it here so the
+      # module builds download the real Debian kernel source.
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
@@ -577,7 +622,13 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
 
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -590,7 +641,12 @@ packages:
         rsync libudev-dev elfutils dpkg-dev
 
       cd /tmp
-      apt-get source "linux-image-${KVER}"
+      # The Debian source package is always named `linux` regardless of the
+      # binary package name (linux-image-<kver> resolves to the linux-upstream
+      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
+      # uses the same `apt-get source linux` form; we match it here so the
+      # module builds download the real Debian kernel source.
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
@@ -654,7 +710,13 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
 
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -667,7 +729,12 @@ packages:
         rsync libudev-dev elfutils dpkg-dev
 
       cd /tmp
-      apt-get source "linux-image-${KVER}"
+      # The Debian source package is always named `linux` regardless of the
+      # binary package name (linux-image-<kver> resolves to the linux-upstream
+      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
+      # uses the same `apt-get source linux` form; we match it here so the
+      # module builds download the real Debian kernel source.
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
@@ -729,7 +796,13 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
 
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*.deb 2>/dev/null | head -1)
+      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
+      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
+      # foreign-arch deb too and apt then fails with a Conflicts/Provides
+      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # matching-arch deb is selected.
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -742,7 +815,12 @@ packages:
         rsync libudev-dev elfutils dpkg-dev
 
       cd /tmp
-      apt-get source "linux-image-${KVER}"
+      # The Debian source package is always named `linux` regardless of the
+      # binary package name (linux-image-<kver> resolves to the linux-upstream
+      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
+      # uses the same `apt-get source linux` form; we match it here so the
+      # module builds download the real Debian kernel source.
+      apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
