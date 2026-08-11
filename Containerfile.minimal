@@ -14,7 +14,7 @@
 #     instead of grub-efi-arm64.
 #
 # Architecture-specific package selection:
-#   x86_64 (amd64):  linux-image-amd64, grub-efi-amd64 (+ signed hold)
+#   x86_64 (amd64):  linux-image-amd64, grub-efi-amd64-signed (+ signed hold)
 #   arm64   (arm64): linux-image-arm64, u-boot-tools, firmware-linux-free,
 #                    firmware-misc-nonfree
 #
@@ -89,9 +89,9 @@ LABEL org.daemoncores.autoupdate-variants="lock,autoupdate"
 # Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
 # grub-efi-${ARCH} on x86_64, u-boot-tools on arm64 SBCs (via BOOT_PKG override).
 ARG ARCH=amd64
-# Boot stack: grub-efi-amd64 (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
-# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern.
-ARG BOOT_PKG=grub-efi-amd64
+# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
+# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
+ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: empty on x86_64 (downstream adds microcode); arm64 ships
 # firmware-linux-free firmware-misc-nonfree for SBC peripherals.
 ARG FIRMWARE_PKGS=""
