@@ -19,9 +19,9 @@ LABEL ostree.bootable=1
 # (Debian upstream kernel metapackages). The boot stack uses ${BOOT_PKG} (a
 # separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
 ARG ARCH=amd64
-# Boot stack: grub-efi-amd64 (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
-# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern.
-ARG BOOT_PKG=grub-efi-amd64
+# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
+# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
+ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
 ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
 # Package(s) to hold from auto-upgrade: grub-efi-amd64-signed (x86_64); empty on arm64.
