@@ -295,7 +295,13 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      make -j"$(nproc)" modules
+      # Translate the Debian-style ARCH (amd64) to the kernel's arch dir
+      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
+      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
+      # with "arch/amd64/Makefile: No such file or directory".
+      KERNEL_ARCH="${ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      make -j"$(nproc)" ARCH="${KERNEL_ARCH}" modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
       # Debian package from that tree. The modules dir name matches the
@@ -940,7 +946,13 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" modules
+      # Translate the Debian-style ARCH (amd64) to the kernel's arch dir
+      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
+      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
+      # with "arch/amd64/Makefile: No such file or directory".
+      KERNEL_ARCH="${ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      make -j"$(nproc)" ARCH="${KERNEL_ARCH}" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -1346,6 +1358,21 @@ packages:
         -e "s|{{ VER }}|${COMPOSEFS_VER#v}|g" \
         -e "s|{{ ARCH }}|${ARCH}|g" \
         DEBIAN/control
+
+      # Qualify the Conflicts field with the build arch so a cross-arch
+      # build environment (amd64 + arm64 debs both present in /tmp/prior)
+      # does not see libcomposefs:amd64 and libcomposefs:arm64 conflict
+      # with each other. Each arch's deb only conflicts with the SAME
+      # arch's deb, so the two can coexist. DEB_ARCH mirrors the
+      # linux-image repack convention (dpkg --print-architecture).
+      DEB_ARCH="${ARCH}"
+      if grep -q '^Conflicts:' DEBIAN/control; then
+        sed -i "s|^Conflicts:.*|Conflicts: libcomposefs:${DEB_ARCH}|" \
+          DEBIAN/control
+      else
+        printf 'Conflicts: libcomposefs:%s\n' "${DEB_ARCH}" \
+          >> DEBIAN/control
+      fi
 
       rm -f debian
       dpkg-deb --build /output/libcomposefs \
