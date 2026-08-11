@@ -28,11 +28,19 @@
 #   - kernel cmdline: quiet init_on_alloc=0 (arm64 adds serial consoles)
 #
 # Custom kernel (optional):
-#   ARG KERNEL_VARIANT=minimal installs `linux-image-minimal-${ARCH}` (built from
-#   the fragments in kernel/config-minimal-<arch>) instead of the stock Debian
-#   `linux-image-stock-${ARCH}` metapackage. Default is `stock` for zero regression.
-#   The CI builds the .deb with the right `linux-image-${KERNEL_VARIANT}-${ARCH}`
-#   name, so the Containerfile installs it directly with no if/else.
+#   ARG KERNEL_VARIANT selects the kernel package via the
+#   `linux-image-${KERNEL_VARIANT}-${ARCH}` naming pattern. `stock` (default)
+#   installs the Debian stock metapackage `linux-image-stock-${ARCH}`;
+#   `minimal` installs `linux-image-minimal-${ARCH}`, the custom kernel built
+#   from the fragments in kernel/config-minimal-<arch> by the bootc-debs-builder
+#   pipeline.
+#   The custom kernel .deb is published as `linux-image-common` by the
+#   bootc-debs-builder pipeline and repacked with
+#   `Provides: linux-image-stock-${ARCH}, linux-image-minimal-${ARCH}` so the
+#   `linux-image-${KERNEL_VARIANT}-${ARCH}` apt install resolves to it via the
+#   virtual package mechanism once the kernel build succeeds. Until the kernel
+#   build publishes its first .deb, the install fails (the package is absent
+#   from every repo) — this is expected and tracked in P02 in todo/registry.md.
 #   See P02 in todo/registry.md and docs/minimal.md#kernel.
 #
 # Per-arch kernel modules (optional):
@@ -92,7 +100,9 @@ ARG FIRMWARE_PKGS=""
 ARG KERNEL_CMDLINE_SERIAL=""
 # `stock` (default) installs the Debian linux-image-stock-<arch> metapackage;
 # `minimal` installs linux-image-minimal-<arch> (custom kernel built from
-# kernel/config-minimal-<arch> by the bootc-debs-builder pipeline). See P02 in
+# kernel/config-minimal-<arch> by the bootc-debs-builder pipeline). Both names
+# are resolved via the `Provides` virtual-package mechanism of the custom
+# `linux-image-common` .deb once the kernel build publishes it. See P02 in
 # todo/registry.md. The CI builds the .deb with the matching KERNEL_VARIANT-<arch>
 # name, so the Containerfile installs it directly with no if/else.
 ARG KERNEL_VARIANT=stock
@@ -153,7 +163,12 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # -----------------------------------------------------------------------------
 # Arch-specific kernel package is derived from KERNEL_VARIANT and ARCH via the
 # linux-image-${KERNEL_VARIANT}-${ARCH} naming pattern, so there is no if/else
-# here. The CI builds the matching .deb name, so apt installs it directly.
+# here. The custom kernel .deb (linux-image-common, built by the
+# bootc-debs-builder pipeline) is repacked with
+# `Provides: linux-image-stock-${ARCH}, linux-image-minimal-${ARCH}` so apt
+# resolves the virtual package name to it once the kernel build publishes.
+# Until the first kernel build succeeds, the package is absent from every repo
+# and the install fails — see P02 in todo/registry.md.
 # BOOT_PKG and FIRMWARE_PKGS stay separate ARGs because arm64 does NOT follow
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
 # Per-arch kernel modules are installed in a separate conditional RUN block
