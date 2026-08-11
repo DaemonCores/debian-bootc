@@ -36,23 +36,28 @@ hardware.
 
 ### Kernel packages are rolling, not pinned
 
-The default `KERNEL_VARIANT=stock` install uses the Debian meta-packages
-`linux-image-amd64` (x86_64) and `linux-image-arm64` (arm64). These
-meta-packages always track the latest Debian kernel for the suite
-(`trixie`) and are **not** pinned to a specific upstream version. Each image
-rebuild picks up whatever version the meta-package currently points to.
-This is intentional (security updates flow automatically) but means that two
-rebuilds a few weeks apart can ship different kernel versions. If
-reproducibility matters, pin the kernel explicitly in a downstream layer
-(`apt install linux-image-6.12.22-1-amd64`) or build a custom kernel from
-the fragments in `kernel/` (see
-[How to recompile the kernel](#how-to-recompile-the-kernel)).
+The default `KERNEL_VARIANT=stock` install uses the `linux-image-stock-<arch>`
+virtual package, resolved via the `Provides` field of the custom
+`linux-image-common` .deb published by the `bootc-debs-builder` pipeline. The
+custom kernel is rebuilt per Debian kernel release (it merges `kernel/config`
+into the Debian defconfig and runs `make bindeb-pkg`), so it is **not** pinned
+to a specific upstream version. Each image rebuild picks up whatever version
+the custom kernel currently points to. This is intentional (security updates
+flow automatically) but means that two rebuilds a few weeks apart can ship
+different kernel versions. If reproducibility matters, pin the kernel
+explicitly in a downstream layer (`apt install linux-image-6.12.22-1-amd64`)
+or build a custom kernel from the fragments in `kernel/` (see
+[How to recompile the kernel](#how-to-recompile-the-kernel)). Until the first
+custom kernel build succeeds, `linux-image-stock-<arch>` does not exist in any
+repo and the image build fails — tracked in P02 in `todo/registry.md`.
 
-The opt-in `KERNEL_VARIANT=minimal` install uses the custom
-`linux-image-minimal` package built from the `kernel/config-minimal-<arch>`
-fragments by the `bootc-debs-builder` pipeline (see
+The opt-in `KERNEL_VARIANT=minimal` install uses the
+`linux-image-minimal-<arch>` virtual package, also resolved via the
+`Provides` field of the same custom `linux-image-common` .deb (the
+`stock`/`minimal` distinction is purely a naming alias at the apt level; the
+custom kernel is the same binary). See
 [Kernel Configuration](#kernel-configuration) below and P02 in
-`todo/registry.md`). That package is also rebuilt per Debian kernel
+`todo/registry.md`. That package is also rebuilt per Debian kernel
 release, so the same rolling reproducibility caveat applies.
 
 ## Architecture Support
@@ -80,9 +85,10 @@ installed from an unverified source.
 
 ### ARM64
 
-A single `linux-image-arm64` kernel is used. It ships with all the upstream
-device trees integrated, so it boots on a wide range of SBCs without
-per-board kernel builds:
+A single custom `linux-image-common` kernel (installed via the
+`linux-image-stock-arm64` virtual package by default) is used. It ships with
+all the upstream device trees integrated, so it boots on a wide range of SBCs
+without per-board kernel builds:
 
 | SoC family        | Boards (examples)                                  |
 |-------------------|----------------------------------------------------|
@@ -140,9 +146,9 @@ metapackages (see [Build arguments](#build-arguments)).
 
 | Package               | x86_64 | arm64 | Purpose                                                            |
 |-----------------------|:------:|:-----:|--------------------------------------------------------------------|
-| `linux-image-amd64`   |   x    |       | Debian generic AMD64 kernel (`KERNEL_VARIANT=stock`)              |
-| `linux-image-arm64`   |        |   x   | Debian generic ARM64 kernel with all upstream DTBs (`KERNEL_VARIANT=stock`) |
-| `linux-image-minimal` | opt    | opt   | Custom kernel built from `kernel/config-minimal-<arch>` (`KERNEL_VARIANT=minimal`) |
+| `linux-image-stock-amd64` | x | | Virtual package (resolved via `Provides` of `linux-image-common`) — custom AMD64 kernel (`KERNEL_VARIANT=stock`) |
+| `linux-image-stock-arm64` |   | x | Virtual package (resolved via `Provides` of `linux-image-common`) — custom ARM64 kernel (`KERNEL_VARIANT=stock`) |
+| `linux-image-minimal-amd64` | opt | opt | Virtual package (resolved via `Provides` of `linux-image-common`) — alias of the stock custom kernel (`KERNEL_VARIANT=minimal`) |
 | `firmware-linux-free` |        |   x   | DFSG-free firmware blobs needed by some ARM64 SBC peripherals      |
 | `firmware-misc-nonfree` |      |   x   | Minimal non-free blobs (Amlogic GX, some Rockchip peripherals)     |
 | `bootc`               |   x    |   x   | Atomic OS management on top of ostree                             |
@@ -293,11 +299,13 @@ On x86_64 additionally:
 
 ### How to recompile the kernel
 
-The minimal image by default (`KERNEL_VARIANT=stock`) uses the stock Debian
-`linux-image-amd64` / `linux-image-arm64` packages. The config fragments in
-`kernel/` are used by the `bootc-debs-builder` pipeline to build the custom
-`linux-image-minimal` package installed when `KERNEL_VARIANT=minimal` is
-passed at build time, and are also provided for users who want to build a
+The minimal image by default (`KERNEL_VARIANT=stock`) uses the
+`linux-image-stock-<arch>` virtual package, resolved via the `Provides` field
+of the custom `linux-image-common` .deb built by the `bootc-debs-builder`
+pipeline from the `kernel/config` fragments. The same `linux-image-common`
+.deb also `Provides: linux-image-minimal-<arch>`, the virtual name installed
+when `KERNEL_VARIANT=minimal` is passed at build time. The config fragments in
+`kernel/` are also provided for users who want to build a
 custom kernel themselves matching the minimal targets.
 
 Prerequisites:
@@ -439,13 +447,16 @@ RUN systemctl unmask getty@tty2.service getty@tty3.service \
 
 WiFi drivers are disabled in `kernel/config-minimal-arm64`, which only
 ships in the image when `KERNEL_VARIANT=minimal` is passed (the default
-`KERNEL_VARIANT=stock` install uses the stock Debian `linux-image-arm64`
-metapackage, which has WiFi enabled). To re-enable WiFi on a specific SBC
+`KERNEL_VARIANT=stock` install uses the custom `linux-image-common` kernel
+via the `linux-image-stock-arm64` virtual package, which inherits the Debian
+defconfig WiFi state). To re-enable WiFi on a specific SBC
 with the minimal kernel you must either:
 
-1. Switch the image to `KERNEL_VARIANT=stock` (use the stock Debian
-   `linux-image-arm64`, which has WiFi enabled) — either rebuild with the
-   default `KERNEL_VARIANT` or override the kernel in a downstream layer, **or**
+1. Switch the image to `KERNEL_VARIANT=stock` (use the custom
+   `linux-image-common` kernel via the `linux-image-stock-arm64` virtual
+   package, which inherits the Debian defconfig WiFi state) — either rebuild
+   with the default `KERNEL_VARIANT` or override the kernel in a downstream
+   layer, **or**
 2. Build a custom kernel from the minimal config with the wireless
    subsystem re-enabled:
 
@@ -483,7 +494,7 @@ defaults reproduce the previous single-arch behaviour with zero regression.
 |------------------|-----------|------------------|--------|
 | `TARGETARCH`     | (auto)    | `amd64` \| `arm64` | BuildKit auto-injects the build architecture. Selects the kernel, boot stack and firmware packages. |
 | `TARGETVARIANT`  | (auto)    | (usually empty)  | Reserved for future size variants. BuildKit auto-injects it; the Containerfile does not currently branch on it. |
-| `KERNEL_VARIANT` | `stock`   | `stock` \| `minimal` | `stock` installs the Debian `linux-image-stock-<arch>` metapackage. `minimal` installs the custom `linux-image-minimal-<arch>` package built from `kernel/config-minimal-<arch>` by the `bootc-debs-builder` pipeline (disabled subsystems: `SND`, `DRM`, `BT`, `WLAN`, `USB_HID`). The CI builds the .deb with the matching `linux-image-${KERNEL_VARIANT}-${ARCH}` name, so the Containerfile installs it directly with no if/else. A full kernel build adds ~30-90 min to the pipeline. |
+| `KERNEL_VARIANT` | `stock`   | `stock` \| `minimal` | `stock` installs the `linux-image-stock-<arch>` virtual package; `minimal` installs the `linux-image-minimal-<arch>` virtual package. Both are resolved via the `Provides` field of the custom `linux-image-common` .deb built from `kernel/config` by the `bootc-debs-builder` pipeline (disabled subsystems: `SND`, `DRM`, `BT`, `WLAN`, `USB_HID`). The Containerfile uses the `linux-image-${KERNEL_VARIANT}-${ARCH}` naming pattern directly (no if/else); apt resolves the virtual name to the custom kernel once it is published in the bootc APT repo. Until the first kernel build succeeds, neither virtual name exists in any repo and the install fails — tracked in P02 in `todo/registry.md`. A full kernel build adds ~30-90 min to the pipeline. |
 | `AUTOUPDATE`     | `1`       | `1` \| `0`       | `1` writes `1` to `/usr/lib/bootc/autoupdate` so bootc performs automated ostree upgrades (the `_autoupdate` tag variant). `0` writes `0` to the same file, disabling auto-update for the `_lock` tag variant (minimal RAM, no background upgrade overhead). bootc reads the file content (`0` = disabled); presence alone is not sufficient. |
 | `DEVICE`         | `generic` | `generic` \| `rpi3` \| `rpi4` \| `rpi5` \| `rk3588` \| `x86_64` | Selects the per-device kernel modules overlay (`modules-kernel/<device>`) installed on top of the kernel package as `linux-modules-${DEVICE}`. The default `generic` installs `linux-modules-generic`, a harmless empty meta-package (no modules) built from the empty `modules-kernel/generic` overlay, so the apt install line always names a real package. The modules are OPTIONAL — the base image works without them. The CI matrix tags the resulting image with a device suffix: `:latest_<device>`. |
 
@@ -627,7 +638,8 @@ sudo bootc switch ghcr.io/youruser/debian-bootc-minimal:<version>_lock
 - **ARM64: no WiFi.** The wireless subsystem is disabled in the
   `kernel/config-minimal-arm64` fragment, which only ships in the image when
   `KERNEL_VARIANT=minimal`. The default `KERNEL_VARIANT=stock` install uses
-  the Debian `linux-image-arm64` metapackage (WiFi enabled). To get WiFi on a
+  the custom `linux-image-common` kernel (via the `linux-image-stock-arm64`
+  virtual package, inheriting the Debian defconfig WiFi state). To get WiFi on a
   minimal-kernel build, either switch back to `KERNEL_VARIANT=stock` in a
   downstream layer or rebuild the minimal kernel with WiFi re-enabled for a
   specific SBC.
