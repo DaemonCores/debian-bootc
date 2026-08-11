@@ -183,10 +183,10 @@ packages:
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
       if grep -q '^Conflicts:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i "/^Conflicts:/s/\$/, linux-image-${DEB_ARCH}/" \
+        sed -i "/^Conflicts:/s/\$/, linux-image-${DEB_ARCH}:${DEB_ARCH}/" \
           "${REPACK_DIR}/DEBIAN/control"
       else
-        printf 'Conflicts: linux-image-%s\n' "${DEB_ARCH}" \
+        printf 'Conflicts: linux-image-common, linux-image-%s:%s\n' "${DEB_ARCH}" "${DEB_ARCH}" \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
       dpkg-deb -b "${REPACK_DIR}" \
