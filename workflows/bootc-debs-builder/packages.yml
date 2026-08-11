@@ -158,29 +158,35 @@ packages:
 
       # Repack the linux-image-common deb with Provides + Conflicts on the
       # stock Debian linux-image metapackages so our custom common image
-      # satisfies apt dependencies on linux-image-amd64 / linux-image-arm64
-      # without coinstall conflicts. Also Provides the KERNEL_VARIANT virtual
-      # names (linux-image-stock-<arch>, linux-image-minimal-<arch>) so the
+      # satisfies apt dependencies on linux-image-<arch> without coinstall
+      # conflicts. Also Provides the KERNEL_VARIANT virtual names
+      # (linux-image-stock-<arch>, linux-image-minimal-<arch>) so the
       # Containerfile.minimal `linux-image-${KERNEL_VARIANT}-${ARCH}` apt
       # install resolves to this custom kernel via the virtual package
       # mechanism (the stock Debian archive has no
       # linux-image-stock-<arch> package; only this Provides makes the name
       # resolvable).
+      # Only the CURRENT arch is Provided/Conflicted: a deb built on arm64
+      # must not Provide linux-image-amd64, otherwise apt refuses to install
+      # it on an arm64 runner that also has the amd64 deb available in
+      # /tmp/prior (the cross-arch Provides + Conflicts creates an unsolvable
+      # solver conflict).
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
       dpkg-deb -R "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
       if grep -q '^Provides:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i '/^Provides:/s/$/, linux-image-amd64, linux-image-arm64, linux-image-stock-amd64, linux-image-stock-arm64, linux-image-minimal-amd64, linux-image-minimal-arm64/' \
+        sed -i "/^Provides:/s/\$/, linux-image-${DEB_ARCH}, linux-image-stock-${DEB_ARCH}, linux-image-minimal-${DEB_ARCH}/" \
           "${REPACK_DIR}/DEBIAN/control"
       else
-        printf 'Provides: linux-image-amd64, linux-image-arm64, linux-image-stock-amd64, linux-image-stock-arm64, linux-image-minimal-amd64, linux-image-minimal-arm64\n' \
+        printf 'Provides: linux-image-%s, linux-image-stock-%s, linux-image-minimal-%s\n' \
+          "${DEB_ARCH}" "${DEB_ARCH}" "${DEB_ARCH}" \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
       if grep -q '^Conflicts:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i '/^Conflicts:/s/$/, linux-image-amd64, linux-image-arm64/' \
+        sed -i "/^Conflicts:/s/\$/, linux-image-${DEB_ARCH}/" \
           "${REPACK_DIR}/DEBIAN/control"
       else
-        printf 'Conflicts: linux-image-amd64, linux-image-arm64\n' \
+        printf 'Conflicts: linux-image-%s\n' "${DEB_ARCH}" \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
       dpkg-deb -b "${REPACK_DIR}" \
@@ -233,7 +239,11 @@ packages:
       COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
+      # Extract version + kernel version from the deb WITHOUT installing it:
+      # installing the custom deb first makes `apt-get source linux` resolve to
+      # the non-existent `linux-upstream` pseudo-source (the deb Provides
+      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
+      # source BEFORE installing the custom deb.
       BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
       KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
 
@@ -251,11 +261,24 @@ packages:
       # binary package name (linux-image-<kver> resolves to the linux-upstream
       # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
       # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source.
+      # module builds download the real Debian kernel source. This MUST run
+      # BEFORE the custom linux-image-common deb is installed (see above).
+      # Purge the pre-installed custom linux-image-common deb so apt-get source
+      # does not resolve 'linux' to the linux-upstream pseudo-source. The
+      # "Install dependency debs" step already installed it (transitively for
+      # the device entries via linux-modules-arm -> linux-image-common), so we
+      # must remove it before the source download resolves 'linux' to the real
+      # Debian source package.
+      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
+      apt-get autoremove -y || true
       apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      # Install the custom common deb AFTER the source download so apt-get
+      # source does not resolve to linux-upstream.
+      apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -432,7 +455,11 @@ packages:
       COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
+      # Extract version + kernel version from the deb WITHOUT installing it:
+      # installing the custom deb first makes `apt-get source linux` resolve to
+      # the non-existent `linux-upstream` pseudo-source (the deb Provides
+      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
+      # source BEFORE installing the custom deb.
       BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
       KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
 
@@ -450,11 +477,24 @@ packages:
       # binary package name (linux-image-<kver> resolves to the linux-upstream
       # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
       # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source.
+      # module builds download the real Debian kernel source. This MUST run
+      # BEFORE the custom linux-image-common deb is installed (see above).
+      # Purge the pre-installed custom linux-image-common deb so apt-get source
+      # does not resolve 'linux' to the linux-upstream pseudo-source. The
+      # "Install dependency debs" step already installed it (transitively for
+      # the device entries via linux-modules-arm -> linux-image-common), so we
+      # must remove it before the source download resolves 'linux' to the real
+      # Debian source package.
+      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
+      apt-get autoremove -y || true
       apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      # Install the custom common deb AFTER the source download so apt-get
+      # source does not resolve to linux-upstream.
+      apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -543,7 +583,11 @@ packages:
       COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
+      # Extract version + kernel version from the deb WITHOUT installing it:
+      # installing the custom deb first makes `apt-get source linux` resolve to
+      # the non-existent `linux-upstream` pseudo-source (the deb Provides
+      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
+      # source BEFORE installing the custom deb.
       BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
       KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
 
@@ -557,11 +601,24 @@ packages:
       # binary package name (linux-image-<kver> resolves to the linux-upstream
       # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
       # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source.
+      # module builds download the real Debian kernel source. This MUST run
+      # BEFORE the custom linux-image-common deb is installed (see above).
+      # Purge the pre-installed custom linux-image-common deb so apt-get source
+      # does not resolve 'linux' to the linux-upstream pseudo-source. The
+      # "Install dependency debs" step already installed it (transitively for
+      # the device entries via linux-modules-arm -> linux-image-common), so we
+      # must remove it before the source download resolves 'linux' to the real
+      # Debian source package.
+      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
+      apt-get autoremove -y || true
       apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      # Install the custom common deb AFTER the source download so apt-get
+      # source does not resolve to linux-upstream.
+      apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -631,7 +688,11 @@ packages:
       COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
+      # Extract version + kernel version from the deb WITHOUT installing it:
+      # installing the custom deb first makes `apt-get source linux` resolve to
+      # the non-existent `linux-upstream` pseudo-source (the deb Provides
+      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
+      # source BEFORE installing the custom deb.
       BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
       KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
 
@@ -645,11 +706,24 @@ packages:
       # binary package name (linux-image-<kver> resolves to the linux-upstream
       # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
       # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source.
+      # module builds download the real Debian kernel source. This MUST run
+      # BEFORE the custom linux-image-common deb is installed (see above).
+      # Purge the pre-installed custom linux-image-common deb so apt-get source
+      # does not resolve 'linux' to the linux-upstream pseudo-source. The
+      # "Install dependency debs" step already installed it (transitively for
+      # the device entries via linux-modules-arm -> linux-image-common), so we
+      # must remove it before the source download resolves 'linux' to the real
+      # Debian source package.
+      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
+      apt-get autoremove -y || true
       apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      # Install the custom common deb AFTER the source download so apt-get
+      # source does not resolve to linux-upstream.
+      apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -719,7 +793,11 @@ packages:
       COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
+      # Extract version + kernel version from the deb WITHOUT installing it:
+      # installing the custom deb first makes `apt-get source linux` resolve to
+      # the non-existent `linux-upstream` pseudo-source (the deb Provides
+      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
+      # source BEFORE installing the custom deb.
       BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
       KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
 
@@ -733,11 +811,24 @@ packages:
       # binary package name (linux-image-<kver> resolves to the linux-upstream
       # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
       # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source.
+      # module builds download the real Debian kernel source. This MUST run
+      # BEFORE the custom linux-image-common deb is installed (see above).
+      # Purge the pre-installed custom linux-image-common deb so apt-get source
+      # does not resolve 'linux' to the linux-upstream pseudo-source. The
+      # "Install dependency debs" step already installed it (transitively for
+      # the device entries via linux-modules-arm -> linux-image-common), so we
+      # must remove it before the source download resolves 'linux' to the real
+      # Debian source package.
+      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
+      apt-get autoremove -y || true
       apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      # Install the custom common deb AFTER the source download so apt-get
+      # source does not resolve to linux-upstream.
+      apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -805,7 +896,11 @@ packages:
       COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
+      # Extract version + kernel version from the deb WITHOUT installing it:
+      # installing the custom deb first makes `apt-get source linux` resolve to
+      # the non-existent `linux-upstream` pseudo-source (the deb Provides
+      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
+      # source BEFORE installing the custom deb.
       BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
       KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
 
@@ -819,11 +914,24 @@ packages:
       # binary package name (linux-image-<kver> resolves to the linux-upstream
       # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
       # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source.
+      # module builds download the real Debian kernel source. This MUST run
+      # BEFORE the custom linux-image-common deb is installed (see above).
+      # Purge the pre-installed custom linux-image-common deb so apt-get source
+      # does not resolve 'linux' to the linux-upstream pseudo-source. The
+      # "Install dependency debs" step already installed it (transitively for
+      # the device entries via linux-modules-arm -> linux-image-common), so we
+      # must remove it before the source download resolves 'linux' to the real
+      # Debian source package.
+      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
+      apt-get autoremove -y || true
       apt-get source linux
       SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
       test -n "${SRCDIR}" \
         || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+
+      # Install the custom common deb AFTER the source download so apt-get
+      # source does not resolve to linux-upstream.
+      apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
       make mrproper
