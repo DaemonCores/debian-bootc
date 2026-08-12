@@ -182,11 +182,22 @@ packages:
           "${DEB_ARCH}" "${DEB_ARCH}" "${DEB_ARCH}" \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
+      # Conflicts must target the OPPOSITE arch, not the current one: a deb
+      # built on amd64 must Conflict with linux-image-arm64 (so it cannot
+      # coinstall the foreign-arch stock metapackage), NOT with
+      # linux-image-amd64 (which would conflict with itself via the Provides
+      # above). Provides stays on the current arch (the deb satisfies
+      # linux-image-<current-arch>).
+      case "${DEB_ARCH}" in
+        amd64) OTHER_ARCH="arm64" ;;
+        arm64) OTHER_ARCH="amd64" ;;
+        *) echo "ERROR: unsupported arch ${DEB_ARCH}" >&2; exit 1 ;;
+      esac
       if grep -q '^Conflicts:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i "/^Conflicts:/s/\$/, linux-image-${DEB_ARCH}:${DEB_ARCH}/" \
+        sed -i "/^Conflicts:/s/\$/, linux-image-${OTHER_ARCH}:${OTHER_ARCH}/" \
           "${REPACK_DIR}/DEBIAN/control"
       else
-        printf 'Conflicts: linux-image-common, linux-image-%s:%s\n' "${DEB_ARCH}" "${DEB_ARCH}" \
+        printf 'Conflicts: linux-image-common, linux-image-%s:%s\n' "${OTHER_ARCH}" "${OTHER_ARCH}" \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
       dpkg-deb -b "${REPACK_DIR}" \
@@ -218,7 +229,7 @@ packages:
       set -euo pipefail
       DEVICE=arm
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
       test -f "${BASE_CONFIG}" \
@@ -234,9 +245,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -281,6 +292,19 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
+      # Translate the Debian-style DEB_ARCH (amd64) to the kernel's arch dir
+      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
+      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
+      # with "arch/amd64/Makefile: No such file or directory".
+      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
+      # olddefconfig, modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # arch/amd64/Makefile and fail on the first command. For ARM the
+      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
+      KERNEL_ARCH="${DEB_ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      unset ARCH
+      export ARCH="${KERNEL_ARCH}"
       make mrproper
 
       # Start from the Debian config for this arch, then merge the base
@@ -295,13 +319,7 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      # Translate the Debian-style ARCH (amd64) to the kernel's arch dir
-      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
-      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
-      # with "arch/amd64/Makefile: No such file or directory".
-      KERNEL_ARCH="${ARCH}"
-      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
-      make -j"$(nproc)" ARCH="${KERNEL_ARCH}" modules
+      make -j"$(nproc)" modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
       # Debian package from that tree. The modules dir name matches the
@@ -318,7 +336,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-image-common (= ${BUILT_VER})
       Description: ARM-generic kernel modules
        This package contains the kernel modules common to all ARM devices
@@ -335,10 +353,10 @@ packages:
 
       # Build the modules deb.
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
 
       # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-generic: the DEFAULT device class — an empty meta-package.
@@ -361,7 +379,7 @@ packages:
       set -euo pipefail
       DEVICE=generic
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
       test -f "${BASE_CONFIG}" \
@@ -377,9 +395,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -399,7 +417,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-image-common (= ${BUILT_VER})
       Description: Empty kernel modules meta-package (generic device class)
        This package contains NO kernel modules. It exists so the
@@ -413,10 +431,10 @@ packages:
       # No payload files -> no md5sums file (dpkg-deb accepts a package with
       # only a control file). Build the empty modules deb.
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
 
       # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-rpi3: device-specific modules for the Raspberry Pi 3
@@ -436,7 +454,7 @@ packages:
       set -euo pipefail
       DEVICE=rpi3
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
@@ -456,9 +474,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -503,6 +521,19 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
+      # Translate the Debian-style DEB_ARCH (amd64) to the kernel's arch dir
+      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
+      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
+      # with "arch/amd64/Makefile: No such file or directory".
+      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
+      # olddefconfig, modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # arch/amd64/Makefile and fail on the first command. For ARM the
+      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
+      KERNEL_ARCH="${DEB_ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      unset ARCH
+      export ARCH="${KERNEL_ARCH}"
       make mrproper
 
       # Start from the Debian config for this arch, then merge the base
@@ -534,7 +565,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -550,10 +581,10 @@ packages:
 
       # Build the modules deb.
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
 
       # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-rpi4: device-specific modules for the Raspberry Pi 4
@@ -569,7 +600,7 @@ packages:
       set -euo pipefail
       DEVICE=rpi4
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
@@ -584,9 +615,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -627,6 +658,15 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
+      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
+      # olddefconfig, modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # arch/amd64/Makefile and fail on the first command. For ARM the
+      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
+      KERNEL_ARCH="${DEB_ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      unset ARCH
+      export ARCH="${KERNEL_ARCH}"
       make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
@@ -643,7 +683,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -657,8 +697,8 @@ packages:
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-rpi5: device-specific modules for the Raspberry Pi 5
@@ -674,7 +714,7 @@ packages:
       set -euo pipefail
       DEVICE=rpi5
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
@@ -689,9 +729,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -732,6 +772,15 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
+      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
+      # olddefconfig, modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # arch/amd64/Makefile and fail on the first command. For ARM the
+      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
+      KERNEL_ARCH="${DEB_ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      unset ARCH
+      export ARCH="${KERNEL_ARCH}"
       make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
@@ -748,7 +797,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -762,8 +811,8 @@ packages:
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-rk3588: device-specific modules for the Rockchip RK3588
@@ -779,7 +828,7 @@ packages:
       set -euo pipefail
       DEVICE=rk3588
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
@@ -794,9 +843,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -837,6 +886,15 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
+      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
+      # olddefconfig, modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # arch/amd64/Makefile and fail on the first command. For ARM the
+      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
+      KERNEL_ARCH="${DEB_ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      unset ARCH
+      export ARCH="${KERNEL_ARCH}"
       make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
@@ -853,7 +911,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -867,8 +925,8 @@ packages:
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-x86_64: device-specific modules for x86_64 PCs / servers /
@@ -885,7 +943,7 @@ packages:
       set -euo pipefail
       DEVICE=x86_64
       SAVE_PWD=$(pwd)
-      ARCH=$(dpkg --print-architecture)
+      DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
       OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
       test -f "${BASE_CONFIG}" \
@@ -897,9 +955,9 @@ packages:
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's ARCH so only the
+      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -940,19 +998,25 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
+      # Translate the Debian-style DEB_ARCH (amd64) to the kernel's arch dir
+      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
+      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
+      # with "arch/amd64/Makefile: No such file or directory".
+      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
+      # olddefconfig, modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # arch/amd64/Makefile and fail on the first command.
+      KERNEL_ARCH="${DEB_ARCH}"
+      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
+      unset ARCH
+      export ARCH="${KERNEL_ARCH}"
       make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
-      # Translate the Debian-style ARCH (amd64) to the kernel's arch dir
-      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
-      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
-      # with "arch/amd64/Makefile: No such file or directory".
-      KERNEL_ARCH="${ARCH}"
-      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
-      make -j"$(nproc)" ARCH="${KERNEL_ARCH}" modules
+      make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -962,7 +1026,7 @@ packages:
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
       Package: linux-modules-${DEVICE}
       Version: ${BUILT_VER}
-      Architecture: ${ARCH}
+      Architecture: ${DEB_ARCH}
       Depends: linux-image-common (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -976,8 +1040,8 @@ packages:
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb"
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${ARCH}.deb" \
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   - name: ifupdown2
@@ -1359,18 +1423,25 @@ packages:
         -e "s|{{ ARCH }}|${ARCH}|g" \
         DEBIAN/control
 
-      # Qualify the Conflicts field with the build arch so a cross-arch
-      # build environment (amd64 + arm64 debs both present in /tmp/prior)
-      # does not see libcomposefs:amd64 and libcomposefs:arm64 conflict
-      # with each other. Each arch's deb only conflicts with the SAME
-      # arch's deb, so the two can coexist. DEB_ARCH mirrors the
-      # linux-image repack convention (dpkg --print-architecture).
+      # Qualify the Conflicts field with the OPPOSITE build arch so a
+      # cross-arch build environment (amd64 + arm64 debs both present in
+      # /tmp/prior) does not see this arch's deb conflict with itself via
+      # its own Provides. A deb built on amd64 must Conflict with
+      # libcomposefs:arm64 (the foreign-arch stock package it replaces),
+      # NOT with libcomposefs:amd64 (which would auto-conflict via the
+      # matching Provides). DEB_ARCH mirrors the linux-image repack
+      # convention (dpkg --print-architecture).
       DEB_ARCH="${ARCH}"
+      case "${DEB_ARCH}" in
+        amd64) OTHER_ARCH="arm64" ;;
+        arm64) OTHER_ARCH="amd64" ;;
+        *) echo "ERROR: unsupported arch ${DEB_ARCH}" >&2; exit 1 ;;
+      esac
       if grep -q '^Conflicts:' DEBIAN/control; then
-        sed -i "s|^Conflicts:.*|Conflicts: libcomposefs:${DEB_ARCH}|" \
+        sed -i "s|^Conflicts:.*|Conflicts: libcomposefs:${OTHER_ARCH}|" \
           DEBIAN/control
       else
-        printf 'Conflicts: libcomposefs:%s\n' "${DEB_ARCH}" \
+        printf 'Conflicts: libcomposefs:%s\n' "${OTHER_ARCH}" \
           >> DEBIAN/control
       fi
 
