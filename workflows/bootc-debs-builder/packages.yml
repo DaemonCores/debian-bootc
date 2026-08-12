@@ -278,9 +278,9 @@ packages:
       # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
       # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
       # with "arch/amd64/Makefile: No such file or directory".
-      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
-      # olddefconfig, modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
+      # modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make olddefconfig` look for
       # arch/amd64/Makefile and fail on the first command. For ARM the
       # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
       KERNEL_ARCH="${DEB_ARCH}"
@@ -506,9 +506,9 @@ packages:
       # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
       # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
       # with "arch/amd64/Makefile: No such file or directory".
-      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
-      # olddefconfig, modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
+      # modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make olddefconfig` look for
       # arch/amd64/Makefile and fail on the first command. For ARM the
       # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
       KERNEL_ARCH="${DEB_ARCH}"
@@ -638,9 +638,9 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
-      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
-      # olddefconfig, modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
+      # modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make olddefconfig` look for
       # arch/amd64/Makefile and fail on the first command. For ARM the
       # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
       KERNEL_ARCH="${DEB_ARCH}"
@@ -751,9 +751,9 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
-      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
-      # olddefconfig, modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
+      # modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make olddefconfig` look for
       # arch/amd64/Makefile and fail on the first command. For ARM the
       # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
       KERNEL_ARCH="${DEB_ARCH}"
@@ -864,9 +864,9 @@ packages:
       apt-get install -y "${COMMON_DEB}"
 
       cd "${SRCDIR}"
-      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
-      # olddefconfig, modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
+      # modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make olddefconfig` look for
       # arch/amd64/Makefile and fail on the first command. For ARM the
       # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
       KERNEL_ARCH="${DEB_ARCH}"
@@ -979,9 +979,9 @@ packages:
       # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
       # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
       # with "arch/amd64/Makefile: No such file or directory".
-      # Export KERNEL_ARCH BEFORE any make invocation (mrproper, defconfig,
-      # olddefconfig, modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make mrproper` look for
+      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
+      # modules, modules_install) — the runner's inherited
+      # ARCH=amd64 would otherwise make `make olddefconfig` look for
       # arch/amd64/Makefile and fail on the first command.
       KERNEL_ARCH="${DEB_ARCH}"
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
