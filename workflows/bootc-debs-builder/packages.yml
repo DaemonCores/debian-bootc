@@ -182,24 +182,6 @@ packages:
           "${DEB_ARCH}" "${DEB_ARCH}" "${DEB_ARCH}" \
           >> "${REPACK_DIR}/DEBIAN/control"
       fi
-      # Conflicts must target the OPPOSITE arch, not the current one: a deb
-      # built on amd64 must Conflict with linux-image-arm64 (so it cannot
-      # coinstall the foreign-arch stock metapackage), NOT with
-      # linux-image-amd64 (which would conflict with itself via the Provides
-      # above). Provides stays on the current arch (the deb satisfies
-      # linux-image-<current-arch>).
-      case "${DEB_ARCH}" in
-        amd64) OTHER_ARCH="arm64" ;;
-        arm64) OTHER_ARCH="amd64" ;;
-        *) echo "ERROR: unsupported arch ${DEB_ARCH}" >&2; exit 1 ;;
-      esac
-      if grep -q '^Conflicts:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i "/^Conflicts:/s/\$/, linux-image-${OTHER_ARCH}:${OTHER_ARCH}/" \
-          "${REPACK_DIR}/DEBIAN/control"
-      else
-        printf 'Conflicts: linux-image-common, linux-image-%s:%s\n' "${OTHER_ARCH}" "${OTHER_ARCH}" \
-          >> "${REPACK_DIR}/DEBIAN/control"
-      fi
       dpkg-deb -b "${REPACK_DIR}" \
         "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
       test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
@@ -305,7 +287,6 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      make mrproper
 
       # Start from the Debian config for this arch, then merge the base
       # config THEN the arm overlay (overlay wins on conflicts — last
@@ -534,7 +515,6 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      make mrproper
 
       # Start from the Debian config for this arch, then merge the base
       # config THEN the arm overlay THEN the device overlay (last merge wins
@@ -667,7 +647,6 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
         || make defconfig
@@ -781,7 +760,6 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
         || make defconfig
@@ -895,7 +873,6 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
         || make defconfig
@@ -1010,7 +987,6 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      make mrproper
       cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
         || cp debian/config/config .config 2>/dev/null \
         || make defconfig
@@ -1422,28 +1398,6 @@ packages:
         -e "s|{{ VER }}|${COMPOSEFS_VER#v}|g" \
         -e "s|{{ ARCH }}|${ARCH}|g" \
         DEBIAN/control
-
-      # Qualify the Conflicts field with the OPPOSITE build arch so a
-      # cross-arch build environment (amd64 + arm64 debs both present in
-      # /tmp/prior) does not see this arch's deb conflict with itself via
-      # its own Provides. A deb built on amd64 must Conflict with
-      # libcomposefs:arm64 (the foreign-arch stock package it replaces),
-      # NOT with libcomposefs:amd64 (which would auto-conflict via the
-      # matching Provides). DEB_ARCH mirrors the linux-image repack
-      # convention (dpkg --print-architecture).
-      DEB_ARCH="${ARCH}"
-      case "${DEB_ARCH}" in
-        amd64) OTHER_ARCH="arm64" ;;
-        arm64) OTHER_ARCH="amd64" ;;
-        *) echo "ERROR: unsupported arch ${DEB_ARCH}" >&2; exit 1 ;;
-      esac
-      if grep -q '^Conflicts:' DEBIAN/control; then
-        sed -i "s|^Conflicts:.*|Conflicts: libcomposefs:${OTHER_ARCH}|" \
-          DEBIAN/control
-      else
-        printf 'Conflicts: libcomposefs:%s\n' "${OTHER_ARCH}" \
-          >> DEBIAN/control
-      fi
 
       rm -f debian
       dpkg-deb --build /output/libcomposefs \
