@@ -1,43 +1,48 @@
 # Support
 
-## Where to Get Help
+<p align="center">
+  <img src="https://raw.githubusercontent.com/DaemonCores/.github/refs/heads/main/assets/banner.svg" alt="AstralEmu Banner" width="100%"/>
+</p>
 
-### Documentation
+<p>
+  <strong align="left">Simplify and Innovate for Everyone.</strong>
+  <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
+  <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
+  <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
+  
+  <em>Identify gaps and fill them, make improvements where possible, but above all, empower developers to offer more to users.</em>
+</p>
 
-The [debian-bootc Wiki](https://github.com/DaemonCores/debian-bootc/wiki) contains the latest documentation, build instructions, and troubleshooting guides.
+---
 
-### GitHub Issues
+Support is provided through GitHub issues on a best-effort basis.
 
-If you encounter a bug or want to request a feature, please use the GitHub issue forms:
+## Before opening an issue
 
-- [Bug Report](https://github.com/DaemonCores/debian-bootc/issues/new?template=bug_report.yml)
-- [Feature Request](https://github.com/DaemonCores/debian-bootc/issues/new?template=feature_request.yml)
+Read the [README](README.md) and [architecture documentation](docs/architecture.md), then search existing issues.
 
-Before opening an issue, please search existing issues to avoid duplicates.
+Provide:
 
-## What Is Supported
+- image digest or commit;
+- `amd64` or `arm64` and the exact hardware or VM type;
+- full or minimal image variant;
+- online ISO, offline ISO, raw image, or direct bootc installation;
+- relevant console, journal, `bootc status`, and failed-unit output;
+- reproduction steps and expected result.
 
-We provide community support for:
+## Project scope
 
-- Building and deploying the debian-bootc image.
-- ISO installer generation (online and offline).
-- First-boot configuration and the `firstboot-user-setup` wizard.
-- General bootc/ostree lifecycle operations (`bootc update`, `bootc rollback`, etc.).
-- The APT repository and package updates.
-- Networking configuration with `ifupdown2`.
-- Secure Boot MOK enrollment and troubleshooting.
+The project can investigate its package recipes, image layout, shared pipeline integration, QEMU boot tests, installer generation, first-boot tooling, and project-specific service changes.
 
-## What Is NOT Supported
+Report issues that reproduce on an unmodified Debian installation to Debian. Report downstream-only Proxmox behaviour to `DaemonCores-VE`. Hardware enablement that is not caused by the image may require the relevant kernel or firmware project.
 
-The following are explicitly out of scope for community support:
+The project does not provide paid support, response-time guarantees, or a hardware compatibility guarantee. Security-sensitive reports belong in the private process described in [SECURITY.md](SECURITY.md).
 
-- **Upstream Debian bugs**: Issues that are reproducible on a standard Debian Trixie installation (without bootc/ostree) should be reported to the [Debian Bug Tracking System](https://bugs.debian.org/) directly.
-- **Hardware-specific issues unrelated to the image**: Driver or firmware problems that are not specific to the atomic deployment model.
-- **Downstream project issues**: Bugs specific to layers built on top of debian-bootc (e.g., DaemonCores-VE) should be reported to their respective repositories.
-- **Paid enterprise support**: This is a community-maintained project. For professional support, consider commercial vendors offering Debian or bootc consulting.
+---
 
-## Response Expectations
-
-This is a community-maintained project. Responses to issues and discussions are best-effort and may take several days depending on maintainer availability.
-
-For urgent or security-sensitive matters, please refer to [SECURITY.md](SECURITY.md).
+<p>
+  <strong align="left">Made with ⭐ by the DaemonCores community</strong>
+  <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
+  <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
+  <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
+</p>
