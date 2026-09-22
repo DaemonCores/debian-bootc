@@ -1,5 +1,20 @@
 # Code of Conduct
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/DaemonCores/.github/refs/heads/main/assets/banner.svg" alt="AstralEmu Banner" width="100%"/>
+</p>
+
+<p>
+  <strong align="left">Simplify and Innovate for Everyone.</strong>
+  <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
+  <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
+  <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
+  
+  <em>Identify gaps and fill them, make improvements where possible, but above all, empower developers to offer more to users.</em>
+</p>
+
+---
+
 ## Our Standards
 
 We are committed to providing a friendly, safe, and welcoming environment for all contributors and users, regardless of background or identity.
@@ -31,3 +46,12 @@ Maintainers have the right and responsibility to remove, edit, or reject contrib
 ## Attribution
 
 This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/), version 2.1, with modifications to keep it short and pragmatic.
+
+---
+
+<p>
+  <strong align="left">Made with ⭐ by the DaemonCores community</strong>
+  <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
+  <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
+  <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
+</p>
