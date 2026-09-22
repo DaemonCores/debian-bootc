@@ -1,380 +1,102 @@
 # debian-bootc
 
-> **⚠️ Work in Progress**
->
-> This repository is still under development.
->
-> A stable release (or a separate stable branch) is not available yet, so please expect bugs and breaking changes.
->
-> The documentation (README and other files) currently reflects the original goals of the project more than its current state, so it may not always match the code. Feedback and reports about any inconsistencies are always welcome.
->
-> A development version is already available. Thanks to everyone who takes the time to test it and share feedback—it's greatly appreciated! :)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/DaemonCores/.github/refs/heads/main/assets/banner.svg" alt="AstralEmu Banner" width="100%"/>
+</p>
 
-**The first fully integrated, production-ready Debian 13 (Trixie) bootc image.**
-
-Every previous attempt to run bootc on Debian either stopped at a proof-of-concept
-stage or was quietly abandoned. This repository delivers a complete, CI-tested,
-automatically maintained image ready for production deployment — no manual assembly,
-no missing pieces.
+<p>
+  <strong align="left">Simplify and Innovate for Everyone.</strong>
+  <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
+  <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
+  <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
+  
+  <em>Identify gaps and fill them, make improvements where possible, but above all, empower developers to offer more to users.</em>
+</p>
 
 ---
 
-## Table of contents
+`debian-bootc` builds Debian 13 as a bootc/OSTree operating-system image. It packages the bootc stack that is not provided by Debian, assembles OCI images, boots them under QEMU for runtime validation, and generates installer artifacts.
 
-- [Why this exists](#why-this-exists)
-- [Is this repository abandoned?](#is-this-repository-abandoned)
-- [Technical stack](#technical-stack)
-- [CI/CD pipeline](#cicd-pipeline)
-- [APT repository](#apt-repository)
-- [Secure Boot](#secure-boot)
-- [Required secrets](#required-secrets)
-- [Quick start](#quick-start)
-- [License](#license)
+The repository is under active development. The amd64 path is the current installation target; arm64 image, package, and disk-image work is present in the pipeline but should be treated as being validated until the architecture matrix is explicitly released.
 
----
+## Implemented components
 
-## Why this exists
+- Debian packages for bootc, OSTree, composefs, bootupd, a BLS-capable GRUB build, first-boot setup, and bootc-specific service integration.
+- A signed APT repository published from the package manifest in `workflows/bootc-debs-builder/packages.yml`.
+- A full image and a reduced `minimal` image assembled from Debian Trixie.
+- Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and keyless cosign signing.
+- Boot tests that install an image to a virtual disk, start it with QEMU/KVM, and execute `workflows/image-tests/tests.yml` over SSH before publication.
+- Online and offline amd64 installer ISOs.
+- Optional raw image generation for the targets enabled by the caller workflow.
 
-The bootc ecosystem — bootc, ostree, composefs, bootupd — was developed primarily
-for Fedora and RHEL. Debian ships none of these packages, and there is no official
-plan to include them in the foreseeable future. Every previous community effort
-produced either a partial proof-of-concept or an abandoned repository.
+## Image variants
 
-This project solves the problem end-to-end:
+| Source | Tag family | Purpose |
+| --- | --- | --- |
+| `Containerfile` | `latest` | General-purpose Debian bootc system with SSH, Podman, ifupdown2, firmware, troubleshooting tools, and the first-boot wizard. |
+| `Containerfile.minimal` | `minimal` | Reduced system using systemd-networkd, a smaller package set, non-persistent journald storage, and masked background services. |
 
-1. **Builds all missing packages from source** and publishes them in a signed APT
-   repository on GitHub Pages, making them installable like any other Debian package.
-2. **Builds a bootc-compliant OCI container image** based on `debian:trixie`, pushed
-   to GHCR and signed with cosign via Sigstore keyless signing.
-3. **Builds Anaconda-based installer ISOs** — both online (pulls from GHCR at install
-   time) and offline (OCI image embedded in the ISO) — for bare-metal and VM
-   deployments with a single boot sequence.
+The minimal Containerfile declares both automatic-update and lock variants. The CI publishes architecture-specific tags and then creates manifest-list tags after successful builds.
 
----
+## Pipeline
 
-## Is this repository abandoned?
+The repository's `pipeline.yml` is a thin caller for [`DaemonCores-CI`](https://github.com/DaemonCores/DaemonCores-CI):
 
-**No.** The repository may appear inactive between Debian releases by design.
+1. build the package environment;
+2. build amd64 and arm64 Debian packages in dependency waves;
+3. publish the signed APT repository;
+4. build every root-level `Containerfile*` variant;
+5. boot and test each image before it is pushed;
+6. sign published images and assemble multi-architecture manifests;
+7. build the selected installer and disk-image artifacts.
 
-### Monthly automated rebuilds
+Pushes use change detection to skip unaffected stages. A scheduled run performs a full rebuild on the first day of each month. Manual runs expose stage-selection inputs.
 
-The CI pipeline runs automatically on the first of every month and rebuilds the full
-distribution image from scratch with `--no-cache`, incorporating all upstream Debian
-security updates as they land in the `trixie` and `trixie-security` repositories.
-All custom `.deb` packages (ostree, composefs, bootupd, bootc, GRUB) are rebuilt
-from source on the same schedule.
+## Build locally
 
-### Audited packages
-
-The custom packages have been audited to confirm they introduce no network-exposed
-attack surface:
-
-- None of them listens on a socket, modifies firewall rules, or establishes outbound
-  connections at install time or service startup.
-- The only modified packages that could be considered sensitive — **ifupdown2** and
-  **systemd-timesyncd** — are repacked from audited Debian and Proxmox sources with
-  minimal, targeted, fully documented patches. Their changes are limited to systemd
-  unit ordering and a single DHCP autoconfiguration helper.
-- All other custom packages are compiled from upstream sources that are actively
-  maintained and tracked for security by their respective projects (ostree, composefs,
-  bootc, bootupd).
-
-### Release lifecycle
-
-The current target is **Debian 13 Trixie**. A new release cycle will begin when
-Debian 14 is published. Between now and then, the only expected changes are:
-
-- Monthly automated security rebuilds (triggered by CI schedule).
-- Version bumps for upstream components (bootc, ostree, bootupd, composefs, GRUB)
-  when new releases are available.
-
-The absence of frequent commits is a sign of stability, not abandonment.
-
----
-
-## Technical stack
-
-### bootc
-
-[bootc](https://github.com/bootc-dev/bootc) treats the entire operating system as
-an OCI container image. Rather than managing packages individually on a running
-system, the OS is built in a standard container pipeline, pushed to a registry, and
-applied atomically to the host using ostree as the on-disk storage engine. Updates
-are transactional and fully rollback-capable from the bootloader.
-
-**Why:** Brings GitOps-style OS management — the same model that powers Fedora
-CoreOS and RHEL Image Mode — to Debian, with the stability and package ecosystem
-that Debian provides.
-
-### ostree
-
-[OSTree](https://ostreedev.github.io/ostree/) is the filesystem layer underneath
-bootc. It stores OS trees in a content-addressed object store modelled after Git,
-deploys them via hard links for storage efficiency, and makes every deployment
-atomic. It manages `/usr`, `/etc`, and `/boot` while delegating `/var` and `/home`
-to normal mutable storage — which is why `/home`, `/root`, `/srv`, `/mnt`, and
-`/opt` are symlinked into `/var` in this image.
-
-This build is compiled from upstream sources with:
-- **composefs support** enabled for filesystem integrity
-- **dracut integration** — the `50ostree` dracut module and `ostree-system-generator`
-  for initramfs and early boot integration
-- **prepare-root** configured for read-only sysroot
-
-### composefs
-
-[composefs](https://github.com/composefs/composefs) provides integrity protection for
-ostree deployments using
-[fs-verity](https://www.kernel.org/doc/html/latest/filesystems/fsverity.html). Every
-file in the deployed OS tree is verified against a cryptographic hash at read time,
-making it impossible to tamper with the system at rest without detection.
-
-Enabled in `prepare-root.conf`:
-```ini
-[sysroot]
-readonly=true
-
-[composefs]
-enabled=yes
-```
-
-### bootupd
-
-[bootupd](https://github.com/coreos/bootupd) manages the EFI System Partition
-independently of the ostree-managed root filesystem. In a bootc system the EFI
-binaries (shim, GRUB) live outside the ostree tree and cannot be updated through
-the normal container image update path. bootupd bridges this gap by tracking and
-updating EFI binaries as a separate managed component.
-
-The `bootc-finalize` script (run at package install time inside the container build)
-sets up the bootupd metadata by calling `bootupctl backend generate-update-metadata`.
-
-### GRUB — Fedora rhboot fork
-
-The standard Debian `grub-efi-amd64-signed` package does not include the `blscfg`
-and `blsuki` modules required by ostree and bootc for
-[BLS](https://uapi-group.org/specifications/specs/boot_loader_specification/)
-(Boot Loader Specification) kernel entry management. This repository compiles GRUB
-from the [Fedora rhboot/grub2](https://github.com/rhboot/grub2) fork at a pinned
-commit, producing a `grubx64.efi` with full BLS support.
-
-### dracut
-
-[dracut](https://github.com/dracut-ng/dracut-ng) generates the initramfs embedded in
-the deployed image. It is configured with the `bootc`, `lvm`, and `ostree` modules,
-`zstd` compression, and `hostonly=no` so the initramfs works on any hardware. The
-initramfs is built inside the container during the `bootc` package post-install
-hook (`bootc-finalize`), so the deployed image is fully self-contained.
-
-### ifupdown2 (Proxmox repack)
-
-ifupdown2 is sourced from the Proxmox repository. This image is designed to serve as
-a foundation for a Proxmox-based bootc deployment, and ifupdown2 is the network
-manager used by Proxmox. The package is repacked with two targeted patches:
-
-- `ifupdown2-pre.service` is ordered `After=ostree-remount.service` to ensure the
-  ostree read-only root is mounted before networking attempts to start.
-- An `ifupdown2-autoconf` helper performs DHCP autoconfiguration on first boot if
-  the interfaces file has not yet been customised.
-
-### systemd-timesyncd (repack)
-
-Repacked with a single drop-in that adds `After=network-online.target` and
-`Wants=network-online.target` to `systemd-timesyncd.service`. Without this,
-timesyncd attempts to reach NTP servers before the network interface is up in a
-bootc environment, causing spurious service failures at boot.
-
-### firstboot-user-setup
-
-A TUI wizard modelled after the Raspberry Pi OS `userconfig` service. Runs on the
-first boot before the login prompt and guides through:
-
-- Hostname (validated against RFC 952)
-- System locale (`dpkg-reconfigure locales`)
-- Keyboard layout (`dpkg-reconfigure keyboard-configuration`)
-- Primary user account — username, full name, password (8 chars minimum)
-- Root password
-- Sudo privileges
-- SSH root login policy
-
-Runs as `ExecStartPre` on `getty@tty1.service` and writes
-`/var/lib/firstboot-user-setup.done` on completion to prevent re-execution.
-
-### Anaconda + Kickstart
-
-The installer ISOs are built from the Fedora Server netinstall ISO with Anaconda as
-the installation engine. Two Kickstart templates are provided:
-
-| ISO | Source | Use case |
-|-----|--------|----------|
-| `online` | Pulls `ghcr.io/<repo>:latest` from the registry at install time | Networked install, always latest image |
-| `offline` | OCI archive embedded in the ISO | Air-gapped install, pinned image version |
-
-Both templates configure LVM on XFS, delegate user setup to `firstboot-user-setup`,
-and set a temporary root password that is replaced on first boot.
-
-**Note on default root password:** The kickstart installer sets a temporary default
-root password `BootcDebug@0`. This is a deliberate fallback: if the first-boot
-user-setup wizard fails to run or is interrupted, the system remains accessible via
-root login so you are not locked out of your own machine. The password is replaced
-by the wizard on first successful boot, and the root account is forced to change
-password via `chage -d 0`.
-
-The ISO branding (sidebar, topbar, header, product name) and Anaconda module
-configuration are injected into the squashfs installer environment by
-`scripts/inject-iso.sh`.
-
-### cosign / Sigstore
-
-The container image is signed with [cosign](https://github.com/sigstore/cosign) via
-keyless Sigstore signing using the GitHub Actions OIDC identity. The signature is
-stored in the same GHCR namespace as the image.
-
-Verify a pulled image:
-```bash
-cosign verify ghcr.io/DaemonCores/debian-bootc:latest \
-  --certificate-identity-regexp \
-    "https://github.com/DaemonCores/DaemonCores-CI/.github/workflows/bootc-build.yml@refs/heads/main" \
-  --certificate-oidc-issuer \
-    "https://token.actions.githubusercontent.com"
-```
-
----
-
-## CI/CD pipeline
-
-```
-┌─────────────────────┐     ┌──────────────────────┐     ┌───────────────────────┐
-│  bootc-debs-builder  │───▶│ bootc-build (reusable │───▶│ iso-builder (reusable │
-│                     │     │  workflow from        │     │  workflow from         │
-│  Compile from src:  │     │  DaemonCores-CI)      │     │  DaemonCores-CI)       │
-│  - libcomposefs     │     │                       │     │                       │
-│  - libostree        │     │  Build OCI image from │     │  Download Fedora       │
-│  - bootupd          │     │  Containerfile        │     │  netinstall ISO       │
-│  - grub-efi-signed  │     │                       │     │  Inject branding       │
-│  - bootc            │     │  Push to GHCR         │     │  Render kickstart      │
-│  - firstboot-setup  │     │                       │     │  Build online ISO      │
-│  - ifupdown2 repack │     │  Sign with cosign     │     │  Build offline ISO     │
-│  - timesyncd repack │     │                       │     │                       │
-│                     │     │  Smoke test:          │     │  Upload to             │
-│  Publish APT repo   │     │  bootc lint           │     │  GitHub Releases       │
-│  to GitHub Pages    │     │                       │     │                       │
-└─────────────────────┘     └──────────────────────┘     └───────────────────────┘
-```
-
-The **Full Pipeline** workflow (`pipeline.yml` in this repo) orchestrates all
-three stages by calling reusable workflows defined in the
-[DaemonCores-CI](https://github.com/DaemonCores/DaemonCores-CI) repository for
-stages 2 and 3. Each stage can be toggled independently via optional per-stage
-inputs, useful for rebuilding only the component that changed without running
-the full 30+ minute pipeline.
-
-### Why GitHub Actions are not pinned to commit SHAs
-
-Pinning actions to commit SHAs provides supply-chain immutability against tag
-mutation, but shifts the entire maintenance burden onto the repository owner: every
-dependency update requires a manual SHA rotation. In practice this leads to
-perpetually outdated pins — which provide false security rather than real security.
-
-This repository instead relies on **Dependabot** (`.github/dependabot.yml`) for
-weekly automated pull requests covering both GitHub Actions and the Docker base image.
-Updates are reviewed and merged explicitly, providing full auditability without
-manual tracking overhead. All actions used are from well-established, high-visibility
-namespaces (`actions/*`, `sigstore/*`, `morph027/*`) where tag mutation would be
-immediately detected by the community.
-
----
-
-## APT repository
-
-The custom packages are published to a signed APT repository on GitHub Pages.
-The signing key SHA-256 is hardcoded in the Containerfile and verified at build
-time before the key is trusted.
-
-Add to an existing Debian Trixie system:
+The full image can be assembled on an amd64 host with:
 
 ```bash
-wget -O /usr/share/keyrings/debian-bootc-keyring.gpg \
-  https://daemoncores.github.io/debian-bootc/gpg.key
-
-# Optionally verify the key fingerprint before trusting it:
-sha256sum /usr/share/keyrings/debian-bootc-keyring.gpg
-
-cat > /etc/apt/sources.list.d/debian-bootc.sources << 'EOF'
-Types: deb
-URIs: https://daemoncores.github.io/debian-bootc/
-Suites: trixie
-Components: main
-Enabled: yes
-Signed-By: /usr/share/keyrings/debian-bootc-keyring.gpg
-EOF
-
-apt update
+podman build --format docker \
+  --build-arg PRODUCT_NAME="debian bootc" \
+  -f Containerfile \
+  -t debian-bootc:local .
 ```
 
----
+The build downloads the repository signing key, verifies its pinned SHA-256 digest, and consumes packages from the project's APT repository. See [`docs/minimal.md`](docs/minimal.md) for the minimal image's architecture-specific arguments.
 
-## Secure Boot
+## Installation
 
-This image supports UEFI Secure Boot via the standard MOK (Machine Owner Key)
-mechanism provided by `shim-signed`.
+When a successful `install-iso` release is available, use the online ISO for a registry-backed installation or the offline ISO when the image must be embedded in the installation media.
 
-### Chain of trust
+The installer performs its own interactive target-disk selection and uses `bootc install to-filesystem`. It creates EFI and `/boot` partitions plus a Btrfs pool with separate `root`, `var`, and `varlog` subvolumes. Reinstallation can preserve the existing `var` subvolume.
 
-UEFI firmware → shim-signed (Microsoft-signed) → grubx64.efi (debian-bootc-signed) → kernel
+The installer is destructive to the selected disk. Review the prompt carefully and test in a virtual machine before using it on physical hardware.
 
-The `grub-efi-amd64-signed` package includes:
-- A GRUB EFI binary signed with the debian-bootc Secure Boot signing key.
-- The signing certificate at `/usr/share/debian-bootc/sb_signing.crt`.
-- A `postinst` script that queues MOK enrollment automatically on package install.
+## Required repository configuration
 
-### Enrollment
+| Secret | Purpose |
+| --- | --- |
+| `PAT_PKG` | Pull and publish images in GHCR. |
+| `APT_GPG_KEY` | Sign the generated APT repository. |
+| `SB_SIGNING_KEY` | Sign the custom EFI bootloader package. |
+| `SB_SIGNING_CERT` | Certificate paired with the Secure Boot key. |
 
-MOK enrollment is queued automatically. On the **first reboot** after installation,
-the firmware will launch the blue MokManager screen:
+GitHub Pages must be configured for Actions deployment so the APT repository can be published.
 
-1. Select **Enroll MOK**
-2. Select **Continue**
-3. Select **Yes**
-4. Enter the enrollment password when prompted
-5. Select **Reboot**
+## Documentation
 
-The signing key is then enrolled permanently. All subsequent boots are fully
-verified end-to-end without any further action.
-
-### Verify enrollment
-
-```bash
-mokutil --sb-state          # confirm Secure Boot is active
-mokutil --list-enrolled     # confirm the debian-bootc key is present
-```
+- [Architecture](docs/architecture.md)
+- [Design decisions and security trade-offs](docs/justifications.md)
+- [Minimal image](docs/minimal.md)
+- [Support](SUPPORT.md)
+- [Security policy](SECURITY.md)
 
 ---
 
-## Required secrets
-
-| Secret           | Workflow                    | Purpose                                           |
-|------------------|-----------------------------|---------------------------------------------------|
-| `PAT_PKG`        | `DaemonCores-CI/.github/workflows/bootc-build.yml` (reusable) | Authenticate Podman and Docker to push to GHCR    |
-| `APT_GPG_KEY`    | `bootc-debs-builder.yml`    | Sign the APT repository published to GitHub Pages |
-| `SB_SIGNING_KEY` | `bootc-debs-builder.yml`    | Private key for GRUB EFI Secure Boot signing      |
-| `SB_SIGNING_CERT`| `bootc-debs-builder.yml`    | Certificate for GRUB EFI Secure Boot signing      |
-
----
-
-## Quick start
-
-1. Fork this repository.
-2. Add `PAT_PKG` and `APT_GPG_KEY` in **Settings → Secrets → Actions**.
-3. Run **Actions → Full Pipeline** with all three stages enabled.
-4. Download the produced ISO from the `install-iso` release.
-5. Boot the ISO on the target machine and follow the first-boot wizard.
-
-For monthly automated rebuilds, the `pipeline.yml` schedule (`0 4 1 * *`) will
-trigger automatically once the repository is active.
-
----
-
-## License
-
-[LGPL-2.1](LICENSE)
+<p>
+  <strong align="left">Made with ⭐ by the DaemonCores community</strong>
+  <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
+  <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
+  <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
+</p>
