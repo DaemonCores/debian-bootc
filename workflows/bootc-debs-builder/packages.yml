@@ -299,10 +299,22 @@ packages:
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
+      # Seed Module.symvers from the linux-headers deb built alongside
+      # linux-image so modpost can resolve kernel symbols in a modules-only
+      # build (no vmlinux.o). Without it, modpost fails on modules that
+      # reference built-in kernel symbols (__fentry__, __x86_return_thunk…).
+      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      if [ -n "${HEADERS_DEB}" ]; then
+        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
+        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        rm -rf /tmp/headers-extract
+      fi
+
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
+      make -j"$(nproc)" modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
       # Debian package from that tree. The modules dir name matches the
@@ -529,10 +541,22 @@ packages:
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
+      # Seed Module.symvers from the linux-headers deb built alongside
+      # linux-image so modpost can resolve kernel symbols in a modules-only
+      # build (no vmlinux.o). Without it, modpost fails on modules that
+      # reference built-in kernel symbols (__fentry__, __x86_return_thunk…).
+      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      if [ -n "${HEADERS_DEB}" ]; then
+        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
+        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        rm -rf /tmp/headers-extract
+      fi
+
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
+      make -j"$(nproc)" modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
       # Debian package from that tree. The modules dir name matches the
@@ -658,7 +682,15 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
+
+      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      if [ -n "${HEADERS_DEB}" ]; then
+        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
+        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        rm -rf /tmp/headers-extract
+      fi
+      make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -773,7 +805,15 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
+
+      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      if [ -n "${HEADERS_DEB}" ]; then
+        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
+        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        rm -rf /tmp/headers-extract
+      fi
+      make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -888,7 +928,15 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
+
+      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      if [ -n "${HEADERS_DEB}" ]; then
+        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
+        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        rm -rf /tmp/headers-extract
+      fi
+      make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -1004,7 +1052,15 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
+
+      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      if [ -n "${HEADERS_DEB}" ]; then
+        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
+        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        rm -rf /tmp/headers-extract
+      fi
+      make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
