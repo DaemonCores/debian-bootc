@@ -84,3 +84,16 @@ CONFIG_USB_EHCI_HCD=m
 
 # INPUT_TABLET: disable tablet subsystem.
 # CONFIG_INPUT_TABLET is not set
+
+# =============================================================================
+# Disable debug/testing modules that reference x86-specific kernel symbols
+# (e.g. __x86_return_thunk, hwpoison_filter_register) only resolvable from
+# vmlinux.o — which is absent in a modules-only build. These modules are pure
+# debug facilities with no use in a production bootc image.
+# =============================================================================
+
+# HWPOISON_INJECT: disable memory poison injection test module. References
+# __x86_return_thunk and hwpoison_filter_register which require vmlinux.o to
+# resolve at modpost time; without it the modules build fails with unresolved
+# symbol errors.
+# CONFIG_HWPOISON_INJECT is not set
