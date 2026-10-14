@@ -302,7 +302,7 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      make -j"$(nproc)" modules
+      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
       # Debian package from that tree. The modules dir name matches the
@@ -532,7 +532,7 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      make -j"$(nproc)" modules
+      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
       # Debian package from that tree. The modules dir name matches the
@@ -658,7 +658,7 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" modules
+      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -773,7 +773,7 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" modules
+      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -888,7 +888,7 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" modules
+      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
@@ -1004,7 +1004,7 @@ packages:
         || make defconfig
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
-      make -j"$(nproc)" modules
+      make -j"$(nproc)" KBUILD_MODPOST_WARN=1 modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
