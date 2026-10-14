@@ -202,6 +202,8 @@ packages:
   # ARM64 core, the kernel command line, the PL011 UART, and the MMC/USB/RTC
   # subsystem cores shared by every ARM device.
   - name: linux-modules-arm
+    when:
+      arch: arm64
     deps:
       - linux-image
     sources:
@@ -425,6 +427,8 @@ packages:
   # packages them as linux-modules-rpi3_<ver>_<arch>.deb. The modules are
   # OPTIONAL — the base image works without them.
   - name: linux-modules-rpi3
+    when:
+      arch: arm64
     deps:
       - linux-modules-arm
     sources:
@@ -570,6 +574,8 @@ packages:
   # linux-modules-rpi4: device-specific modules for the Raspberry Pi 4
   # (Broadcom BCM2711). Same shape as rpi3 (deps on linux-modules-arm).
   - name: linux-modules-rpi4
+    when:
+      arch: arm64
     deps:
       - linux-modules-arm
     sources:
@@ -683,6 +689,8 @@ packages:
   # linux-modules-rpi5: device-specific modules for the Raspberry Pi 5
   # (Broadcom BCM2712). Same shape as rpi3 (deps on linux-modules-arm).
   - name: linux-modules-rpi5
+    when:
+      arch: arm64
     deps:
       - linux-modules-arm
     sources:
@@ -796,6 +804,8 @@ packages:
   # linux-modules-rk3588: device-specific modules for the Rockchip RK3588
   # SoC. Same shape as rpi3 (deps on linux-modules-arm).
   - name: linux-modules-rk3588
+    when:
+      arch: arm64
     deps:
       - linux-modules-arm
     sources:
@@ -911,6 +921,8 @@ packages:
   # Same shape as the other device entries. x86_64 is NOT ARM, so it depends
   # on linux-image directly (wave 1) rather than on linux-modules-arm.
   - name: linux-modules-x86_64
+    when:
+      arch: amd64
     deps:
       - linux-image
     sources:
