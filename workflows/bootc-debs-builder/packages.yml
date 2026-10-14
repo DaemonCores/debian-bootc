@@ -117,14 +117,26 @@ packages:
       make mrproper
 
       # Start from the Debian config for this arch.
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
 
       # Merge the base config (filesystems, virtio, serial, disables — the
       # base for every device). merge_config.sh -m merges in place.
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}"
       make olddefconfig
+      # Save the final .config so module builds on other runners can start
+      # from the same base (prevents CONFIG_FUNCTION_TRACER mismatch that
+      # causes __fentry__ undefined symbol errors in modpost).
+      cp .config "/debs/linux-kernel.config"
 
       # Build the kernel + modules as a Debian binary package. bindeb-pkg
       # produces linux-image-*.deb and linux-modules-*.deb in /tmp (one
@@ -293,9 +305,17 @@ packages:
       # Start from the Debian config for this arch, then merge the base
       # config THEN the arm overlay (overlay wins on conflicts — last
       # merge wins).
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
@@ -535,9 +555,17 @@ packages:
       # Start from the Debian config for this arch, then merge the base
       # config THEN the arm overlay THEN the device overlay (last merge wins
       # on conflicts — device overlay wins over arm, arm wins over base).
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
@@ -677,9 +705,17 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
@@ -800,9 +836,17 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
@@ -923,9 +967,17 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
@@ -1047,9 +1099,17 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Prefer the .config saved by the linux-image build (uploaded in its
+      # artifact). Starting from the same base as the kernel build guarantees
+      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
+      # modpost can resolve __fentry__ from Module.symvers.
+      if test -f /tmp/prior/linux-kernel.config; then
+        cp /tmp/prior/linux-kernel.config .config
+      else
+        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+          || cp debian/config/config .config 2>/dev/null \
+          || make defconfig
+      fi
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
