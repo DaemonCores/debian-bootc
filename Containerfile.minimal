@@ -182,6 +182,7 @@ RUN apt update \
         dracut \
         ${BOOT_PKG} \
         ${FIRMWARE_PKGS} \
+        btrfs-progs \
         iproute2 \
         systemd-timesyncd \
         ca-certificates \
