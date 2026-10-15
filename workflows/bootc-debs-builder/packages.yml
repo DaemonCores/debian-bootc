@@ -1204,6 +1204,10 @@ packages:
   - name: linux-modules-x86_64
     when:
       arch: amd64
+    # DEVICE is set to x86-64 (hyphen) inside the build so the generated deb
+    # name is linux-modules-x86-64 (Debian forbids underscores in package names).
+    # deb-glob overrides the default PACKAGE_* glob so build-deb.sh finds it.
+    deb-glob: "linux-modules-x86-64_*"
     deps:
       - linux-image
     sources:
