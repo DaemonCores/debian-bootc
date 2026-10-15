@@ -394,6 +394,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-image-common (= ${BUILT_VER})
       Description: ARM-generic kernel modules
        This package contains the kernel modules common to all ARM devices
@@ -476,6 +477,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-image-common (= ${BUILT_VER})
       Description: Empty kernel modules meta-package (generic device class)
        This package contains NO kernel modules. It exists so the
@@ -681,6 +683,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -852,6 +855,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -1019,6 +1023,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -1186,6 +1191,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-modules-arm (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
@@ -1332,6 +1338,7 @@ packages:
       Version: ${BUILT_VER}
       Architecture: ${DEB_ARCH}
       Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+      Section: kernel
       Depends: linux-image-common (= ${BUILT_VER})
       Description: Device-specific kernel modules for ${DEVICE}
        This package contains the kernel modules specific to the ${DEVICE}
