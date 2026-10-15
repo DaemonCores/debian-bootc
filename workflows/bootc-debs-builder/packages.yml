@@ -481,7 +481,8 @@ packages:
 
   # linux-modules-arm-device: one template for all four ARM device-specific
   # module packages. The CI expands each variant into an independent build job
-  # and injects DEVICE from the variant key so the build script is shared.
+  # (see the manifest-expand action) and injects VARIANT from the variant key,
+  # so this build script is written once.
   # Variants (all wave 2, deps: linux-modules-arm):
   #   linux-modules-rpi3 / linux-modules-rpi4
   #   linux-modules-rpi5 / linux-modules-rk3588
@@ -496,6 +497,7 @@ packages:
       rpi5: {}
       rk3588: {}
     variant-name-prefix: "linux-modules-"
+    variant-env: DEVICE
     variant-source: "../../modules-kernel/{variant}"
     sources:
       - ../../kernel/config
