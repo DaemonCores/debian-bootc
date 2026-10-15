@@ -61,7 +61,6 @@ permissions:
   pages: write
   id-token: write
   issues: write
-  secrets: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
