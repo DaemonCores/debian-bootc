@@ -75,6 +75,7 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         linux-image-${ARCH} \
+        btrfs-progs \
         ${BOOT_PKG} \
         dracut \
         dracut-network \
