@@ -392,6 +392,7 @@ packages:
       sed -i \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        -e "s|{{ KVER }}|${KVER}|g" \
         "${DESTDIR}/DEBIAN/control"
 
       # Regenerate md5sums for the installed module files.
@@ -468,6 +469,7 @@ packages:
       sed -i \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        -e "s|{{ KVER }}|${KVER}|g" \
         "${DESTDIR}/DEBIAN/control"
 
       # No payload files -> no md5sums file (dpkg-deb accepts a package with
@@ -817,6 +819,7 @@ packages:
       sed -i \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        -e "s|{{ KVER }}|${KVER}|g" \
         "${DESTDIR}/DEBIAN/control"
 
       ( cd "${DESTDIR}" && \
