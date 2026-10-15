@@ -227,6 +227,7 @@ packages:
     sources:
       - ../../kernel/config
       - ../../modules-kernel/arm
+      - preinstall/output/linux-modules-arm
     build: |
       set -euo pipefail
       DEVICE=arm
@@ -386,24 +387,12 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      # Generate the Debian control file. The arm modules package depends on
-      # the common image (which carries the matching vmlinuz). The ARM device
-      # modules packages will in turn depend on THIS package.
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-image-common (= ${BUILT_VER})
-      Description: ARM-generic kernel modules
-       This package contains the kernel modules common to all ARM devices
-       (ARM64 core, kernel command line, PL011 UART, MMC/USB/RTC subsystem
-       cores). It is built on top of linux-image-common and must be installed
-       alongside it. The ARM device-specific modules packages
-       (linux-modules-rpi3/rpi4/rpi5/rk3588) depend on this package.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       # Regenerate md5sums for the installed module files.
       ( cd "${DESTDIR}" && \
@@ -434,6 +423,7 @@ packages:
     sources:
       - ../../kernel/config
       - ../../modules-kernel/generic
+      - preinstall/output/linux-modules-generic
     build: |
       set -euo pipefail
       DEVICE=generic
@@ -473,22 +463,12 @@ packages:
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
 
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-image-common (= ${BUILT_VER})
-      Description: Empty kernel modules meta-package (generic device class)
-       This package contains NO kernel modules. It exists so the
-       linux-modules-${DEVICE} apt install line in Containerfile.minimal
-       resolves to a real package name when DEVICE=generic (the default),
-       instead of relying on apt silently ignoring an empty package name. It
-       Depends on linux-image-common so apt pulls the common kernel image
-       transitively.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-generic/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       # No payload files -> no md5sums file (dpkg-deb accepts a package with
       # only a control file). Build the empty modules deb.
@@ -514,6 +494,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/arm
       - ../../modules-kernel/rpi3
+      - preinstall/output/linux-modules-arm-device
     build: |
       set -euo pipefail
       DEVICE=rpi3
@@ -677,23 +658,13 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      # Generate the Debian control file. The device modules package depends
-      # on linux-modules-arm (which itself depends on linux-image-common), so
-      # apt pulls the whole chain transitively.
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-modules-arm (= ${BUILT_VER})
-      Description: Device-specific kernel modules for ${DEVICE}
-       This package contains the kernel modules specific to the ${DEVICE}
-       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
-       of linux-modules-arm (ARM-generic modules) and must be installed
-       alongside it.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ DEVICE }}|${DEVICE}|g" \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       # Regenerate md5sums for the installed module files.
       ( cd "${DESTDIR}" && \
@@ -719,6 +690,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/arm
       - ../../modules-kernel/rpi4
+      - preinstall/output/linux-modules-arm-device
     build: |
       set -euo pipefail
       DEVICE=rpi4
@@ -853,20 +825,13 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-modules-arm (= ${BUILT_VER})
-      Description: Device-specific kernel modules for ${DEVICE}
-       This package contains the kernel modules specific to the ${DEVICE}
-       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
-       of linux-modules-arm (ARM-generic modules) and must be installed
-       alongside it.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ DEVICE }}|${DEVICE}|g" \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       ( cd "${DESTDIR}" && \
         find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
@@ -888,6 +853,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/arm
       - ../../modules-kernel/rpi5
+      - preinstall/output/linux-modules-arm-device
     build: |
       set -euo pipefail
       DEVICE=rpi5
@@ -1022,20 +988,13 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-modules-arm (= ${BUILT_VER})
-      Description: Device-specific kernel modules for ${DEVICE}
-       This package contains the kernel modules specific to the ${DEVICE}
-       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
-       of linux-modules-arm (ARM-generic modules) and must be installed
-       alongside it.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ DEVICE }}|${DEVICE}|g" \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       ( cd "${DESTDIR}" && \
         find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
@@ -1057,6 +1016,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/arm
       - ../../modules-kernel/rk3588
+      - preinstall/output/linux-modules-arm-device
     build: |
       set -euo pipefail
       DEVICE=rk3588
@@ -1191,20 +1151,13 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-modules-arm (= ${BUILT_VER})
-      Description: Device-specific kernel modules for ${DEVICE}
-       This package contains the kernel modules specific to the ${DEVICE}
-       device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
-       of linux-modules-arm (ARM-generic modules) and must be installed
-       alongside it.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ DEVICE }}|${DEVICE}|g" \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       ( cd "${DESTDIR}" && \
         find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
@@ -1231,6 +1184,7 @@ packages:
     sources:
       - ../../kernel/config
       - ../../modules-kernel/x86_64
+      - preinstall/output/linux-modules-x86-64
     build: |
       set -euo pipefail
       DEVICE=x86-64
@@ -1339,20 +1293,12 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      cat > "${DESTDIR}/DEBIAN/control" <<EOF
-      Package: linux-modules-${DEVICE}
-      Version: ${BUILT_VER}
-      Architecture: ${DEB_ARCH}
-      Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
-      Section: kernel
-      Priority: optional
-      Depends: linux-image-common (= ${BUILT_VER})
-      Description: Device-specific kernel modules for ${DEVICE}
-       This package contains the kernel modules specific to the ${DEVICE}
-       device overlay (NVMe, AHCI, physical NIC drivers, USB host
-       controllers). It is built on top of linux-image-common and must be
-       installed alongside it.
-      EOF
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-x86-64/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
 
       ( cd "${DESTDIR}" && \
         find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
