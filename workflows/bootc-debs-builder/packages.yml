@@ -1211,15 +1211,17 @@ packages:
       - ../../modules-kernel/x86_64
     build: |
       set -euo pipefail
-      DEVICE=x86_64
+      DEVICE=x86-64
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
       BASE_CONFIG="${SAVE_PWD}/kernel/config"
-      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      # The overlay directory uses underscores (filesystem name); DEVICE uses
+      # hyphens so the generated Debian package name is valid (no underscores).
+      OVERLAY="${SAVE_PWD}/modules-kernel/x86_64"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
       test -f "${OVERLAY}" \
-        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: modules-kernel/x86_64 overlay missing" >&2; exit 1; }
 
       # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
