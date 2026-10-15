@@ -379,6 +379,10 @@ packages:
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      # modules.builtin is generated during a full kernel build; a modules-only
+      # build (make modules without vmlinux) may not produce it. Provide an
+      # empty stub so modules_install does not fail trying to install the file.
+      [ -f modules.builtin ] || touch modules.builtin
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       # Generate the Debian control file. The arm modules package depends on
@@ -659,6 +663,10 @@ packages:
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      # modules.builtin is generated during a full kernel build; a modules-only
+      # build (make modules without vmlinux) may not produce it. Provide an
+      # empty stub so modules_install does not fail trying to install the file.
+      [ -f modules.builtin ] || touch modules.builtin
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       # Generate the Debian control file. The device modules package depends
@@ -827,6 +835,10 @@ packages:
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      # modules.builtin is generated during a full kernel build; a modules-only
+      # build (make modules without vmlinux) may not produce it. Provide an
+      # empty stub so modules_install does not fail trying to install the file.
+      [ -f modules.builtin ] || touch modules.builtin
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
@@ -988,6 +1000,10 @@ packages:
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      # modules.builtin is generated during a full kernel build; a modules-only
+      # build (make modules without vmlinux) may not produce it. Provide an
+      # empty stub so modules_install does not fail trying to install the file.
+      [ -f modules.builtin ] || touch modules.builtin
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
@@ -1149,6 +1165,10 @@ packages:
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      # modules.builtin is generated during a full kernel build; a modules-only
+      # build (make modules without vmlinux) may not produce it. Provide an
+      # empty stub so modules_install does not fail trying to install the file.
+      [ -f modules.builtin ] || touch modules.builtin
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
@@ -1283,6 +1303,10 @@ packages:
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      # modules.builtin is generated during a full kernel build; a modules-only
+      # build (make modules without vmlinux) may not produce it. Provide an
+      # empty stub so modules_install does not fail trying to install the file.
+      [ -f modules.builtin ] || touch modules.builtin
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       cat > "${DESTDIR}/DEBIAN/control" <<EOF
