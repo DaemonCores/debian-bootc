@@ -348,18 +348,25 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      # Patch scripts/Makefile.modpost so in-tree modules-only builds pass
-      # -i Module.symvers to modpost when vmlinux.o is absent. By default the
-      # kernel Makefile only adds this flag on the KBUILD_EXTMOD (external-
-      # module) path; without it modpost has no kernel symbol table and reports
-      # 1400+ undefined-symbol errors even though Module.symvers contains them.
-      if [ -f scripts/Makefile.modpost ] && [ -f Module.symvers ]; then
+      # Filter Module.symvers to vmlinux-only exports before patching modpost.
+      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
+      # etc.); if we feed those to modpost via -i it flags duplicate exports when
+      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
+      # the module build; inter-module exports are discovered by scanning .ko files.
+      if [ -f Module.symvers ]; then
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+      fi
+      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
+      # absent. In-tree modules-only builds skip this flag by default (only the
+      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
+      # and reports 1400+ undefined-symbol errors.
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
         python3 << 'PYEOF'
       f = 'scripts/Makefile.modpost'
       needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard Module.symvers),)\nmodpost-args += -i Module.symvers\nendif'
+      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
       txt = open(f).read()
-      if needle in txt and '-i Module.symvers' not in txt:
+      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
           open(f, 'w').write(txt.replace(needle, needle + insert, 1))
       PYEOF
       fi
@@ -621,18 +628,25 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      # Patch scripts/Makefile.modpost so in-tree modules-only builds pass
-      # -i Module.symvers to modpost when vmlinux.o is absent. By default the
-      # kernel Makefile only adds this flag on the KBUILD_EXTMOD (external-
-      # module) path; without it modpost has no kernel symbol table and reports
-      # 1400+ undefined-symbol errors even though Module.symvers contains them.
-      if [ -f scripts/Makefile.modpost ] && [ -f Module.symvers ]; then
+      # Filter Module.symvers to vmlinux-only exports before patching modpost.
+      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
+      # etc.); if we feed those to modpost via -i it flags duplicate exports when
+      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
+      # the module build; inter-module exports are discovered by scanning .ko files.
+      if [ -f Module.symvers ]; then
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+      fi
+      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
+      # absent. In-tree modules-only builds skip this flag by default (only the
+      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
+      # and reports 1400+ undefined-symbol errors.
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
         python3 << 'PYEOF'
       f = 'scripts/Makefile.modpost'
       needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard Module.symvers),)\nmodpost-args += -i Module.symvers\nendif'
+      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
       txt = open(f).read()
-      if needle in txt and '-i Module.symvers' not in txt:
+      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
           open(f, 'w').write(txt.replace(needle, needle + insert, 1))
       PYEOF
       fi
@@ -786,18 +800,25 @@ packages:
         # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
       fi
       [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
-      # Patch scripts/Makefile.modpost so in-tree modules-only builds pass
-      # -i Module.symvers to modpost when vmlinux.o is absent. By default the
-      # kernel Makefile only adds this flag on the KBUILD_EXTMOD (external-
-      # module) path; without it modpost has no kernel symbol table and reports
-      # 1400+ undefined-symbol errors even though Module.symvers contains them.
-      if [ -f scripts/Makefile.modpost ] && [ -f Module.symvers ]; then
+      # Filter Module.symvers to vmlinux-only exports before patching modpost.
+      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
+      # etc.); if we feed those to modpost via -i it flags duplicate exports when
+      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
+      # the module build; inter-module exports are discovered by scanning .ko files.
+      if [ -f Module.symvers ]; then
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+      fi
+      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
+      # absent. In-tree modules-only builds skip this flag by default (only the
+      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
+      # and reports 1400+ undefined-symbol errors.
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
         python3 << 'PYEOF'
       f = 'scripts/Makefile.modpost'
       needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard Module.symvers),)\nmodpost-args += -i Module.symvers\nendif'
+      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
       txt = open(f).read()
-      if needle in txt and '-i Module.symvers' not in txt:
+      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
           open(f, 'w').write(txt.replace(needle, needle + insert, 1))
       PYEOF
       fi
@@ -940,18 +961,25 @@ packages:
         # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
       fi
       [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
-      # Patch scripts/Makefile.modpost so in-tree modules-only builds pass
-      # -i Module.symvers to modpost when vmlinux.o is absent. By default the
-      # kernel Makefile only adds this flag on the KBUILD_EXTMOD (external-
-      # module) path; without it modpost has no kernel symbol table and reports
-      # 1400+ undefined-symbol errors even though Module.symvers contains them.
-      if [ -f scripts/Makefile.modpost ] && [ -f Module.symvers ]; then
+      # Filter Module.symvers to vmlinux-only exports before patching modpost.
+      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
+      # etc.); if we feed those to modpost via -i it flags duplicate exports when
+      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
+      # the module build; inter-module exports are discovered by scanning .ko files.
+      if [ -f Module.symvers ]; then
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+      fi
+      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
+      # absent. In-tree modules-only builds skip this flag by default (only the
+      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
+      # and reports 1400+ undefined-symbol errors.
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
         python3 << 'PYEOF'
       f = 'scripts/Makefile.modpost'
       needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard Module.symvers),)\nmodpost-args += -i Module.symvers\nendif'
+      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
       txt = open(f).read()
-      if needle in txt and '-i Module.symvers' not in txt:
+      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
           open(f, 'w').write(txt.replace(needle, needle + insert, 1))
       PYEOF
       fi
@@ -1094,18 +1122,25 @@ packages:
         # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
       fi
       [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
-      # Patch scripts/Makefile.modpost so in-tree modules-only builds pass
-      # -i Module.symvers to modpost when vmlinux.o is absent. By default the
-      # kernel Makefile only adds this flag on the KBUILD_EXTMOD (external-
-      # module) path; without it modpost has no kernel symbol table and reports
-      # 1400+ undefined-symbol errors even though Module.symvers contains them.
-      if [ -f scripts/Makefile.modpost ] && [ -f Module.symvers ]; then
+      # Filter Module.symvers to vmlinux-only exports before patching modpost.
+      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
+      # etc.); if we feed those to modpost via -i it flags duplicate exports when
+      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
+      # the module build; inter-module exports are discovered by scanning .ko files.
+      if [ -f Module.symvers ]; then
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+      fi
+      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
+      # absent. In-tree modules-only builds skip this flag by default (only the
+      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
+      # and reports 1400+ undefined-symbol errors.
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
         python3 << 'PYEOF'
       f = 'scripts/Makefile.modpost'
       needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard Module.symvers),)\nmodpost-args += -i Module.symvers\nendif'
+      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
       txt = open(f).read()
-      if needle in txt and '-i Module.symvers' not in txt:
+      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
           open(f, 'w').write(txt.replace(needle, needle + insert, 1))
       PYEOF
       fi
@@ -1249,18 +1284,25 @@ packages:
         # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
       fi
       [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
-      # Patch scripts/Makefile.modpost so in-tree modules-only builds pass
-      # -i Module.symvers to modpost when vmlinux.o is absent. By default the
-      # kernel Makefile only adds this flag on the KBUILD_EXTMOD (external-
-      # module) path; without it modpost has no kernel symbol table and reports
-      # 1400+ undefined-symbol errors even though Module.symvers contains them.
-      if [ -f scripts/Makefile.modpost ] && [ -f Module.symvers ]; then
+      # Filter Module.symvers to vmlinux-only exports before patching modpost.
+      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
+      # etc.); if we feed those to modpost via -i it flags duplicate exports when
+      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
+      # the module build; inter-module exports are discovered by scanning .ko files.
+      if [ -f Module.symvers ]; then
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+      fi
+      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
+      # absent. In-tree modules-only builds skip this flag by default (only the
+      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
+      # and reports 1400+ undefined-symbol errors.
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
         python3 << 'PYEOF'
       f = 'scripts/Makefile.modpost'
       needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard Module.symvers),)\nmodpost-args += -i Module.symvers\nendif'
+      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
       txt = open(f).read()
-      if needle in txt and '-i Module.symvers' not in txt:
+      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
           open(f, 'w').write(txt.replace(needle, needle + insert, 1))
       PYEOF
       fi
