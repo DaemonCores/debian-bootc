@@ -1515,3 +1515,143 @@ packages:
       rm -f /output/bootc/debian
       dpkg-deb --build /output/bootc /debs/bootc_${BOOTC_VER#v}_${ARCH}.deb
 
+  # ===========================================================================
+  # fisherman — Go CLI backend for bootc OS installation.
+  # CGO_ENABLED=0 → fully static binary, no libc dependency.
+  # go.sum is empty (zero external deps); build is pure stdlib + internal pkgs.
+  # Pinned to a specific commit; bump FISHERMAN_COMMIT + FISHERMAN_VER together.
+  # ===========================================================================
+  - name: fisherman
+    sources:
+      - preinstall/output/fisherman
+    env:
+      FISHERMAN_COMMIT: "4dc8f1cca20e9808c123ed95e572f9106a9be18e"
+      FISHERMAN_VER: "0.3.0+git4dc8f1c"
+    build: |
+      set -euo pipefail
+      ARCH=$(dpkg --print-architecture)
+      GOARCH="${ARCH}"
+
+      # Install Go from Debian (Trixie ships golang-go >= 1.22 which fisherman
+      # requires; fail fast with a version check before touching the source).
+      apt-get update
+      apt-get install -y --no-install-recommends golang-go
+      go_ver=$(go version | awk '{print $3}' | sed 's/go//')
+      go_major=$(printf '%s' "${go_ver}" | cut -d. -f1)
+      go_minor=$(printf '%s' "${go_ver}" | cut -d. -f2)
+      if [ "${go_major}" -lt 1 ] || { [ "${go_major}" -eq 1 ] && [ "${go_minor}" -lt 22 ]; }; then
+        echo "ERROR: Go ${go_ver} < 1.22 (fisherman requires go 1.22)" >&2; exit 1
+      fi
+      go version
+
+      # Clone fisherman at the pinned commit. Full clone (no --depth=1) so a
+      # bare commit SHA can be checked out regardless of branch position.
+      git clone https://github.com/tuna-os/fisherman.git /build/fisherman-src
+      git -C /build/fisherman-src checkout "${FISHERMAN_COMMIT}"
+
+      # Build — CGO_ENABLED=0 gives a fully static binary.
+      CGO_ENABLED=0 GOARCH="${GOARCH}" go build \
+        -C /build/fisherman-src/fisherman \
+        -ldflags "-s -w -X main.version=${FISHERMAN_VER}" \
+        -o /tmp/fisherman-bin \
+        ./cmd/fisherman
+
+      # Stage the binary and polkit policy into the output tree.
+      install -Dm755 /tmp/fisherman-bin \
+        /output/fisherman/usr/local/bin/fisherman
+      install -Dm644 \
+        /build/fisherman-src/data/polkit/org.tunaos.Installer.policy \
+        /output/fisherman/usr/share/polkit-1/actions/org.tunaos.Installer.policy
+
+      # Validate: binary runs and reports version.
+      /output/fisherman/usr/local/bin/fisherman version 2>/dev/null \
+        | grep -q "fisherman" \
+        || { echo "ERROR: fisherman version check failed" >&2; exit 1; }
+
+      sed -i \
+        -e "s|{{ VER }}|${FISHERMAN_VER}|g" \
+        -e "s|{{ ARCH }}|${ARCH}|g" \
+        /output/fisherman/DEBIAN/control
+
+      dpkg-deb --build /output/fisherman \
+        "/debs/fisherman_${FISHERMAN_VER}_${ARCH}.deb"
+
+      test -s "/debs/fisherman_${FISHERMAN_VER}_${ARCH}.deb" \
+        || { echo "ERROR: fisherman deb empty or missing" >&2; exit 1; }
+
+  # ===========================================================================
+  # bootc-installer — GTK4/Libadwaita/Python3 graphical frontend for fisherman.
+  # Meson build with blueprint-compiler for the .blp UI sources.
+  # Architecture-independent (Python + GResources), but tied to the fisherman
+  # dep which IS arch-specific, so we build on the target arch runner.
+  # ===========================================================================
+  - name: bootc-installer
+    deps:
+      - fisherman
+    sources:
+      - preinstall/output/bootc-installer
+    env:
+      BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f"
+    build: |
+      set -euo pipefail
+      ARCH=$(dpkg --print-architecture)
+
+      # Build deps: meson/ninja are in the buildenv; add blueprint-compiler and
+      # the GTK4/Adwaita/GnomeDesktop/GWeather dev headers for meson introspection.
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        blueprint-compiler \
+        libgtk-4-dev \
+        libadwaita-1-dev \
+        libgnome-desktop-4-dev \
+        libgweather-4-dev \
+        libnm-dev \
+        appstream \
+        desktop-file-utils
+
+      # Clone at the pinned commit (shallow not possible with a bare commit SHA).
+      git clone https://github.com/frostyard/bootc-installer.git /build/bootc-installer-src
+      git -C /build/bootc-installer-src checkout "${BOOTC_INSTALLER_COMMIT}"
+
+      # The meson build wants fisherman's data/images.json; that lives in the
+      # fisherman submodule of the upstream repo, but we provide our own recipe.
+      # Stub out the fisherman subdir with just the images.json path the meson
+      # build reads (data/meson.build references ../fisherman/data/images.json).
+      mkdir -p /build/bootc-installer-src/fisherman/data
+      cp /build/bootc-installer-src/recipe.json \
+        /build/bootc-installer-src/fisherman/data/images.json
+
+      # Build with meson. build-fisherman=false: we package fisherman separately.
+      meson setup \
+        --prefix=/usr \
+        -Dbuild-fisherman=false \
+        /build/bootc-installer-build \
+        /build/bootc-installer-src
+
+      meson compile -C /build/bootc-installer-build
+
+      # Install to DESTDIR for packaging.
+      DESTDIR=/output/bootc-installer \
+        meson install -C /build/bootc-installer-build
+
+      # Content check: the installed launcher and GResource bundle exist.
+      test -x /output/bootc-installer/usr/bin/bootc-installer \
+        || { echo "ERROR: bootc-installer launcher missing" >&2; exit 1; }
+      _res=$(find /output/bootc-installer/usr -name "*.gresource" | head -1)
+      test -n "${_res}" && test -s "${_res}" \
+        || { echo "ERROR: bootc-installer GResource bundle missing" >&2; exit 1; }
+
+      sed -i \
+        -e "s|{{ VER }}|${BOOTC_INSTALLER_VER}|g" \
+        /output/bootc-installer/DEBIAN/control
+
+      cd /output/bootc-installer
+      ln -sf DEBIAN debian
+      dpkg-deb --build /output/bootc-installer \
+        "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb"
+      rm -f debian
+
+      test -s "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb" \
+        || { echo "ERROR: bootc-installer deb empty or missing" >&2; exit 1; }
+
