@@ -7,6 +7,7 @@ Homepage: https://github.com/frostyard/bootc-installer
 Section: admin
 Priority: optional
 Depends: fisherman,
+ polkit,
  python3 (>= 3.11),
  python3-gi,
  gir1.2-gtk-4.0,
