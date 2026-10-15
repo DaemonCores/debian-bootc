@@ -1,12 +1,12 @@
 Source: bootc
 Package: bootc
 Version: {{ VER }}
-Architecture: amd64
+Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
-Pre-Depends: lvm2, xfsprogs, dracut, libostree, bootupd
+Pre-Depends: lvm2, xfsprogs, dracut, libostree{{ BOOTUPD_DEP }}
 Depends: iproute2, {{ DEPS }}
 Recommends: fdisk, dosfstools, parted, skopeo
 Description: bootable OCI container image manager for Debian

@@ -199,6 +199,12 @@ packages:
       test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: repacked linux-image-common deb empty" >&2; exit 1; }
 
+      # Save Module.symvers so module builds can seed it directly. The
+      # headers deb may not include it in all build configurations; an
+      # explicit copy is more reliable than extracting from the deb.
+      [ -f Module.symvers ] \
+        && cp Module.symvers "/debs/linux-kernel-Module.symvers"
+
       # Free the ~10 GB kernel source tree now that all debs are copied to
       # /debs. Without this the runner's /tmp fills up and starves parallel
       # jobs (e.g. grub-efi-amd64-signed) of disk space.
@@ -323,19 +329,21 @@ packages:
       # linux-image so modpost can resolve kernel symbols in a modules-only
       # build (no vmlinux.o). Without it, modpost fails on modules that
       # reference built-in kernel symbols (__fentry__, __x86_return_thunk…).
-      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
-      if [ -n "${HEADERS_DEB}" ]; then
-        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        if [ -n "${SYMVERS}" ]; then
-          cp "${SYMVERS}" Module.symvers
-          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
-          # symvers target for modules-only builds. Seed it too so modpost
-          # finds the kernel symbols when vmlinux.o is absent.
-          cp "${SYMVERS}" modules-only.symvers
+      SYMVERS_SRC=""
+      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
+        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
+      else
+        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        if [ -n "${HEADERS_DEB}" ]; then
+          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
         fi
-        rm -rf /tmp/headers-extract
       fi
+      if [ -n "${SYMVERS_SRC}" ]; then
+        cp "${SYMVERS_SRC}" Module.symvers
+        cp "${SYMVERS_SRC}" modules-only.symvers
+      fi
+      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
 
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
@@ -579,19 +587,21 @@ packages:
       # linux-image so modpost can resolve kernel symbols in a modules-only
       # build (no vmlinux.o). Without it, modpost fails on modules that
       # reference built-in kernel symbols (__fentry__, __x86_return_thunk…).
-      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
-      if [ -n "${HEADERS_DEB}" ]; then
-        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        if [ -n "${SYMVERS}" ]; then
-          cp "${SYMVERS}" Module.symvers
-          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
-          # symvers target for modules-only builds. Seed it too so modpost
-          # finds the kernel symbols when vmlinux.o is absent.
-          cp "${SYMVERS}" modules-only.symvers
+      SYMVERS_SRC=""
+      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
+        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
+      else
+        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        if [ -n "${HEADERS_DEB}" ]; then
+          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
         fi
-        rm -rf /tmp/headers-extract
       fi
+      if [ -n "${SYMVERS_SRC}" ]; then
+        cp "${SYMVERS_SRC}" Module.symvers
+        cp "${SYMVERS_SRC}" modules-only.symvers
+      fi
+      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
 
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
@@ -731,19 +741,21 @@ packages:
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
-      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
-      if [ -n "${HEADERS_DEB}" ]; then
-        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        if [ -n "${SYMVERS}" ]; then
-          cp "${SYMVERS}" Module.symvers
-          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
-          # symvers target for modules-only builds. Seed it too so modpost
-          # finds the kernel symbols when vmlinux.o is absent.
-          cp "${SYMVERS}" modules-only.symvers
+      SYMVERS_SRC=""
+      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
+        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
+      else
+        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        if [ -n "${HEADERS_DEB}" ]; then
+          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
         fi
-        rm -rf /tmp/headers-extract
       fi
+      if [ -n "${SYMVERS_SRC}" ]; then
+        cp "${SYMVERS_SRC}" Module.symvers
+        cp "${SYMVERS_SRC}" modules-only.symvers
+      fi
+      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
       make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
@@ -868,19 +880,21 @@ packages:
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
-      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
-      if [ -n "${HEADERS_DEB}" ]; then
-        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        if [ -n "${SYMVERS}" ]; then
-          cp "${SYMVERS}" Module.symvers
-          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
-          # symvers target for modules-only builds. Seed it too so modpost
-          # finds the kernel symbols when vmlinux.o is absent.
-          cp "${SYMVERS}" modules-only.symvers
+      SYMVERS_SRC=""
+      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
+        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
+      else
+        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        if [ -n "${HEADERS_DEB}" ]; then
+          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
         fi
-        rm -rf /tmp/headers-extract
       fi
+      if [ -n "${SYMVERS_SRC}" ]; then
+        cp "${SYMVERS_SRC}" Module.symvers
+        cp "${SYMVERS_SRC}" modules-only.symvers
+      fi
+      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
       make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
@@ -1005,19 +1019,21 @@ packages:
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
-      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
-      if [ -n "${HEADERS_DEB}" ]; then
-        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        if [ -n "${SYMVERS}" ]; then
-          cp "${SYMVERS}" Module.symvers
-          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
-          # symvers target for modules-only builds. Seed it too so modpost
-          # finds the kernel symbols when vmlinux.o is absent.
-          cp "${SYMVERS}" modules-only.symvers
+      SYMVERS_SRC=""
+      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
+        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
+      else
+        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        if [ -n "${HEADERS_DEB}" ]; then
+          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
         fi
-        rm -rf /tmp/headers-extract
       fi
+      if [ -n "${SYMVERS_SRC}" ]; then
+        cp "${SYMVERS_SRC}" Module.symvers
+        cp "${SYMVERS_SRC}" modules-only.symvers
+      fi
+      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
       make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
@@ -1143,19 +1159,21 @@ packages:
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
-      HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
-      if [ -n "${HEADERS_DEB}" ]; then
-        dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-        SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        if [ -n "${SYMVERS}" ]; then
-          cp "${SYMVERS}" Module.symvers
-          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
-          # symvers target for modules-only builds. Seed it too so modpost
-          # finds the kernel symbols when vmlinux.o is absent.
-          cp "${SYMVERS}" modules-only.symvers
+      SYMVERS_SRC=""
+      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
+        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
+      else
+        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        if [ -n "${HEADERS_DEB}" ]; then
+          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
+          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
         fi
-        rm -rf /tmp/headers-extract
       fi
+      if [ -n "${SYMVERS_SRC}" ]; then
+        cp "${SYMVERS_SRC}" Module.symvers
+        cp "${SYMVERS_SRC}" modules-only.symvers
+      fi
+      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
       make -j"$(nproc)" modules
 
       DESTDIR="/output/linux-modules-${DEVICE}"
@@ -1447,6 +1465,8 @@ packages:
         /debs/grub-efi-amd64-signed_${GRUB_VER}_${ARCH}.deb
 
   - name: bootupd
+    when:
+      arch: amd64
     sources:
       - preinstall/output/bootupd
       - patches/bootupd-0.2.35-dpkg.patch
@@ -1632,6 +1652,7 @@ packages:
       sed -i \
         -e "s|{{ VER }}|${OSTREE_VER}|g" \
         -e "s|{{ DEPS }}|${DEPS}|g" \
+        -e "s|{{ ARCH }}|${ARCH}|g" \
         /output/ostree/DEBIAN/control
       cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ostreepostinstall/* /output/ostree/
 
@@ -1683,9 +1704,13 @@ packages:
         | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
 
       DEPS=$(cat /tmp/bootc-deps)
+      BOOTUPD_DEP=""
+      [ "${ARCH}" = "amd64" ] && BOOTUPD_DEP=", bootupd"
       sed -i \
         -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
-        -e "s|{{ DEPS }}|${DEPS}|g"  \
+        -e "s|{{ DEPS }}|${DEPS}|g" \
+        -e "s|{{ ARCH }}|${ARCH}|g" \
+        -e "s|{{ BOOTUPD_DEP }}|${BOOTUPD_DEP}|g" \
         /output/bootc/DEBIAN/control
       cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
 
