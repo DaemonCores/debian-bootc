@@ -44,6 +44,14 @@ CONFIG_MMC_BCM2835=y
 # next deployment.
 # =============================================================================
 
-# BCMGENET: built-in. Broadcom GENET Ethernet controller, used on the
+# BCMGENET: module. Broadcom GENET Ethernet controller, used on the
 #           Raspberry Pi 3B+ (the wired Ethernet port).
-CONFIG_BCMGENET=y
+#           Kept as =m (not =y): BCMGENET selects BCM_NET_PHYLIB, so
+#           forcing it built-in promotes BCM_NET_PHYLIB to =y too, which
+#           removes bcm-phy-lib.ko from the build and breaks bcm54140.ko
+#           at modpost (bcm_phy_*_rdb undefined). Network is not needed in
+#           early boot on the Pi (bootc pulls updates from userspace).
+CONFIG_BCMGENET=m
+# Pin BCM_NET_PHYLIB to =m so select-chains from BCMGENET or
+# BROADCOM_PHY cannot promote it to =y and hide bcm-phy-lib.ko.
+CONFIG_BCM_NET_PHYLIB=m

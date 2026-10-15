@@ -48,6 +48,8 @@ CONFIG_MMC_BCM2835=y
 # next deployment.
 # =============================================================================
 
-# BCMGENET: built-in. Broadcom GENET Ethernet controller, used on the
-#           Raspberry Pi 4 (the wired Ethernet port).
-CONFIG_BCMGENET=y
+# BCMGENET: module. Broadcom GENET Ethernet controller, used on the
+#           Raspberry Pi 4 (the wired Ethernet port). Kept as =m — see
+#           modules-kernel/rpi3 for the bcm-phy-lib/modpost rationale.
+CONFIG_BCMGENET=m
+CONFIG_BCM_NET_PHYLIB=m
