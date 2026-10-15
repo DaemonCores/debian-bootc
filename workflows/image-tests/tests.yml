@@ -17,6 +17,9 @@
 #                  match the running arch (reports SKIP, not FAIL).
 
 boot_timeout: 600
+# Timeout for the VM to come back after the rollback reboot (shorter than
+# boot_timeout since the image is already installed — no dracut rebuild).
+reboot_timeout: 300
 
 tests:
   # ── bootc / ostree / immutability ──────────────────────────────────────
@@ -190,3 +193,50 @@ tests:
     run: test -x /usr/local/bin/bootc-finalize
     diag: |
       ls -la /usr/local/bin/bootc-finalize 2>&1
+
+  # ── rollback preparation (pre-reboot — must pass before the reboot phase) ─
+  - name: two deployments staged for rollback test
+    run: test "$(ls /ostree/deploy/*/deploy/ 2>/dev/null | wc -l)" -ge 2
+    diag: |
+      ls -la /ostree/deploy/*/deploy/ 2>&1
+      ostree admin status 2>&1
+
+  - name: /var rollback marker written
+    run: touch /var/rollback-test-marker
+    diag: |
+      ls -la /var/ 2>&1 | head -n 20
+      findmnt /var 2>&1
+
+  - name: bootc rollback queues prior deployment
+    run: |
+      bootc rollback &&
+      bootc status --format json | jq -e '.status.rollbackQueued == true'
+    diag: |
+      bootc status 2>&1
+      ostree admin status 2>&1
+
+reboot_tests:
+  # ── post-rollback verification (runs after VM reboots into rollback slot) ─
+  - name: /var marker preserved across rollback reboot
+    run: test -f /var/rollback-test-marker
+    diag: |
+      ls -la /var/rollback-test-marker 2>&1 || echo absent
+      findmnt /var 2>&1
+
+  - name: rollback consumed after reboot (rollbackQueued is false)
+    run: bootc status --format json | jq -e '.status.rollbackQueued == false'
+    diag: |
+      bootc status 2>&1
+      ostree admin status 2>&1
+
+  - name: no failed systemd units after rollback reboot
+    run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
+    diag: |
+      systemctl --failed --no-pager 2>&1
+
+  - name: booted through bootc after rollback
+    run: bootc status --format json
+    expect: booted
+    diag: |
+      bootc status 2>&1 | head -n 30
+      journalctl -b --no-pager 2>&1 | tail -n 20
