@@ -327,7 +327,13 @@ packages:
       if [ -n "${HEADERS_DEB}" ]; then
         dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
         SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        if [ -n "${SYMVERS}" ]; then
+          cp "${SYMVERS}" Module.symvers
+          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
+          # symvers target for modules-only builds. Seed it too so modpost
+          # finds the kernel symbols when vmlinux.o is absent.
+          cp "${SYMVERS}" modules-only.symvers
+        fi
         rm -rf /tmp/headers-extract
       fi
 
@@ -577,7 +583,13 @@ packages:
       if [ -n "${HEADERS_DEB}" ]; then
         dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
         SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        if [ -n "${SYMVERS}" ]; then
+          cp "${SYMVERS}" Module.symvers
+          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
+          # symvers target for modules-only builds. Seed it too so modpost
+          # finds the kernel symbols when vmlinux.o is absent.
+          cp "${SYMVERS}" modules-only.symvers
+        fi
         rm -rf /tmp/headers-extract
       fi
 
@@ -723,7 +735,13 @@ packages:
       if [ -n "${HEADERS_DEB}" ]; then
         dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
         SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        if [ -n "${SYMVERS}" ]; then
+          cp "${SYMVERS}" Module.symvers
+          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
+          # symvers target for modules-only builds. Seed it too so modpost
+          # finds the kernel symbols when vmlinux.o is absent.
+          cp "${SYMVERS}" modules-only.symvers
+        fi
         rm -rf /tmp/headers-extract
       fi
       make -j"$(nproc)" modules
@@ -854,7 +872,13 @@ packages:
       if [ -n "${HEADERS_DEB}" ]; then
         dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
         SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        if [ -n "${SYMVERS}" ]; then
+          cp "${SYMVERS}" Module.symvers
+          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
+          # symvers target for modules-only builds. Seed it too so modpost
+          # finds the kernel symbols when vmlinux.o is absent.
+          cp "${SYMVERS}" modules-only.symvers
+        fi
         rm -rf /tmp/headers-extract
       fi
       make -j"$(nproc)" modules
@@ -985,7 +1009,13 @@ packages:
       if [ -n "${HEADERS_DEB}" ]; then
         dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
         SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        if [ -n "${SYMVERS}" ]; then
+          cp "${SYMVERS}" Module.symvers
+          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
+          # symvers target for modules-only builds. Seed it too so modpost
+          # finds the kernel symbols when vmlinux.o is absent.
+          cp "${SYMVERS}" modules-only.symvers
+        fi
         rm -rf /tmp/headers-extract
       fi
       make -j"$(nproc)" modules
@@ -1117,7 +1147,13 @@ packages:
       if [ -n "${HEADERS_DEB}" ]; then
         dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
         SYMVERS=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        [ -n "${SYMVERS}" ] && cp "${SYMVERS}" Module.symvers
+        if [ -n "${SYMVERS}" ]; then
+          cp "${SYMVERS}" Module.symvers
+          # Linux 7.x writes modules-only.symvers (not Module.symvers) as the
+          # symvers target for modules-only builds. Seed it too so modpost
+          # finds the kernel symbols when vmlinux.o is absent.
+          cp "${SYMVERS}" modules-only.symvers
+        fi
         rm -rf /tmp/headers-extract
       fi
       make -j"$(nproc)" modules
