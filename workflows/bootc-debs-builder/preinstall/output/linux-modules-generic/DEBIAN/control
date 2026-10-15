@@ -1,0 +1,14 @@
+Package: linux-modules-generic
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+Section: kernel
+Priority: optional
+Depends: linux-image-common (= {{ VER }})
+Description: Empty kernel modules meta-package (generic device class)
+ This package contains NO kernel modules. It exists so the
+ linux-modules-generic apt install line in Containerfile.minimal
+ resolves to a real package name when DEVICE=generic (the default),
+ instead of relying on apt silently ignoring an empty package name. It
+ Depends on linux-image-common so apt pulls the common kernel image
+ transitively.
