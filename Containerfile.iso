@@ -1,0 +1,182 @@
+#####################################################################################
+# Containerfile.iso — DaemonCores graphical installer live image
+#
+# Produces a bootc container image that boots as a live graphical installer.
+# bootc-image-builder then converts this image to an ISO (dracut live squashfs).
+#
+# The live environment runs bootc-installer (GTK4/Adwaita frontend) + fisherman
+# (Go backend) as the graphical installation wizard. The ISO ITSELF is a bootc
+# image — it can be edited as a container like any other image in this repo.
+#
+# Architecture support: amd64 only for now (the graphical stack is x86-first).
+# Build with:
+#   podman build --build-arg ARCH=amd64 -f Containerfile.iso -t installer .
+#
+# Based on the minimal image to keep the ISO small. Adds:
+#   - cage (single-app Wayland compositor, no full DE needed)
+#   - fisherman .deb (Go bootc install backend)
+#   - bootc-installer .deb (GTK4/Adwaita wizard frontend)
+#   - Mesa software renderer (llvmpipe) for display without specific GPU driver
+#   - live user with autologin on tty1 → cage → bootc-installer
+#   - polkit rule: live user runs fisherman via pkexec without password prompt
+#   - DaemonCores recipe.json (image catalog for bootc-installer)
+#####################################################################################
+
+FROM debian:trixie
+STOPSIGNAL SIGRTMIN+3
+
+LABEL org.opencontainers.image.title="DaemonCores Installer"
+LABEL org.opencontainers.image.description="Graphical bootc installer live image (bootc-installer + fisherman)"
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
+LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
+
+ARG ARCH=amd64
+ARG BOOT_PKG=grub-efi-amd64-signed
+ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
+
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# -----------------------------------------------------------------------------
+# Phase 1: SSL prerequisites + APT sources (shared with main Containerfile)
+# -----------------------------------------------------------------------------
+COPY ./src/debianpreinstall /
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        openssl \
+        git \
+        curl \
+        wget \
+    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
+    && rm -f \
+        "/etc/ssl/certs/988a38cb.0" \
+        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
+        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
+
+# -----------------------------------------------------------------------------
+# Phase 2: Trust the bootc APT repo (same as main Containerfile)
+# -----------------------------------------------------------------------------
+COPY ./src/bootcpreinstall /
+RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
+        /etc/apt/sources.list.d/debian-bootc.sources \
+    && wget \
+        -O /usr/share/keyrings/debian-bootc-keyring.gpg \
+        https://daemoncores.github.io/debian-bootc/gpg.key \
+    && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
+        | sha256sum -c -
+
+# -----------------------------------------------------------------------------
+# Phase 3: Base bootc stack (same as minimal — kernel, grub, bootc, ostree)
+# -----------------------------------------------------------------------------
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        linux-image-${ARCH} \
+        ${BOOT_PKG} \
+        dracut \
+        dracut-network \
+        bootc \
+        libostree \
+        bootupd \
+        systemd \
+        systemd-sysv \
+        udev \
+        dbus \
+        polkit \
+        iproute2 \
+        isc-dhcp-client \
+        bash \
+        coreutils \
+        util-linux \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
+# Phase 4: Graphical installer stack
+# fisherman + bootc-installer are installed from our APT repo.
+# cage: minimal single-app Wayland compositor (no full DE required).
+# Mesa llvmpipe: software renderer — works on any GPU without specific drivers.
+# Fonts: minimal set for GTK4 rendering.
+# Network deps: libnm / NM for the bootc-installer network configuration page.
+# -----------------------------------------------------------------------------
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fisherman \
+        bootc-installer \
+        cage \
+        libgl1-mesa-dri \
+        libdrm2 \
+        fonts-dejavu-core \
+        fonts-noto-core \
+        network-manager \
+        libnm0 \
+        gir1.2-nm-1.0 \
+        libgnome-desktop-4-2 \
+        gir1.2-gnome-desktop-4.0 \
+        libgweather-4-0 \
+        gir1.2-gweather-4.0 \
+        xdg-utils \
+        adwaita-icon-theme \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
+# Phase 5: Live user + autologin + graphical session
+# -----------------------------------------------------------------------------
+
+# live user: no password, home at /var/home/live (ostree-native location).
+RUN useradd \
+        --uid 1000 \
+        --create-home \
+        --home-dir /var/home/live \
+        --shell /bin/bash \
+        --comment "Live installer user" \
+        live \
+    && passwd -d live \
+    && usermod -aG video,render,input,plugdev live \
+    && mkdir -p /var/home/live \
+    && chown live:live /var/home/live
+
+# .bash_profile: when live logs in on tty1, start cage → bootc-installer.
+# cage inherits the VT from the login session, so no display manager needed.
+RUN printf '%s\n' \
+    '# Start the graphical installer automatically on tty1.' \
+    'if [ "$(tty)" = "/dev/tty1" ]; then' \
+    '    exec cage -- bootc-installer' \
+    'fi' \
+    > /var/home/live/.bash_profile \
+    && chown live:live /var/home/live/.bash_profile
+
+# getty@tty1 autologin override.
+RUN mkdir -p /etc/systemd/system/getty@tty1.service.d
+RUN printf '%s\n' \
+    '[Service]' \
+    'ExecStart=' \
+    'ExecStart=-/sbin/agetty --autologin live --noclear %I $TERM' \
+    > /etc/systemd/system/getty@tty1.service.d/autologin.conf
+
+# polkit rule: live user may run fisherman via pkexec without a password.
+# fisherman must be root to partition disks and call bootc install.
+RUN mkdir -p /etc/polkit-1/rules.d
+RUN printf '%s\n' \
+    'polkit.addRule(function(action, subject) {' \
+    '    if (action.id === "org.tunaos.Installer" &&' \
+    '        subject.user === "live") {' \
+    '        return polkit.Result.YES;' \
+    '    }' \
+    '});' \
+    > /etc/polkit-1/rules.d/50-bootc-installer-live.rules
+
+# -----------------------------------------------------------------------------
+# Phase 6: DaemonCores image catalog for bootc-installer
+# -----------------------------------------------------------------------------
+RUN mkdir -p /etc/bootc-installer
+COPY ./workflows/build-iso/recipe.json /etc/bootc-installer/recipe.json
+
+# -----------------------------------------------------------------------------
+# Phase 7: bootc finalize (same as main Containerfile)
+# -----------------------------------------------------------------------------
+RUN bootc-finalize

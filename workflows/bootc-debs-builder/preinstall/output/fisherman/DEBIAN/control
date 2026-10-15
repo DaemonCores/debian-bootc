@@ -1,0 +1,18 @@
+Source: fisherman
+Package: fisherman
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
+Homepage: https://github.com/tuna-os/fisherman
+Section: admin
+Priority: optional
+Depends: podman, dosfstools, e2fsprogs, btrfs-progs, cryptsetup-bin, util-linux, xfsprogs, skopeo, polkit
+Description: bootc disk installer backend
+ Command-line backend for bootc-based OS installers. Reads a JSON recipe
+ describing the target disk, encryption, bootloader and image source, then
+ performs all installation steps: partition, format, LUKS setup, mount,
+ bootc install to-filesystem, post-configuration, and finalize.
+ .
+ fisherman is invoked by graphical frontends such as bootc-installer via
+ pkexec. It supports GRUB2 and systemd-boot stacks, LUKS+TPM2 encryption,
+ btrfs/xfs/ext4 filesystems, and offline installs from a local OCI store.
