@@ -387,6 +387,15 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
+      if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
+        printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
+        printf '%s' "${MODULE_SIGNING_CERT}" > /tmp/mod_sign.x509
+        find "${DESTDIR}/lib/modules" -name "*.ko" | while IFS= read -r ko; do
+          scripts/sign-file sha512 /tmp/mod_sign.pem /tmp/mod_sign.x509 "${ko}"
+        done
+        rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
+      fi
+
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
@@ -668,6 +677,15 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
+      if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
+        printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
+        printf '%s' "${MODULE_SIGNING_CERT}" > /tmp/mod_sign.x509
+        find "${DESTDIR}/lib/modules" -name "*.ko" | while IFS= read -r ko; do
+          scripts/sign-file sha512 /tmp/mod_sign.pem /tmp/mod_sign.x509 "${ko}"
+        done
+        rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
+      fi
+
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
@@ -813,6 +831,15 @@ packages:
       [ -f modules.builtin ] || touch modules.builtin
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+      if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
+        printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
+        printf '%s' "${MODULE_SIGNING_CERT}" > /tmp/mod_sign.x509
+        find "${DESTDIR}/lib/modules" -name "*.ko" | while IFS= read -r ko; do
+          scripts/sign-file sha512 /tmp/mod_sign.pem /tmp/mod_sign.x509 "${ko}"
+        done
+        rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
+      fi
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-x86-64/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
