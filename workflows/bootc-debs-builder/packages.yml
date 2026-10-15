@@ -1568,9 +1568,134 @@ packages:
       dpkg-deb --build /output/grub-efi-amd64-signed \
         /debs/grub-efi-amd64-signed_${GRUB_VER}_${ARCH}.deb
 
-  - name: bootupd
+  # grub-efi-arm64-signed mirrors grub-efi-amd64-signed for the arm64 EFI
+  # GRUB binary. It produces grubaa64.efi (arm64-efi target) signed for
+  # Secure Boot. No BIOS i386-pc step — arm64 is EFI-only.
+  - name: grub-efi-arm64-signed
     when:
-      arch: amd64
+      arch: arm64
+    sources:
+      - preinstall/output/grub-efi-arm64-signed
+    env:
+      GRUB_VER: "1+2.12+9+fedora44"
+      GRUB_FEDORA_BRANCH: fedora-44
+      GRUB_PINNED_COMMIT: "5e9e7e44eddcab0174decc12c3799825e600639f"
+    secret-env:
+      SB_SIGNING_KEY: SB_SIGNING_KEY
+      SB_SIGNING_CERT: SB_SIGNING_CERT
+    build: |
+      set -euo pipefail
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      trap 'rm -f /tmp/sb.key /tmp/sb.crt' EXIT
+
+      git clone --branch "${GRUB_FEDORA_BRANCH}" \
+        https://github.com/rhboot/grub2.git /build/grub2-fedora
+      cd /build/grub2-fedora
+      git checkout "${GRUB_PINNED_COMMIT}"
+
+      ./bootstrap
+
+      ./configure \
+        --target=aarch64 \
+        --with-platform=efi \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --disable-werror \
+        --program-transform-name='s,grub,grub2,' \
+        MAKEINFO=true
+
+      make -j$(nproc)
+
+      make -j$(nproc) install \
+        DESTDIR=/output/grub-efi-arm64-signed \
+        MAKEINFO=true
+
+      GRUB_MODULES=" \
+        all_video boot blscfg btrfs blsuki \
+        cat configfile cryptodisk \
+        echo ext2 f2fs fat font \
+        gcry_rijndael gcry_rsa gcry_serpent \
+        gcry_sha256 gcry_twofish gcry_whirlpool \
+        gfxmenu gfxterm gzio \
+        halt hfsplus http increment iso9660 \
+        jpeg loadenv loopback linux lvm luks luks2 \
+        memdisk mdraid09 mdraid1x minicmd net \
+        normal part_apple part_msdos part_gpt \
+        password_pbkdf2 pgp png reboot regexp \
+        search search_fs_uuid search_fs_file \
+        search_label serial sleep \
+        squash4 syslinuxcfg \
+        test tftp version video xfs zstd \
+        efi_netfs efifwsetup efinet lsefi lsefimmap connectefi \
+        backtrace chain tpm usb usbserial_common \
+        usbserial_pl2303 usbserial_ftdi"
+
+      mkdir -p \
+        /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed
+
+      ./grub-mkimage \
+        -O arm64-efi \
+        -o /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
+        -d grub-core \
+        -p /EFI/debian \
+        ${GRUB_MODULES}
+
+      cd /output/grub-efi-arm64-signed/
+      ln -sf DEBIAN debian
+
+      sed -i \
+        -e "s|{{ VER }}|${GRUB_VER}|g" \
+        DEBIAN/control
+      rm -f debian
+
+      (umask 077; echo "${SB_SIGNING_KEY}"  | base64 -d > /tmp/sb.key)
+      (umask 077; echo "${SB_SIGNING_CERT}" | base64 -d > /tmp/sb.crt)
+
+      sbsign \
+        --key  /tmp/sb.key \
+        --cert /tmp/sb.crt \
+        --output /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
+        /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed
+
+      sbverify \
+        --cert /tmp/sb.crt \
+        /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
+        || { echo "ERROR: GRUB EFI signature verification failed" >&2; exit 1; }
+
+      mkdir -p /output/grub-efi-arm64-signed/usr/share/debian-bootc
+      cp /tmp/sb.crt \
+        /output/grub-efi-arm64-signed/usr/share/debian-bootc/sb_signing.crt
+
+      # Stage where bootupd reads EFI components: EFI/debian (NVRAM vendor path)
+      # and EFI/BOOT (removable-media fallback). BOOTAA64.EFI is the arm64
+      # fallback name (analogous to BOOTX64.EFI on amd64).
+      for _sub in debian BOOT; do
+        install -Dm0644 \
+          /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
+          "/output/grub-efi-arm64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/${_sub}/grubaa64.efi"
+      done
+      # Provide the standard fallback name for firmware that looks for BOOTAA64.EFI.
+      install -Dm0644 \
+        /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
+        "/output/grub-efi-arm64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/BOOT/BOOTAA64.EFI"
+
+      rm -f /tmp/sb.key /tmp/sb.crt
+
+      _o=/output/grub-efi-arm64-signed
+      test -x "${_o}/usr/bin/grub2-editenv" \
+        && test -x "${_o}/usr/sbin/grub2-install" \
+        && test -d "${_o}/usr/lib/grub/arm64-efi" \
+        || { echo "ERROR: grub userspace/modules incomplete" >&2; exit 1; }
+      compgen -G "${_o}/usr/lib/efi/grub2/*/EFI/debian/grubaa64.efi" >/dev/null \
+        && compgen -G "${_o}/usr/lib/efi/grub2/*/EFI/BOOT/grubaa64.efi" >/dev/null \
+        || { echo "ERROR: grubaa64.efi not staged for bootupd" >&2; exit 1; }
+
+      chmod 755 /output/grub-efi-arm64-signed/DEBIAN/postinst
+      dpkg-deb --build /output/grub-efi-arm64-signed \
+        /debs/grub-efi-arm64-signed_${GRUB_VER}_${ARCH}.deb
+
+  - name: bootupd
     sources:
       - preinstall/output/bootupd
       - patches/bootupd-0.2.35-dpkg.patch
@@ -1628,9 +1753,12 @@ packages:
         | sed 's/shlibs:Depends=//' > /tmp/bootupd-deps
 
       DEPS="$(cat /tmp/bootupd-deps), util-linux"
+      GRUB_ARCH="${ARCH}"
       sed -i \
         -e "s|{{ VER }}|${BOOTUPD_VER#v}|g" \
         -e "s|{{ DEPS }}|${DEPS}|g" \
+        -e "s|{{ ARCH }}|${ARCH}|g" \
+        -e "s|{{ GRUB_ARCH }}|${GRUB_ARCH}|g" \
         /output/bootupd/DEBIAN/control
 
       # Content check: the built bootupd binary exists (its patched dpkg
@@ -1808,13 +1936,10 @@ packages:
         | sed 's/shlibs:Depends=//' > /tmp/bootc-deps
 
       DEPS=$(cat /tmp/bootc-deps)
-      BOOTUPD_DEP=""
-      [ "${ARCH}" = "amd64" ] && BOOTUPD_DEP=", bootupd"
       sed -i \
         -e "s|{{ VER }}|${BOOTC_VER#v}|g" \
         -e "s|{{ DEPS }}|${DEPS}|g" \
         -e "s|{{ ARCH }}|${ARCH}|g" \
-        -e "s|{{ BOOTUPD_DEP }}|${BOOTUPD_DEP}|g" \
         /output/bootc/DEBIAN/control
       cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/bootcpostinstall/* /output/bootc/
 
