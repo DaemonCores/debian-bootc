@@ -97,3 +97,13 @@ CONFIG_USB_EHCI_HCD=m
 # resolve at modpost time; without it the modules build fails with unresolved
 # symbol errors.
 # CONFIG_HWPOISON_INJECT is not set
+
+# =============================================================================
+# Disable module signing — signing requires certs/signing_key.pem, which is
+# generated only during a full kernel build (make bindeb-pkg). In a
+# modules-only build that file is absent, so modules_install aborts with an
+# SSL error. The bootc image does not enforce module signature verification, so
+# there is no security regression in disabling auto-signing here.
+# =============================================================================
+
+# CONFIG_MODULE_SIG_ALL is not set
