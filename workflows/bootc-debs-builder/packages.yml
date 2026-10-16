@@ -667,12 +667,14 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      # Remove .ko files already shipped by linux-modules-arm so this device
+      # Remove all files already shipped by linux-modules-arm so this device
       # package only carries device-specific modules and dpkg does not refuse
-      # to install two packages that own the same path.
+      # to install two packages that own the same path. This includes .ko files
+      # AND kernel metadata files (modules.builtin, modules.alias, modules.dep,
+      # etc.) that make modules_install generates identically for every package.
       ARM_DEB=$(ls /tmp/prior/linux-modules-arm_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
       if [ -n "${ARM_DEB}" ]; then
-        dpkg-deb --fsys-tarfile "${ARM_DEB}" | tar t | grep '\.ko$' | sed 's|^\./||' \
+        dpkg-deb --fsys-tarfile "${ARM_DEB}" | tar t | sed 's|^\./||' \
           | while IFS= read -r f; do
               target="${DESTDIR}/${f}"
               [ -f "${target}" ] && rm -f "${target}"
