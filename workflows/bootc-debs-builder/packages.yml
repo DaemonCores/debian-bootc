@@ -1,4 +1,4 @@
-# Package manifest for the bootc .deb builder.
+# Package manifest for the bootc .deb builder. Last forced rebuild: 2026-10-16.
 # One entry per package. Consumed by the generic bootc-debs-builder workflow
 # (setup computes dependency waves) and by the build-one-deb reusable workflow.
 #   name       logical package name
