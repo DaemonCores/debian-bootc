@@ -77,16 +77,22 @@ Examples include `latest_amd64_autoupdate`, `minimal_arm64_autoupdate`, and `min
 
 ## Installation media
 
-The ISO workflow currently targets amd64. It starts from a Fedora Server net-install environment because Anaconda provides the installer runtime used by the project.
+The ISO workflow currently targets amd64. `Containerfile.iso` derives from the
+published `debian-bootc` base image and adds a thin installer layer: `cage` as a
+single-app Wayland compositor, the `fisherman` backend and the `bootc-installer`
+GTK4 wizard, a live user with autologin on tty1, and a polkit rule letting that
+user run fisherman through `pkexec` without a password prompt. `bootc-image-builder`
+converts the result to an ISO through dracut's live squashfs path.
 
-The Kickstart runs the actual installation from `%pre`:
+The wizard drives the installation:
 
-- the operator selects the target disk;
-- the installer creates EFI, ext4 `/boot`, and Btrfs system partitions;
-- the Btrfs pool contains `root`, `var`, and `varlog` subvolumes;
-- `/var/log` receives a 2 GiB qgroup limit;
-- `bootc install to-filesystem` deploys the image;
+- the operator selects the target disk and filesystem (the recipe offers Btrfs and XFS);
+- fisherman creates the partitions and calls `bootc install to-filesystem` to deploy the image;
 - an existing compatible pool may keep its `var` subvolume during reinstall.
+
+The graphical installer replaces the earlier Anaconda/Kickstart flow. The live
+image is the same base the installed system runs, so installer and target stay
+in step.
 
 The online ISO pulls the registry image during installation. The offline ISO embeds an OCI archive. Both retain the registry reference as the future upgrade source.
 
