@@ -361,15 +361,10 @@ packages:
       # absent. In-tree modules-only builds skip this flag by default (only the
       # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
       # and reports 1400+ undefined-symbol errors.
-      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
-        python3 << 'PYEOF'
-      f = 'scripts/Makefile.modpost'
-      needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
-      txt = open(f).read()
-      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
-          open(f, 'w').write(txt.replace(needle, needle + insert, 1))
-      PYEOF
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
+         && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
+        printf '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\n' \
+          >> scripts/Makefile.modpost
       fi
       make -j"$(nproc)" modules
 
@@ -651,15 +646,10 @@ packages:
       # absent. In-tree modules-only builds skip this flag by default (only the
       # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
       # and reports 1400+ undefined-symbol errors.
-      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ]; then
-        python3 << 'PYEOF'
-      f = 'scripts/Makefile.modpost'
-      needle = 'output-symdump := modules-only.symvers'
-      insert = '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif'
-      txt = open(f).read()
-      if needle in txt and '-i /tmp/vmlinux-only.symvers' not in txt:
-          open(f, 'w').write(txt.replace(needle, needle + insert, 1))
-      PYEOF
+      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
+         && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
+        printf '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\n' \
+          >> scripts/Makefile.modpost
       fi
       make -j"$(nproc)" modules
 
