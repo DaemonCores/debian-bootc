@@ -218,7 +218,7 @@ RUN apt update \
 # on arm64 ships no /etc/default/grub), sed -i /d removes any prior directive line,
 # printf >> appends the fresh value. Fixes A3 (no duplication on rebuild).
 COPY ./src/minimalpostinstall /
-RUN && sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
+RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
     && printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0%s%s"\n' \
         "${KERNEL_CMDLINE_SERIAL:+ }" "${KERNEL_CMDLINE_SERIAL}" \
         >> /etc/default/grub \
