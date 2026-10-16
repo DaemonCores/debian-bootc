@@ -89,16 +89,14 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # the custom linux-image-common deb from bootc-debs-builder. This prevents Debian's
 # kernel (linux-image-amd64/arm64) from being co-installed, which would create a
 # second /usr/lib/modules/<deb-kver>/ directory and fail bootc lint.
-# linux-headers is our custom kernel headers deb; Debian's linux-headers-${ARCH}
-# creates /usr/lib/modules/<deb-kver>/build (same spurious-directory problem).
+# linux-headers is NOT installed: it was never published to the custom apt repo
+# and Debian's linux-headers-${ARCH} would create a spurious /usr/lib/modules/<kver>/build.
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1): amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm +
 # rpi3/rpi4/rpi5/rk3588 overlays.
 RUN apt update \
     && apt install -y \
-        dkms \
         linux-image-${KERNEL_VARIANT}-${ARCH} \
-        linux-headers \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
