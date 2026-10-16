@@ -1,6 +1,7 @@
 .git/
 .github/
 workflows/
+!workflows/build-iso/recipe.json
 *.iso
 out/
 README.md
