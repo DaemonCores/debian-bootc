@@ -116,27 +116,25 @@ packages:
       cd "${SRCDIR}"
       make mrproper
 
-      # Start from the Debian config for this arch.
-      # Prefer the .config saved by the linux-image build (uploaded in its
-      # artifact). Starting from the same base as the kernel build guarantees
-      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
-      # modpost can resolve __fentry__ from Module.symvers.
-      if test -f /tmp/prior/linux-kernel.config; then
-        cp /tmp/prior/linux-kernel.config .config
-      else
-        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-          || cp debian/config/config .config 2>/dev/null \
-          || make defconfig
-      fi
+      # Start from the Debian config for this arch. This entry IS the kernel
+      # build, so there is nothing to inherit from: take the distro .config
+      # shipped in the build container's kernel headers package.
+      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
+        || cp debian/config/config .config 2>/dev/null \
+        || make defconfig
 
       # Merge the base config (filesystems, virtio, serial, disables — the
       # base for every device). merge_config.sh -m merges in place.
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}"
       make olddefconfig
-      # Save the final .config so module builds on other runners can start
-      # from the same base (prevents CONFIG_FUNCTION_TRACER mismatch that
-      # causes __fentry__ undefined symbol errors in modpost).
-      cp .config "/debs/linux-kernel.config"
+
+      # Ship the finalized .config and Module.symvers inside the common image
+      # deb (see the repack below). They must live in the deb, not beside it in
+      # /debs: a cache hit restores only the .deb from the published APT repo,
+      # so every dependent module job would otherwise build with the wrong
+      # .config and no symbol table, and modpost fails on the built-in kernel
+      # symbols (__fentry__…) with tens of thousands of undefined-symbol errors.
+      cp .config /tmp/linux-kernel.config
 
       # Build the kernel + modules as a Debian binary package. bindeb-pkg
       # produces linux-image-*.deb and linux-modules-*.deb in /tmp (one
@@ -186,6 +184,22 @@ packages:
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
       dpkg-deb -R "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
+
+      # Ship the build inputs the module packages need INSIDE the deb. A cache
+      # hit restores only the .deb from the published APT repo, so a file
+      # written beside it in /debs never reaches a dependent module job on a
+      # reused linux-image; the module builds then have no kernel config and no
+      # symbol table and modpost fails with tens of thousands of
+      # unresolved-symbol errors. Both are required, so a missing one is a bug
+      # in this build, not a case to tolerate.
+      test -f /tmp/linux-kernel.config \
+        || { echo "ERROR: kernel build produced no .config" >&2; exit 1; }
+      test -f Module.symvers \
+        || { echo "ERROR: kernel build produced no Module.symvers" >&2; exit 1; }
+      mkdir -p "${REPACK_DIR}/usr/lib/linux-kernel-build"
+      cp /tmp/linux-kernel.config "${REPACK_DIR}/usr/lib/linux-kernel-build/config"
+      cp Module.symvers "${REPACK_DIR}/usr/lib/linux-kernel-build/Module.symvers"
+
       if grep -q '^Provides:' "${REPACK_DIR}/DEBIAN/control"; then
         sed -i "/^Provides:/s/\$/, linux-image-${DEB_ARCH}, linux-image-stock-${DEB_ARCH}, linux-image-minimal-${DEB_ARCH}/" \
           "${REPACK_DIR}/DEBIAN/control"
@@ -198,12 +212,6 @@ packages:
         "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
       test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: repacked linux-image-common deb empty" >&2; exit 1; }
-
-      # Save Module.symvers so module builds can seed it directly. The
-      # headers deb may not include it in all build configurations; an
-      # explicit copy is more reliable than extracting from the deb.
-      [ -f Module.symvers ] \
-        && cp Module.symvers "/debs/linux-kernel-Module.symvers"
 
       # Free the ~10 GB kernel source tree now that all debs are copied to
       # /debs. Without this the runner's /tmp fills up and starves parallel
@@ -250,7 +258,7 @@ packages:
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
       # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -312,39 +320,32 @@ packages:
       # Start from the Debian config for this arch, then merge the base
       # config THEN the arm overlay (overlay wins on conflicts — last
       # merge wins).
-      # Prefer the .config saved by the linux-image build (uploaded in its
-      # artifact). Starting from the same base as the kernel build guarantees
-      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
-      # modpost can resolve __fentry__ from Module.symvers.
-      if test -f /tmp/prior/linux-kernel.config; then
-        cp /tmp/prior/linux-kernel.config .config
-      else
-        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-          || cp debian/config/config .config 2>/dev/null \
-          || make defconfig
-      fi
+      # Seed .config from the linux-image-common deb, which carries the .config
+      # the kernel was built with at /usr/lib/linux-kernel-build/config. It has
+      # to travel inside the deb: a cache hit restores only the .deb from the
+      # published APT repo, so a file written beside it in /debs never reaches
+      # this job. Starting from the same .config as the kernel build keeps
+      # CONFIG_FUNCTION_TRACER and the other core settings identical, which is
+      # what lets modpost resolve __fentry__.
+      SEED_DIR=/tmp/linux-kernel-build-seed
+      rm -rf "${SEED_DIR}"
+      dpkg-deb -x "${COMMON_DEB}" "${SEED_DIR}"
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/config" \
+        || { echo "ERROR: ${COMMON_DEB} carries no kernel config" >&2; exit 1; }
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build/config" .config
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
-      # Seed Module.symvers from the linux-headers deb built alongside
-      # linux-image so modpost can resolve kernel symbols in a modules-only
-      # build (no vmlinux.o). Without it, modpost fails on modules that
-      # reference built-in kernel symbols (__fentry__, __x86_return_thunk…).
-      SYMVERS_SRC=""
-      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
-        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
-      else
-        HEADERS_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-headers_*_${DEB_ARCH}.deb" 2>/dev/null | head -1)
-        if [ -n "${HEADERS_DEB}" ]; then
-          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        fi
-      fi
-      if [ -n "${SYMVERS_SRC}" ]; then
-        cp "${SYMVERS_SRC}" Module.symvers
-        # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
-      fi
-      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
+      # Seed Module.symvers from the same deb, at
+      # /usr/lib/linux-kernel-build/Module.symvers. This is a modules-only build
+      # with no vmlinux.o, so without that symbol table modpost cannot verify
+      # the built-in kernel symbols the modules reference (__fentry__,
+      # __x86_return_thunk…) and fails with tens of thousands of
+      # undefined-symbol errors.
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+        || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" Module.symvers
+      # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
 
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
@@ -451,7 +452,7 @@ packages:
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
       # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       apt-get install -y "${COMMON_DEB}"
@@ -535,7 +536,7 @@ packages:
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
       # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -597,39 +598,32 @@ packages:
       # Start from the Debian config for this arch, then merge the base
       # config THEN the arm overlay THEN the device overlay (last merge wins
       # on conflicts — device overlay wins over arm, arm wins over base).
-      # Prefer the .config saved by the linux-image build (uploaded in its
-      # artifact). Starting from the same base as the kernel build guarantees
-      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
-      # modpost can resolve __fentry__ from Module.symvers.
-      if test -f /tmp/prior/linux-kernel.config; then
-        cp /tmp/prior/linux-kernel.config .config
-      else
-        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-          || cp debian/config/config .config 2>/dev/null \
-          || make defconfig
-      fi
+      # Seed .config from the linux-image-common deb, which carries the .config
+      # the kernel was built with at /usr/lib/linux-kernel-build/config. It has
+      # to travel inside the deb: a cache hit restores only the .deb from the
+      # published APT repo, so a file written beside it in /debs never reaches
+      # this job. Starting from the same .config as the kernel build keeps
+      # CONFIG_FUNCTION_TRACER and the other core settings identical, which is
+      # what lets modpost resolve __fentry__.
+      SEED_DIR=/tmp/linux-kernel-build-seed
+      rm -rf "${SEED_DIR}"
+      dpkg-deb -x "${COMMON_DEB}" "${SEED_DIR}"
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/config" \
+        || { echo "ERROR: ${COMMON_DEB} carries no kernel config" >&2; exit 1; }
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build/config" .config
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
-      # Seed Module.symvers from the linux-headers deb built alongside
-      # linux-image so modpost can resolve kernel symbols in a modules-only
-      # build (no vmlinux.o). Without it, modpost fails on modules that
-      # reference built-in kernel symbols (__fentry__, __x86_return_thunk…).
-      SYMVERS_SRC=""
-      if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
-        SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
-      else
-        HEADERS_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-headers_*_${DEB_ARCH}.deb" 2>/dev/null | head -1)
-        if [ -n "${HEADERS_DEB}" ]; then
-          dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
-          SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
-        fi
-      fi
-      if [ -n "${SYMVERS_SRC}" ]; then
-        cp "${SYMVERS_SRC}" Module.symvers
-        # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
-      fi
-      [ -d /tmp/headers-extract ] && rm -rf /tmp/headers-extract
+      # Seed Module.symvers from the same deb, at
+      # /usr/lib/linux-kernel-build/Module.symvers. This is a modules-only build
+      # with no vmlinux.o, so without that symbol table modpost cannot verify
+      # the built-in kernel symbols the modules reference (__fentry__,
+      # __x86_return_thunk…) and fails with tens of thousands of
+      # undefined-symbol errors.
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+        || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" Module.symvers
+      # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
 
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
@@ -672,7 +666,7 @@ packages:
       # to install two packages that own the same path. This includes .ko files
       # AND kernel metadata files (modules.builtin, modules.alias, modules.dep,
       # etc.) that make modules_install generates identically for every package.
-      ARM_DEB=$(ls /tmp/prior/linux-modules-arm_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      ARM_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-modules-arm_*_${DEB_ARCH}.deb" | head -1)
       if [ -n "${ARM_DEB}" ]; then
         dpkg-deb --fsys-tarfile "${ARM_DEB}" | tar t | sed 's|^\./||' \
           | while IFS= read -r f; do
@@ -749,7 +743,7 @@ packages:
       # collision (the common deb Provides+Conflicts linux-image-amd64 AND
       # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
-      COMMON_DEB=$(ls /tmp/prior/linux-image-common_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
       test -n "${COMMON_DEB}" \
         || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
       # Extract version + kernel version from the deb WITHOUT installing it:
@@ -802,17 +796,19 @@ packages:
       [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
       unset ARCH
       export ARCH="${KERNEL_ARCH}"
-      # Prefer the .config saved by the linux-image build (uploaded in its
-      # artifact). Starting from the same base as the kernel build guarantees
-      # that CONFIG_FUNCTION_TRACER (and other core settings) match, so
-      # modpost can resolve __fentry__ from Module.symvers.
-      if test -f /tmp/prior/linux-kernel.config; then
-        cp /tmp/prior/linux-kernel.config .config
-      else
-        cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-          || cp debian/config/config .config 2>/dev/null \
-          || make defconfig
-      fi
+      # Seed .config from the linux-image-common deb, which carries the .config
+      # the kernel was built with at /usr/lib/linux-kernel-build/config. It has
+      # to travel inside the deb: a cache hit restores only the .deb from the
+      # published APT repo, so a file written beside it in /debs never reaches
+      # this job. Starting from the same .config as the kernel build keeps
+      # CONFIG_FUNCTION_TRACER and the other core settings identical, which is
+      # what lets modpost resolve __fentry__.
+      SEED_DIR=/tmp/linux-kernel-build-seed
+      rm -rf "${SEED_DIR}"
+      dpkg-deb -x "${COMMON_DEB}" "${SEED_DIR}"
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/config" \
+        || { echo "ERROR: ${COMMON_DEB} carries no kernel config" >&2; exit 1; }
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build/config" .config
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
