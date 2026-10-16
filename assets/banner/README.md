@@ -1,32 +1,33 @@
-# assets/banner/
+# assets/banner/ — legacy (Anaconda / Fedora)
 
-Optional branding assets applied during CI builds to the Anaconda installer ISO.
+> **These assets are no longer used.**
+> The ISO pipeline was rewritten to use `bootc-image-builder` with
+> `bootc-installer` (GTK4). See `assets/installer/` for the current
+> branding assets and injection documentation.
 
-## Files
+The files below were originally injected into the **Anaconda** installer
+(Fedora-based ISOs). They are kept as historical reference for the visual
+style (the blue geometric triangle pattern from `anaconda-sidebar.png`
+is reproduced as clean SVG in `assets/installer/`).
 
-| File                   | Description                                                       | Orientation | Width × Height       |
-|------------------------|-------------------------------------------------------------------|-------------|----------------------|
-| `motd`                 | Login message (plain text, copied to `/etc/motd`)                 | —           | free text            |
-| `anaconda-sidebar.png` | Left panel background in the Anaconda installer                   | vertical    | **637 × 508 px**     |
-| `anaconda-logo.png`    | Logo overlaid on top of the sidebar background                    | vertical    | **70 × 97 px**       |
-|                        | If absent while sidebar.png is present: auto-cleared (transparent)|             |                      |
-| `anaconda-topbar.png`  | Top navigation bar (spoke screens)                                | horizontal  | **636 × 450 px**     |
-| `anaconda-header.png`  | Main hub header (selection screen)                                | horizontal  | **119 × 36 px**      |
+## Original files
 
-All dimensions are **width × height** (Fedora 44, server variant).
-All files are optional. Missing files are silently skipped.
+| File | Description | Dimensions |
+|------|-------------|-----------|
+| `anaconda-sidebar.png` | Left panel background (blue triangles) | 637 × 508 px |
+| `anaconda-logo.png` | Sidebar logo (Debian swirl + text) | 70 × 97 px |
+| `anaconda-topbar.png` | Top navigation bar | 636 × 450 px |
+| `anaconda-header.png` | Main hub header | 119 × 36 px |
+| `flat-overrides.css` | GTK CSS color overrides | — |
 
-## Paths inside the Anaconda installer (Fedora 44)
+## Color palette (extracted from `anaconda-sidebar.png`)
 
-| Source file            | Root variant                         | Server variant                           |
-|------------------------|--------------------------------------|------------------------------------------|
-| `anaconda-sidebar.png` | `pixmaps/sidebar-bg.png` 406×767     | `pixmaps/server/sidebar-bg.png` 637×508  |
-| `anaconda-logo.png`    | `pixmaps/sidebar-logo.png` 150×69    | `pixmaps/server/sidebar-logo.png` 70×97  |
-| `anaconda-topbar.png`  | `pixmaps/topbar-bg.png` 1040×132     | `pixmaps/server/topbar-bg.png` 636×450   |
-| `anaconda-header.png`  | `pixmaps/anaconda_header.png` 119×36 | —                                        |
+These tokens carry over to the new bootc-installer theme in `assets/installer/`:
 
-The **Server netinstall** loads `fedora-server.css` which references the `server/` variants.
-The injection script replaces both variants to cover all cases regardless of which
-product CSS Anaconda loads.
-
-If a future Fedora release moves these paths, update `scripts/inject-iso.sh` accordingly.
+```css
+@define-color flat_primary       #446EC5;
+@define-color flat_primary_dark  #2F6BE8;
+@define-color flat_accent        #39E2F9;
+@define-color flat_bg            #EAF4FD;
+@define-color flat_text          #0E1F4A;
+```
