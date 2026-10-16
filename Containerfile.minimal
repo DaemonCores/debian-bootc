@@ -46,7 +46,7 @@
 # Per-arch kernel modules (optional):
 #   The image installs ALL modules matching the target arch in a separate
 #   conditional RUN block below (after the main apt install): x86_64 ->
-#   linux-modules-x86_64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/rk3588
+#   linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/rk3588
 #   overlays so a single arm64 image boots on every SBC the project targets.
 #   The modules are optional — the base kernel (linux-image-common) works
 #   without them. Replaces the previous per-device DEVICE build-arg +
@@ -173,7 +173,7 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
-# amd64 -> linux-modules-x86_64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
+# amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
 # rk3588 overlays. The modules are OPTIONAL — the base image works without them.
 RUN apt update \
     && apt install -y --no-install-recommends \
@@ -205,7 +205,7 @@ RUN apt update \
 RUN if [ "${ARCH}" = "amd64" ]; then \
         apt update \
         && apt install -y --no-install-recommends \
-            linux-modules-x86_64 \
+            linux-modules-x86-64 \
         && rm -rf /var/lib/apt/lists/*; \
     else \
         apt update \
