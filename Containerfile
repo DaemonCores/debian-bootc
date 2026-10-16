@@ -142,7 +142,7 @@ RUN apt update \
         wpasupplicant \
         firstboot-user-setup \
         ${BOOT_PKG} \
-    && apt-mark hold ${APT_HOLD_PKG} || true \
+    && { [ -z "${APT_HOLD_PKG}" ] || apt-mark hold "${APT_HOLD_PKG}"; } \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
@@ -162,7 +162,7 @@ RUN apt update \
 RUN if [ "${ARCH}" = "amd64" ]; then \
         apt update \
         && apt install -y --no-install-recommends \
-            linux-modules-x86_64 \
+            linux-modules-x86-64 \
         && rm -rf /var/lib/apt/lists/*; \
     else \
         apt update \

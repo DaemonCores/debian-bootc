@@ -117,7 +117,7 @@ RUN apt-get update \
         libnm0 \
         gir1.2-nm-1.0 \
         libgnome-desktop-4-2 \
-        gir1.2-gnome-desktop-4.0 \
+        gir1.2-gnomedesktop-4.0 \
         libgweather-4-0 \
         gir1.2-gweather-4.0 \
         xdg-utils \
