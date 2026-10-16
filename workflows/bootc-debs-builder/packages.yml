@@ -1614,11 +1614,14 @@ packages:
       git clone https://github.com/frostyard/bootc-installer.git /build/bootc-installer-src
       git -C /build/bootc-installer-src checkout "${BOOTC_INSTALLER_COMMIT}"
 
-      # The meson build wants fisherman's data/images.json; that lives in the
-      # fisherman submodule of the upstream repo, but we provide our own recipe.
-      # Stub out the fisherman subdir with just the images.json path the meson
-      # build reads (data/meson.build references ../fisherman/data/images.json).
-      mkdir -p /build/bootc-installer-src/fisherman/data
+      # The fisherman submodule contains data/images/ (distribution logos) that
+      # bootc-installer.gresource.xml references at build time. Initialize it so
+      # those image files are available. The fisherman binary itself is NOT built
+      # (build-fisherman=false) — we package it separately — but the data dir is needed.
+      git -C /build/bootc-installer-src submodule update --init fisherman
+
+      # Override images.json with our DaemonCores recipe so bootc-installer
+      # shows our images rather than the upstream defaults.
       cp /build/bootc-installer-src/recipe.json \
         /build/bootc-installer-src/fisherman/data/images.json
 
