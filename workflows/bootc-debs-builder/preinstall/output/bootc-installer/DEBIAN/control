@@ -15,7 +15,7 @@ Depends: fisherman,
  gir1.2-adw-1,
  gir1.2-glib-2.0,
  gir1.2-nm-1.0,
- gir1.2-gnome-desktop-4.0,
+ gir1.2-gnomedesktop-4.0,
  gir1.2-gweather-4.0
 Description: graphical GTK4 frontend for bootc OS installation
  GTK4/Libadwaita graphical installer for bootc-based operating systems.
