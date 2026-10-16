@@ -47,6 +47,18 @@ CONFIG_BTRFS_FS=y
 #        almost always already on in defconfig; we restate it to be safe.
 CONFIG_TMPFS=y
 
+# overlayfs: module. Used by podman/bootc for container layer stacking and
+#            by bootc's own deployment logic. Must be a module (not disabled)
+#            so dracut can include overlay.ko in the initramfs and podman can
+#            load it at runtime. Not built-in because it is not needed before
+#            the rootfs is mounted.
+CONFIG_OVERLAY_FS=m
+
+# erofs: module. Read-only compressed filesystem used by some container
+#        image formats and by bootc's image store. Module is sufficient;
+#        erofs is never the root filesystem so no chicken-and-egg issue.
+CONFIG_EROFS_FS=m
+
 # =============================================================================
 # Virtio — built-in. For VMs (qemu, libvirt) on every arch, so a minimal guest
 # image can boot from virtio-blk + virtio-net without module loading in the
