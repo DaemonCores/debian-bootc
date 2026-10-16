@@ -5,6 +5,7 @@ Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
 Section: kernel
 Priority: optional
 Depends: linux-modules-arm (= {{ VER }})
+Replaces: linux-modules-arm
 Description: Device-specific kernel modules for {{ DEVICE }}
  This package contains the kernel modules specific to the {{ DEVICE }}
  device overlay (SoC, Ethernet PHY, MMC, USB, RTC). It is built on top
