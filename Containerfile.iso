@@ -97,6 +97,35 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
+# Phase 3.5: ostree filesystem migration
+# -----------------------------------------------------------------------------
+# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var
+# and a /sysroot directory. Mirrors the main Containerfile exactly.
+# bootc lint check "baseimage-root" enforces /sysroot existence.
+COPY ./src/debianpostinstall /
+RUN mkdir -p /var/home \
+        /var/roothome \
+        /var/mnt \
+        /var/srv \
+        /var/opt \
+        /var/usr/lib/locale \
+        /sysroot/ostree \
+    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
+    && rm -rf /home \
+        /root \
+        /mnt \
+        /srv \
+        /opt \
+        /usr/lib/locale \
+    && ln -s var/home / \
+    && ln -s var/mnt / \
+    && ln -s var/srv / \
+    && ln -s var/opt / \
+    && ln -s var/roothome /root \
+    && ln -s sysroot/ostree /ostree \
+    && ln -s var/usr/lib/locale /usr/lib/locale
+
+# -----------------------------------------------------------------------------
 # Phase 4: Graphical installer stack
 # fisherman + bootc-installer are installed from our APT repo.
 # cage: minimal single-app Wayland compositor (no full DE required).
