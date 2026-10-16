@@ -1,7 +1,7 @@
 {
     "log_file": "/var/log/bootc-installer.log",
     "distro_name": "DaemonCores",
-    "distro_logo": "resource:///org/bootcinstaller/Installer/images/welcome.png",
+    "distro_logo": "resource:///org/bootcinstaller/Installer/assets/welcome.png",
     "imgref": "ghcr.io/daemoncores/debian-bootc:latest-amd64-autoupdate",
     "images": [
         {

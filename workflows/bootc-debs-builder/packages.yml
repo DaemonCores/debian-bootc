@@ -1583,7 +1583,7 @@ packages:
       - preinstall/output/bootc-installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
-      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc6"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc7"
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -1614,8 +1614,11 @@ packages:
       git -C /build/bootc-installer-src submodule update --init fisherman
 
       # Override images.json with our DaemonCores recipe so bootc-installer
-      # shows our images rather than the upstream defaults.
-      cp "${SAVE_PWD}/workflows/build-iso/recipe.json" \
+      # shows our images rather than the upstream defaults. The source is the
+      # same recipe.json the live image ships at /etc/bootc-installer/recipe.json
+      # (RecipeLoader's primary path) — bundling it as images.json keeps the
+      # fallback catalog identical to the runtime one.
+      cp "${SAVE_PWD}/src/buildisopreinstall/etc/bootc-installer/recipe.json" \
         /build/bootc-installer-src/fisherman/data/images.json
 
       # Inject DaemonCores branding assets before meson compiles the GResource bundle.
