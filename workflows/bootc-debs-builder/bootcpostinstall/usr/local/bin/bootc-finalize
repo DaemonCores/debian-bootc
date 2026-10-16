@@ -84,7 +84,7 @@ if [ -n "${SHIM_VER}" ] && [ -n "${GRUB_VER}" ]; then
   fi
 fi
 
-bootupctl backend generate-update-metadata /
+command -v bootupctl >/dev/null 2>&1 && bootupctl backend generate-update-metadata /
 
 # Brand the shim fallback's boot entry with the product name so the firmware
 # NVRAM entry matches this image instead of a hardcoded distro. fbx64 reads
