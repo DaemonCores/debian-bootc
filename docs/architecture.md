@@ -19,8 +19,8 @@ The project targets Debian 13 (Trixie). `DaemonCores-VE` consumes the published 
 | `Containerfile.minimal` | Reduced multi-architecture image definition. |
 | `src/` | Files copied into the image before and after package installation. |
 | `workflows/bootc-debs-builder/` | Package manifest, build scripts, package metadata, and overlays. |
-| `workflows/build-env/env.yml` | Package-builder environment recipe. |
-| `workflows/image-tests/tests.yml` | Tests executed against a booted image. |
+| `workflows/env.yml` | Package-builder environment recipe. |
+| `workflows/tests.yml` | Tests executed against a booted image. |
 | `kernel/` and `modules-kernel/` | Kernel and device-module configuration inputs. |
 | `.github/workflows/pipeline.yml` | Product-specific triggers for the shared pipeline. |
 
@@ -60,7 +60,7 @@ For every matrix entry the workflow:
 3. runs bootc validation;
 4. installs the image onto a virtual disk;
 5. boots that disk with QEMU/KVM and UEFI firmware;
-6. executes every applicable test from `workflows/image-tests/tests.yml` over SSH;
+6. executes every applicable test from `workflows/tests.yml` over SSH;
 7. pushes and signs the image only after the tests pass.
 
 Tests cover the bootc deployment, OSTree and composefs mounts, writable state, bootloader assets, initramfs contents, networking, package repacks, and first-boot tooling. Architecture-specific checks are gated in the test manifest.

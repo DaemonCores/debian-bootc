@@ -1059,7 +1059,7 @@ packages:
       # boots \EFI\BOOT\BOOTX64.EFI (shim) with no NVRAM entry — e.g. a fresh VM —
       # shim only looks for grubx64.efi in its OWN directory (rhboot/shim
       # README.fallback), so grub must sit next to it there too. Paths match
-      # workflows/image-tests/tests.yml.
+      # workflows/tests.yml.
       for _sub in debian BOOT; do
         install -Dm0644 \
           /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
@@ -1583,7 +1583,7 @@ packages:
       - preinstall/output/bootc-installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
-      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc4"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc5"
     build: |
       set -euo pipefail
       ARCH=$(dpkg --print-architecture)

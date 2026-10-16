@@ -146,39 +146,17 @@ RUN apt update \
         firstboot-user-setup \
         ${BOOT_PKG} \
     && { [ -z "${APT_HOLD_PKG}" ] || apt-mark hold "${APT_HOLD_PKG}"; } \
-    && rm -rf \
-        /tmp/* \
-        /var/tmp/* \
-        /run/* \
-        /usr/sbin/policy-rc.d
-
-# -----------------------------------------------------------------------------
-# Phase 3.1: Per-arch kernel modules (optional)
-# -----------------------------------------------------------------------------
-# Install ALL modules matching the target arch. amd64 gets the x86_64 module
-# set; arm64 gets the arm64 module set PLUS the Raspberry Pi 3/4/5 and Rockchip
-# RK3588 SBC overlays so a single arm64 image boots on every SBC the project
-# targets. The modules are OPTIONAL — the base kernel works without them, so a
-# failure to find a module package (rare on non-SBC arm64 hosts) is tolerated.
-# Replaces the previous per-device DEVICE build-arg + linux-modules-${DEVICE}
-# pattern: the device dimension is now collapsed into the arch dimension.
-RUN if [ "${ARCH}" = "amd64" ]; then \
-        apt update \
-        && apt install -y --no-install-recommends \
+    && apt update \
+    && if [ "${ARCH}" = "amd64" ]; then \
+        apt install -y --no-install-recommends \
             linux-modules-x86-64 \
-        && rm -rf /var/lib/apt/lists/*; \
     else \
-        apt update \
-        && apt install -y --no-install-recommends \
+        apt install -y --no-install-recommends \
             linux-modules-arm \
-        && { apt install -y --no-install-recommends \
-                -o Dpkg::Options::="--force-overwrite" \
-                linux-modules-rpi3 \
-                linux-modules-rpi4 \
-                linux-modules-rpi5 \
-                linux-modules-rk3588 \
-            || echo "WARNING: SBC module packages not found (CDN delay); skipping"; } \
-        && rm -rf /var/lib/apt/lists/*; \
+            linux-modules-rpi3 \
+            linux-modules-rpi4 \
+            linux-modules-rpi5 \
+            linux-modules-rk3588 \
     fi
 
 # -----------------------------------------------------------------------------
@@ -202,6 +180,10 @@ RUN mkdir -p /var/home \
         /srv \
         /opt \
         /usr/lib/locale \
+        /tmp/* \
+        /var/tmp/* \
+        /run/* \
+        /usr/sbin/policy-rc.d \
     && ln -s var/home / \
     && ln -s var/mnt / \
     && ln -s var/srv / \

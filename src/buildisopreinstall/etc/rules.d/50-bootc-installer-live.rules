@@ -1,0 +1,6 @@
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.tunaos.Installer" &&
+        subject.user === "live") {
+        return polkit.Result.YES;
+    }
+});
