@@ -18,8 +18,11 @@ case "$1" in
     mkdir -p "${efidir}/BOOT" "${efidir}/debian"
     # shimx64.efi.signed is the boot entrypoint: it lands as the removable-media
     # fallback EFI/BOOT/BOOTX64.EFI and as the vendor EFI/debian/shimx64.efi.
-    cp /usr/lib/shim/shimx64.efi.signed "${efidir}/BOOT/BOOTX64.EFI"
-    cp /usr/lib/shim/shimx64.efi.signed "${efidir}/debian/shimx64.efi"
+    # Guard: absent on arm64 (u-boot-tools, no x86 shim).
+    if [ -f /usr/lib/shim/shimx64.efi.signed ]; then
+      cp /usr/lib/shim/shimx64.efi.signed "${efidir}/BOOT/BOOTX64.EFI"
+      cp /usr/lib/shim/shimx64.efi.signed "${efidir}/debian/shimx64.efi"
+    fi
     # MokManager, for MOK enrollment; best-effort. Only launched on a pending
     # MOK request, so harmless. We deliberately do NOT ship fbx64.efi (the shim
     # fallback): booted from the removable path with no NVRAM entry, shim would
