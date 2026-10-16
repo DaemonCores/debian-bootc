@@ -1583,9 +1583,10 @@ packages:
       - preinstall/output/bootc-installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
-      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc5"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc6"
     build: |
       set -euo pipefail
+      SAVE_PWD=$(pwd)
       ARCH=$(dpkg --print-architecture)
 
       # Build deps: meson/ninja are in the buildenv; add blueprint-compiler and
@@ -1599,7 +1600,8 @@ packages:
         libgweather-4-dev \
         libnm-dev \
         appstream \
-        desktop-file-utils
+        desktop-file-utils \
+        librsvg2-bin
 
       # Clone at the pinned commit (shallow not possible with a bare commit SHA).
       git clone https://github.com/frostyard/bootc-installer.git /build/bootc-installer-src
@@ -1613,8 +1615,20 @@ packages:
 
       # Override images.json with our DaemonCores recipe so bootc-installer
       # shows our images rather than the upstream defaults.
-      cp /build/bootc-installer-src/recipe.json \
+      cp "${SAVE_PWD}/workflows/build-iso/recipe.json" \
         /build/bootc-installer-src/fisherman/data/images.json
+
+      # Inject DaemonCores branding assets before meson compiles the GResource bundle.
+      # welcome.svg is rasterised to PNG at 512×512 (displayed at 128px by the installer).
+      rsvg-convert -w 512 -h 512 \
+        "${SAVE_PWD}/assets/installer/welcome.svg" \
+        -o /build/bootc-installer-src/assets/welcome.png
+      cp "${SAVE_PWD}/assets/installer/complete.svg" \
+        /build/bootc-installer-src/assets/complete.svg
+      cp "${SAVE_PWD}/assets/installer/ready.svg" \
+        /build/bootc-installer-src/assets/ready.svg
+      cp "${SAVE_PWD}/assets/installer/containerized.svg" \
+        /build/bootc-installer-src/assets/containerized.svg
 
       # Build with meson. build-fisherman=false: we package fisherman separately.
       meson setup \
