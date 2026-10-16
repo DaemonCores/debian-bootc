@@ -242,8 +242,7 @@ printf '%s:%s\n' "$USERNAME" "$PASS1" | chpasswd
 
 # ── Root password (required) ─────────────────────────────────────────────
 printf 'root:%s\n' "$ROOT_PASS" | chpasswd
-# Clear the forced expiry set by the kickstart (chage -d 0) now that the
-# user has set their password
+# Record the password change date for root now that it is set
 chage -d "$(date +%Y-%m-%d)" root
 
 # ── Standard Debian groups ────────────────────────────────────────────────
