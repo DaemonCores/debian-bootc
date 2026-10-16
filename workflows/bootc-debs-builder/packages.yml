@@ -334,7 +334,7 @@ packages:
       if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
         SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
       else
-        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        HEADERS_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-headers_*_${DEB_ARCH}.deb" 2>/dev/null | head -1)
         if [ -n "${HEADERS_DEB}" ]; then
           dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
           SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
@@ -619,7 +619,7 @@ packages:
       if [ -f /tmp/prior/linux-kernel-Module.symvers ]; then
         SYMVERS_SRC="/tmp/prior/linux-kernel-Module.symvers"
       else
-        HEADERS_DEB=$(ls /tmp/prior/linux-headers_*_${DEB_ARCH}.deb 2>/dev/null | head -1)
+        HEADERS_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-headers_*_${DEB_ARCH}.deb" 2>/dev/null | head -1)
         if [ -n "${HEADERS_DEB}" ]; then
           dpkg-deb -x "${HEADERS_DEB}" /tmp/headers-extract
           SYMVERS_SRC=$(find /tmp/headers-extract -name 'Module.symvers' | head -1)
