@@ -9,7 +9,7 @@ case "$1" in
     # the grub-efi-amd64-signed package under /usr/lib/efi/grub2/...; here we add
     # shim (from shim-signed, a Pre-Depend) under /usr/lib/efi/shim/<ver>/EFI in
     # the 3-level <name>/<version>/EFI layout bootupd reads (cf. bootupd v0.2.35
-    # src/efi.rs and workflows/image-tests/tests.yml), then generate the update
+    # src/efi.rs and workflows/tests.yml), then generate the update
     # metadata bootupd needs to actually install the bootloader. This runs at
     # image build time (writable /usr); bootc systems never apt-install on a
     # booted, read-only /usr.
