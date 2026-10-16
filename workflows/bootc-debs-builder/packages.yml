@@ -283,11 +283,6 @@ packages:
       # the device entries via linux-modules-arm -> linux-image-common), so we
       # must remove it before the source download resolves 'linux' to the real
       # Debian source package.
-      # Pre-collect .ko files owned by installed packages before purge+autoremove
-      # wipes them from dpkg's database. Used after modules_install to exclude
-      # duplicate files that would cause dpkg file-overwrite conflicts.
-      dpkg-query -l | awk '/^ii/{print $2}' | xargs -r dpkg-query -L 2>/dev/null \
-        | grep '\.ko$' | sort -u > /tmp/exclude-ko-files.txt || true
       apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
       apt-get autoremove -y || true
       apt-get source linux
@@ -400,14 +395,6 @@ packages:
         done
         rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
       fi
-
-      # Remove .ko files already in dep packages (list built before purge+autoremove).
-      if [ -s /tmp/exclude-ko-files.txt ]; then
-          while IFS= read -r ko; do
-              rm -f "${DESTDIR}${ko}"
-          done < /tmp/exclude-ko-files.txt
-      fi
-      find "${DESTDIR}/lib/modules" -mindepth 1 -type d -empty -delete 2>/dev/null || true
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
@@ -586,11 +573,6 @@ packages:
       # the device entries via linux-modules-arm -> linux-image-common), so we
       # must remove it before the source download resolves 'linux' to the real
       # Debian source package.
-      # Pre-collect .ko files owned by installed packages before purge+autoremove
-      # wipes them from dpkg's database. Used after modules_install to exclude
-      # duplicate files that would cause dpkg file-overwrite conflicts.
-      dpkg-query -l | awk '/^ii/{print $2}' | xargs -r dpkg-query -L 2>/dev/null \
-        | grep '\.ko$' | sort -u > /tmp/exclude-ko-files.txt || true
       apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
       apt-get autoremove -y || true
       apt-get source linux
@@ -704,14 +686,6 @@ packages:
         rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
       fi
 
-      # Remove .ko files already in dep packages (list built before purge+autoremove).
-      if [ -s /tmp/exclude-ko-files.txt ]; then
-          while IFS= read -r ko; do
-              rm -f "${DESTDIR}${ko}"
-          done < /tmp/exclude-ko-files.txt
-      fi
-      find "${DESTDIR}/lib/modules" -mindepth 1 -type d -empty -delete 2>/dev/null || true
-
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
@@ -799,11 +773,6 @@ packages:
       # the device entries via linux-modules-arm -> linux-image-common), so we
       # must remove it before the source download resolves 'linux' to the real
       # Debian source package.
-      # Pre-collect .ko files owned by installed packages before purge+autoremove
-      # wipes them from dpkg's database. Used after modules_install to exclude
-      # duplicate files that would cause dpkg file-overwrite conflicts.
-      dpkg-query -l | awk '/^ii/{print $2}' | xargs -r dpkg-query -L 2>/dev/null \
-        | grep '\.ko$' | sort -u > /tmp/exclude-ko-files.txt || true
       apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
       apt-get autoremove -y || true
       apt-get source linux
@@ -871,14 +840,6 @@ packages:
         done
         rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
       fi
-
-      # Remove .ko files already in dep packages (list built before purge+autoremove).
-      if [ -s /tmp/exclude-ko-files.txt ]; then
-          while IFS= read -r ko; do
-              rm -f "${DESTDIR}${ko}"
-          done < /tmp/exclude-ko-files.txt
-      fi
-      find "${DESTDIR}/lib/modules" -mindepth 1 -type d -empty -delete 2>/dev/null || true
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-x86-64/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
