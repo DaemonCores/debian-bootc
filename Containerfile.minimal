@@ -211,12 +211,13 @@ RUN if [ "${ARCH}" = "amd64" ]; then \
         apt update \
         && apt install -y --no-install-recommends \
             linux-modules-arm \
-        && apt install -y --no-install-recommends \
-            -o Dpkg::Options::="--force-overwrite" \
-            linux-modules-rpi3 \
-            linux-modules-rpi4 \
-            linux-modules-rpi5 \
-            linux-modules-rk3588 \
+        && { apt install -y --no-install-recommends \
+                -o Dpkg::Options::="--force-overwrite" \
+                linux-modules-rpi3 \
+                linux-modules-rpi4 \
+                linux-modules-rpi5 \
+                linux-modules-rk3588 \
+            || echo "WARNING: SBC module packages not found (CDN delay); skipping"; } \
         && rm -rf /var/lib/apt/lists/*; \
     fi
 

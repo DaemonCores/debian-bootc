@@ -1583,7 +1583,7 @@ packages:
       - preinstall/output/bootc-installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
-      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc3"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc4"
     build: |
       set -euo pipefail
       ARCH=$(dpkg --print-architecture)
@@ -1641,10 +1641,21 @@ packages:
         /output/bootc-installer/DEBIAN/control
 
       cd /output/bootc-installer
-      ln -sf DEBIAN debian
-      dpkg-deb -Zgzip --build /output/bootc-installer \
-        "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb"
-      rm -f debian
+      # dpkg-deb has a tar buffer-reuse bug that corrupts filenames starting at
+      # entry ~172 when the package has many locale files (the Turkish locale dir
+      # `tr/` gets the prior entry's `tl/` buffer prefix, breaking the tar).
+      # Assemble the deb manually with system tar + ar to bypass that code path.
+      find . -not -path './DEBIAN' -not -path './DEBIAN/*' -type f \
+        | LC_ALL=C sort | xargs md5sum \
+        | sed 's|^\([0-9a-f]*\)  \./|\1  |' \
+        > ./DEBIAN/md5sums
+      tar --owner=0 --group=0 --numeric-owner \
+        --exclude=./DEBIAN -czf /tmp/data.tar.gz .
+      tar --owner=0 --group=0 --numeric-owner \
+        -czf /tmp/control.tar.gz -C ./DEBIAN .
+      printf '2.0\n' > /tmp/debian-binary
+      ar qc "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb" \
+        /tmp/debian-binary /tmp/control.tar.gz /tmp/data.tar.gz
 
       test -s "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb" \
         || { echo "ERROR: bootc-installer deb empty or missing" >&2; exit 1; }
