@@ -1583,7 +1583,7 @@ packages:
       - preinstall/output/bootc-installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
-      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc2"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc3"
     build: |
       set -euo pipefail
       ARCH=$(dpkg --print-architecture)
@@ -1642,7 +1642,7 @@ packages:
 
       cd /output/bootc-installer
       ln -sf DEBIAN debian
-      dpkg-deb -Zgz --build /output/bootc-installer \
+      dpkg-deb -Zgzip --build /output/bootc-installer \
         "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb"
       rm -f debian
 
