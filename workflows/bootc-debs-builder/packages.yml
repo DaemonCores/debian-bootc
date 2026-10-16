@@ -396,6 +396,13 @@ packages:
         rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
       fi
 
+      # Remove .ko files already shipped by installed packages (e.g. linux-image-*)
+      # to prevent dpkg file conflicts when multiple module packages are installed together.
+      find "${DESTDIR}" -name "*.ko" -printf '%P\n' | while IFS= read -r rel; do
+          dpkg -S "/${rel}" >/dev/null 2>&1 && rm -f "${DESTDIR}/${rel}"
+      done
+      find "${DESTDIR}/lib/modules" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
@@ -686,6 +693,14 @@ packages:
         rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
       fi
 
+      # Remove .ko files already shipped by installed packages (e.g. linux-image-*,
+      # linux-modules-arm) to prevent dpkg file conflicts when multiple module
+      # packages are installed together.
+      find "${DESTDIR}" -name "*.ko" -printf '%P\n' | while IFS= read -r rel; do
+          dpkg -S "/${rel}" >/dev/null 2>&1 && rm -f "${DESTDIR}/${rel}"
+      done
+      find "${DESTDIR}/lib/modules" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
@@ -840,6 +855,14 @@ packages:
         done
         rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
       fi
+
+      # Remove .ko files already shipped by installed packages (e.g. linux-image-*)
+      # to prevent dpkg file conflicts when linux-image and linux-modules-x86-64
+      # are installed together.
+      find "${DESTDIR}" -name "*.ko" -printf '%P\n' | while IFS= read -r rel; do
+          dpkg -S "/${rel}" >/dev/null 2>&1 && rm -f "${DESTDIR}/${rel}"
+      done
+      find "${DESTDIR}/lib/modules" -mindepth 1 -type d -empty -delete 2>/dev/null || true
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-x86-64/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"

@@ -86,7 +86,8 @@ RUN apt-get update \
         systemd-sysv \
         udev \
         dbus \
-        polkit \
+        polkitd \
+        pkexec \
         iproute2 \
         isc-dhcp-client \
         bash \
