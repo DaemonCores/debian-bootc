@@ -29,8 +29,8 @@ Use the repository issue forms for bugs and feature proposals. Report vulnerabil
 | --- | --- |
 | Image composition | `Containerfile*`, `src/` |
 | Package builds | `workflows/bootc-debs-builder/` |
-| Build environment | `workflows/build-env/env.yml` |
-| Runtime tests | `workflows/image-tests/tests.yml` |
+| Build environment | `workflows/env.yml` |
+| Runtime tests | `workflows/tests.yml` |
 | Pipeline triggers | `.github/workflows/pipeline.yml` |
 | Documentation | `README.md`, `docs/` |
 

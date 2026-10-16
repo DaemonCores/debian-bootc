@@ -25,7 +25,7 @@ The repository is under active development. The amd64 path is the current instal
 - A signed APT repository published from the package manifest in `workflows/bootc-debs-builder/packages.yml`.
 - A full image and a reduced `minimal` image assembled from Debian Trixie.
 - Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and keyless cosign signing.
-- Boot tests that install an image to a virtual disk, start it with QEMU/KVM, and execute `workflows/image-tests/tests.yml` over SSH before publication.
+- Boot tests that install an image to a virtual disk, start it with QEMU/KVM, and execute `workflows/tests.yml` over SSH before publication.
 - Online and offline amd64 installer ISOs.
 - Optional raw image generation for the targets enabled by the caller workflow.
 
