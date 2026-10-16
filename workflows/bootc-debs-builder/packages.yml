@@ -671,7 +671,15 @@ packages:
         dpkg-deb --fsys-tarfile "${ARM_DEB}" | tar t | sed 's|^\./||' \
           | while IFS= read -r f; do
               target="${DESTDIR}/${f}"
-              [ -f "${target}" ] && rm -f "${target}"
+              # Must be an if, not `[ -f ] && rm`: the test is not the last
+              # command of the loop body by accident — a bare `&&` chain leaves
+              # the loop's exit status at 1 the moment a listed path is absent
+              # from DESTDIR (routine: linux-modules-arm carries files this
+              # device package does not build), and set -e + pipefail then kill
+              # the whole script right after modules_install with no error.
+              if [ -f "${target}" ]; then
+                rm -f "${target}"
+              fi
             done
       fi
 
