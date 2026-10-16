@@ -97,6 +97,7 @@ RUN apt update \
         linux-headers-${ARCH} \
         ${FIRMWARE_PKGS} \
         bootc \
+        bootupd \
         podman \
         adduser \
         sudo \

@@ -680,6 +680,7 @@ packages:
         "${DESTDIR}/DEBIAN/control"
       sed -i \
         -e "s|{{ DEVICE }}|${DEVICE}|g" \
+        -e "s|Version: {{ VER }}|Version: ${BUILT_VER}+r1|g" \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
         "${DESTDIR}/DEBIAN/control"
@@ -691,10 +692,10 @@ packages:
 
       # Build the modules deb.
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
+        "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb"
 
       # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
+      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-x86_64: device-specific modules for x86_64 PCs / servers /
@@ -1582,7 +1583,7 @@ packages:
       - preinstall/output/bootc-installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
-      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f"
+      BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc1"
     build: |
       set -euo pipefail
       ARCH=$(dpkg --print-architecture)
