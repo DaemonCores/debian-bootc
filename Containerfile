@@ -15,10 +15,16 @@ LABEL containers.bootc=1
 LABEL ostree.bootable=1
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
-# Drives kernel/headers package names: linux-image-${ARCH}, linux-headers-${ARCH}
-# (Debian upstream kernel metapackages). The boot stack uses ${BOOT_PKG} (a
-# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
+# Drives the kernel package name via linux-image-${KERNEL_VARIANT}-${ARCH} and the
+# boot stack (${BOOT_PKG} is separate because arm64 does NOT follow grub-efi-${ARCH}).
 ARG ARCH=amd64
+# Kernel variant: `stock` (default) installs linux-image-stock-${ARCH}, which is provided
+# by the custom linux-image-common deb published by bootc-debs-builder via Provides:.
+# The Debian archive has no linux-image-stock-<arch> package, so this name only resolves
+# once the custom deb is published. Using the virtual name avoids installing Debian's
+# kernel (linux-image-amd64/arm64) which would create a second /usr/lib/modules/<deb-kver>/
+# directory and fail bootc lint. See packages.yml linux-image BUILD section.
+ARG KERNEL_VARIANT=stock
 # Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
 # separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
 ARG BOOT_PKG=grub-efi-amd64-signed
@@ -78,23 +84,21 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # -----------------------------------------------------------------------------
 # Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
 # -----------------------------------------------------------------------------
-# Arch-specific packages (kernel/headers) use the Debian upstream naming pattern
-# linux-image-${ARCH}, linux-headers-${ARCH}, so there is no if/else on ARCH
-# here. apt installs the upstream Debian kernel metapackage directly. The
-# per-arch kernel modules are installed in a separate conditional RUN block
-# below (after the main apt install) so each arch gets ALL its SBC-relevant
-# modules in one go: amd64 -> linux-modules-x86_64; arm64 ->
-# linux-modules-arm + rpi3/rpi4/rpi5/rk3588 overlays. The modules are OPTIONAL —
-# the base image works without them. The boot stack uses ${BOOT_PKG} (separate
-# ARG because arm64 does NOT follow grub-efi-${ARCH}). broadcom-sta-dkms is
-# amd64-only and absent from Containerfile.minimal, so it is dropped here for
-# parity. FIRMWARE_PKGS and APT_HOLD_PKG stay separate ARGs because they do NOT
-# follow the name-${ARCH} pattern.
+# Kernel package resolves via the virtual name linux-image-${KERNEL_VARIANT}-${ARCH}
+# (default: linux-image-stock-amd64 / linux-image-stock-arm64) which is Provided by
+# the custom linux-image-common deb from bootc-debs-builder. This prevents Debian's
+# kernel (linux-image-amd64/arm64) from being co-installed, which would create a
+# second /usr/lib/modules/<deb-kver>/ directory and fail bootc lint.
+# linux-headers is our custom kernel headers deb; Debian's linux-headers-${ARCH}
+# creates /usr/lib/modules/<deb-kver>/build (same spurious-directory problem).
+# Per-arch kernel modules are installed in a separate conditional RUN block
+# below (Phase 3.1): amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm +
+# rpi3/rpi4/rpi5/rk3588 overlays.
 RUN apt update \
     && apt install -y \
         dkms \
-        linux-image-${ARCH} \
-        linux-headers-${ARCH} \
+        linux-image-${KERNEL_VARIANT}-${ARCH} \
+        linux-headers \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
@@ -169,6 +173,8 @@ RUN if [ "${ARCH}" = "amd64" ]; then \
         apt update \
         && apt install -y --no-install-recommends \
             linux-modules-arm \
+        && apt install -y --no-install-recommends \
+            -o Dpkg::Options::="--force-overwrite" \
             linux-modules-rpi3 \
             linux-modules-rpi4 \
             linux-modules-rpi5 \
