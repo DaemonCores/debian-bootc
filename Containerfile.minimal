@@ -194,14 +194,14 @@ RUN apt update \
     && apt update \
     && if [ "${ARCH}" = "amd64" ]; then \
         apt install -y --no-install-recommends \
-            linux-modules-x86-64 \
+            linux-modules-x86-64; \
     else \
         apt install -y --no-install-recommends \
             linux-modules-arm \
             linux-modules-rpi3 \
             linux-modules-rpi4 \
             linux-modules-rpi5 \
-            linux-modules-rk3588 \
+            linux-modules-rk3588; \
     fi
 
 # -----------------------------------------------------------------------------
