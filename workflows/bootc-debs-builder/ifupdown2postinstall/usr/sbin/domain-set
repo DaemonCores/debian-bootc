@@ -12,11 +12,11 @@ if [[ -z "$IP" ]]; then
 fi
 
 HOST=$(hostname -s)
-# First domain advertised over DHCP.  dhclient (called by networking.service)
-# writes the DHCP-provided domain to /etc/resolv.conf via the resolvconf hook;
-# read it from there rather than depending on a separate dhcpcd process.
-FQDN=$(awk '/^domain /{print $2; exit} /^search /{print $2; exit}' \
-  /etc/resolv.conf 2>/dev/null || echo "")
+# First domain advertised over DHCP.  ifupdown2-autoconf (ExecStartPre) reads
+# the domain from the dhclient probe lease synchronously and saves it here;
+# we read it now rather than from /etc/resolv.conf, which is written by dhclient
+# running in the background and is not yet populated when ExecStartPost fires.
+FQDN=$(cat /run/ifupdown2-dhcp-domain 2>/dev/null | tr -d '[:space:]' || echo "")
 HOSTS=$(cat /etc/hosts 2>/dev/null || true)
 
 [[ "${FQDN}" == "" ]] \
