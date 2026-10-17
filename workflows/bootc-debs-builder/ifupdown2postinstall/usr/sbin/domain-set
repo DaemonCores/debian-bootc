@@ -12,10 +12,11 @@ if [[ -z "$IP" ]]; then
 fi
 
 HOST=$(hostname -s)
-# First domain advertised over DHCP (domain_name may list several).
-# dhcpcd -U exits non-zero when the daemon is not running; fall back to an
-# empty string so the script continues and FQDN defaults to "local" below.
-FQDN=$(dhcpcd -U 2>/dev/null | sed -n "s/^domain_name='\?\([^' ]*\).*/\1/p" | head -1 || echo "")
+# First domain advertised over DHCP.  dhclient (called by networking.service)
+# writes the DHCP-provided domain to /etc/resolv.conf via the resolvconf hook;
+# read it from there rather than depending on a separate dhcpcd process.
+FQDN=$(awk '/^domain /{print $2; exit} /^search /{print $2; exit}' \
+  /etc/resolv.conf 2>/dev/null || echo "")
 HOSTS=$(cat /etc/hosts 2>/dev/null || true)
 
 [[ "${FQDN}" == "" ]] \
