@@ -100,6 +100,7 @@ RUN apt update \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
+        skopeo \
         podman \
         adduser \
         sudo \
