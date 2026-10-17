@@ -94,7 +94,10 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1): amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm +
 # rpi3/rpi4/rpi5/rk3588 overlays.
-RUN apt update \
+RUN for _r in 1 2 3 4 5; do \
+        rm -rf /var/lib/apt/lists/* && apt update && break; \
+        [ "$_r" -lt 5 ] && sleep 30; \
+    done \
     && apt install -y \
         linux-image-${KERNEL_VARIANT}-${ARCH} \
         ${FIRMWARE_PKGS} \
