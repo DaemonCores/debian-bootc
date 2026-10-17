@@ -13,7 +13,9 @@ fi
 
 HOST=$(hostname -s)
 # First domain advertised over DHCP (domain_name may list several).
-FQDN=$(dhcpcd -U | sed -n "s/^domain_name='\?\([^' ]*\).*/\1/p" | head -1)
+# dhcpcd -U exits non-zero when the daemon is not running; fall back to an
+# empty string so the script continues and FQDN defaults to "local" below.
+FQDN=$(dhcpcd -U 2>/dev/null | sed -n "s/^domain_name='\?\([^' ]*\).*/\1/p" | head -1 || echo "")
 HOSTS=$(cat /etc/hosts 2>/dev/null || true)
 
 [[ "${FQDN}" == "" ]] \
