@@ -174,7 +174,10 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
 # amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
 # rk3588 overlays. The modules are OPTIONAL — the base image works without them.
-RUN apt update \
+RUN for _r in 1 2 3 4 5; do \
+        rm -rf /var/lib/apt/lists/* && apt update && break; \
+        [ "$_r" -lt 5 ] && sleep 30; \
+    done \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}-${ARCH} \
         bootc \
