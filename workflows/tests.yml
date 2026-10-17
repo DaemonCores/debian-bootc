@@ -59,6 +59,10 @@ tests:
     run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
     diag: |
       systemctl --failed --no-pager 2>&1
+      echo '--- networking.service status ---'
+      systemctl status networking.service --no-pager -l 2>&1 | tail -20
+      echo '--- networking.service journal ---'
+      journalctl -u networking.service --no-pager -b 2>&1 | tail -30
 
   # ── bootloader / secure boot ───────────────────────────────────────────
   - name: bootupd present
@@ -196,7 +200,7 @@ tests:
 
   # ── rollback preparation (pre-reboot — must pass before the reboot phase) ─
   - name: two deployments staged for rollback test
-    run: test "$(ls /ostree/deploy/*/deploy/ 2>/dev/null | wc -l)" -ge 2
+    run: test "$(ls -d /ostree/deploy/*/deploy/*.0 2>/dev/null | wc -l)" -ge 2
     diag: |
       ls -la /ostree/deploy/*/deploy/ 2>&1
       ostree admin status 2>&1
@@ -233,6 +237,10 @@ reboot_tests:
     run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
     diag: |
       systemctl --failed --no-pager 2>&1
+      echo '--- networking.service status ---'
+      systemctl status networking.service --no-pager -l 2>&1 | tail -20
+      echo '--- networking.service journal ---'
+      journalctl -u networking.service --no-pager -b 2>&1 | tail -30
 
   - name: booted through bootc after rollback
     run: bootc status --format json
