@@ -15,6 +15,11 @@
 #                  that are x86_64-only, and for U-Boot tests that are
 #                  arm64-only. The harness skips a test whose arch does not
 #                  match the running arch (reports SKIP, not FAIL).
+#   tests[].variant optional: `main` or `minimal` to run the test ONLY on that
+#                  image variant. Absent = run on all variants. Used for tests
+#                  that target packages present only in the full (main) image,
+#                  such as ifupdown2 or firstboot-user-setup. The harness skips
+#                  a test whose variant does not match (reports SKIP, not FAIL).
 
 boot_timeout: 600
 # Timeout for the VM to come back after the rollback reboot (shorter than
@@ -137,11 +142,14 @@ tests:
       command -v mkfs.btrfs 2>&1 || echo absent; dpkg -l 2>&1 | grep -i btrfs-progs
   - name: btrfs kernel module loads
     arch: amd64
-    run: modprobe btrfs && lsmod | grep -q btrfs
+    # Use /proc/filesystems instead of lsmod: lsmod omits built-in modules
+    # (CONFIG_BTRFS_FS=y), so the check passes for both module and built-in.
+    run: modprobe btrfs 2>/dev/null; grep -qw btrfs /proc/filesystems
     diag: |
-      modprobe btrfs 2>&1 && echo "modprobe OK" || echo "modprobe FAILED"
-      lsmod 2>&1 | grep btrfs
-      ls /usr/lib/modules/*/kernel/fs/btrfs/ 2>&1 || echo "no btrfs module in tree"
+      modprobe btrfs 2>&1 || echo "modprobe FAILED (may be built-in)"
+      grep btrfs /proc/filesystems 2>&1 || echo "not in /proc/filesystems"
+      lsmod 2>&1 | grep btrfs || echo "not in lsmod (may be built-in)"
+      ls /usr/lib/modules/*/kernel/fs/btrfs/ 2>&1 || echo "no btrfs.ko (may be built-in)"
 
   # ── podman (bootc imgstorage on upgrade) ───────────────────────────────
   # podman is installed in the MAIN image (x86_64) but NOT in the minimal
@@ -160,10 +168,9 @@ tests:
 
   # ── networking / repacked packages ─────────────────────────────────────
   # ifupdown2 is repacked and installed in the MAIN image only; the minimal
-  # image uses systemd-networkd instead. Gate to amd64 (main image is
-  # x86_64-only today).
+  # image uses systemd-networkd instead.
   - name: ifupdown2 repacked (+bootc)
-    arch: amd64
+    variant: main
     run: dpkg-query -W -f='${Version}' ifupdown2
     expect: +bootc
     diag: |
@@ -189,7 +196,10 @@ tests:
       journalctl -b -u ssh --no-pager 2>&1 | tail -n 15
 
   # ── first-boot tooling shipped ─────────────────────────────────────────
+  # firstboot-user-setup is installed in the MAIN image only; the minimal image
+  # omits it to hit the RAM target.
   - name: firstboot wizard present
+    variant: main
     run: test -x /usr/local/bin/firstboot-user-setup
     diag: |
       ls -la /usr/local/bin/firstboot-user-setup 2>&1
