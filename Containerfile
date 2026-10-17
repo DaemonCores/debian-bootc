@@ -193,5 +193,10 @@ RUN mkdir -p /var/home \
     && ln -s sysroot/ostree /ostree \
     && ln -s var/usr/lib/locale /usr/lib/locale
 
+# dhcpcd and networking.service (ifupdown2) both try to manage the same
+# interfaces at boot, causing networking.service to fail. Remove the auto-start
+# symlink so dhcpcd does not start automatically; the binary stays installed.
+RUN rm -f /etc/systemd/system/multi-user.target.wants/dhcpcd.service
+
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE
