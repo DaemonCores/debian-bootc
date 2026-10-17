@@ -902,13 +902,13 @@ packages:
         > /output/ifupdown2/DEBIAN/md5sums
 
       # Preserve +pmx suffix for pve-manager version check
-      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc3/" \
+      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc4/" \
         /output/ifupdown2/DEBIAN/control
       chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf \
         /output/ifupdown2/usr/sbin/domain-set
 
       # Content check: version bumped and our helpers present + executable.
-      grep -qF "Version: 1:${ORIG_VER}+bootc3" \
+      grep -qF "Version: 1:${ORIG_VER}+bootc4" \
         /output/ifupdown2/DEBIAN/control \
         || { echo "ERROR: ifupdown2 version not rewritten" >&2; exit 1; }
       for s in ifupdown2-autoconf domain-set; do
@@ -918,7 +918,7 @@ packages:
       done
 
       dpkg-deb --build /output/ifupdown2 \
-        /debs/ifupdown2_${ORIG_VER}+bootc3_all.deb
+        /debs/ifupdown2_${ORIG_VER}+bootc4_all.deb
 
   - name: systemd-timesyncd
     upstream: systemd-timesyncd
@@ -1639,16 +1639,24 @@ packages:
       # (build-fisherman=false) — we package it separately — but the data dir is needed.
       git -C /build/bootc-installer-src submodule update --init fisherman
 
-      # Override images.json with our DaemonCores recipe so bootc-installer
-      # shows our images rather than the upstream defaults. The source is the
-      # same recipe.json the live image ships at /etc/bootc-installer/recipe.json
-      # (RecipeLoader's primary path) — bundling it as images.json keeps the
-      # fallback catalog identical to the runtime one.
-      cp "${SAVE_PWD}/src/buildisopreinstall/etc/bootc-installer/recipe.json" \
+      # Auto-generate images.json from the Containerfiles in the repo root.
+      # gen-recipe.py reads IMAGE_REGISTRY from the environment and scans the
+      # ctx_dir for Containerfile* to build the image list, updating the static
+      # template fields from the existing recipe.json in-place.
+      # GITHUB_REPOSITORY is set by GitHub Actions (e.g. DaemonCores/debian-bootc).
+      IMAGE_REGISTRY="ghcr.io/${GITHUB_REPOSITORY,,}"
+      TEMPLATE="${SAVE_PWD}/src/buildisopreinstall/etc/bootc-installer/recipe.json"
+      cp "${TEMPLATE}" /tmp/gen-recipe-work.json
+      IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
+        python3 "${SAVE_PWD}/scripts/gen-recipe.py" \
+          "${SAVE_PWD}" /tmp/gen-recipe-work.json
+      cp /tmp/gen-recipe-work.json \
         /build/bootc-installer-src/fisherman/data/images.json
 
       # Inject DaemonCores branding assets before meson compiles the GResource bundle.
       # welcome.svg is rasterised to PNG at 512×512 (displayed at 128px by the installer).
+      # Upstream commit 0290d4fb restructured the repo; assets/ may not exist yet.
+      mkdir -p /build/bootc-installer-src/assets
       rsvg-convert -w 512 -h 512 \
         "${SAVE_PWD}/assets/installer/welcome.svg" \
         -o /build/bootc-installer-src/assets/welcome.png
