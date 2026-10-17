@@ -49,6 +49,10 @@ on:
         description: 'Build Linux Gallium .img (arm64 only) — disabled for this repo'
         type: boolean
         default: false
+      sign_modules:
+        description: 'Module signing override: nosign | sign | both | "" (use config.yml default)'
+        type: string
+        default: ''
 
 permissions:
   actions: write
@@ -76,4 +80,5 @@ jobs:
       # Gallium .img build is disabled here. The shared workflow
       # keeps its own default ('false') for run_img_gallium.
       run_img_rpi: ${{ inputs.run_img_rpi }}
+      sign_modules: ${{ inputs.sign_modules }}
     secrets: inherit
