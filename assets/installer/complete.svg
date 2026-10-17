@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300">
+  <!--
+    DaemonCores installer - complete.svg
+    600x300 - transparent background - no hatching
+
+    Drawn as a line icon with the caption set in the file, matching the upstream
+    illustration dimensions so the GResource injection needs no other change.
+
+    The caption colours are fixed, not themed: Gtk.Picture rasterises this file
+    through librsvg at load time and never receives the widget theme, so no
+    colour here can follow light and dark. Both grounds are instead covered by
+    contrast - the title holds 5.2:1 on white and 3.2:1 on #1e1e1e, and the
+    description uses the neutral #7b7d85, which reaches 4.1:1 on either. That
+    neutral is the highest minimum a single colour can achieve across the two
+    grounds.
+  -->
+  <g transform="translate(232.80,34) scale(5.6)" fill="none" stroke="#d70a53"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="m9 12 2 2 4-4"/>
+  </g>
+
+  <text x="300.0" y="196" font-family="DejaVu Sans, Liberation Sans, sans-serif"
+        font-size="21" font-weight="bold" fill="#d70a53" text-anchor="middle">Installation Complete</text>
+  <path d="M 204.0 208 H 396.0" stroke="#d70a53" stroke-width="2.5" stroke-linecap="round"/>
+
+  <text x="300.0" y="237" font-family="DejaVu Sans, Liberation Sans, sans-serif"
+        font-size="13.5" fill="#7b7d85" text-anchor="middle">DaemonCores is ready to use. Remove the installation media and reboot.</text>
+</svg>
