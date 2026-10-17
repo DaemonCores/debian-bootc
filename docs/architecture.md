@@ -19,8 +19,8 @@ The project targets Debian 13 (Trixie). `DaemonCores-VE` consumes the published 
 | `Containerfile.minimal` | Reduced multi-architecture image definition. |
 | `src/` | Files copied into the image before and after package installation. |
 | `workflows/bootc-debs-builder/` | Package manifest, build scripts, package metadata, and overlays. |
-| `workflows/build-env/env.yml` | Package-builder environment recipe. |
-| `workflows/image-tests/tests.yml` | Tests executed against a booted image. |
+| `workflows/env.yml` | Package-builder environment recipe. |
+| `workflows/tests.yml` | Tests executed against a booted image. |
 | `kernel/` and `modules-kernel/` | Kernel and device-module configuration inputs. |
 | `.github/workflows/pipeline.yml` | Product-specific triggers for the shared pipeline. |
 
@@ -60,7 +60,7 @@ For every matrix entry the workflow:
 3. runs bootc validation;
 4. installs the image onto a virtual disk;
 5. boots that disk with QEMU/KVM and UEFI firmware;
-6. executes every applicable test from `workflows/image-tests/tests.yml` over SSH;
+6. executes every applicable test from `workflows/tests.yml` over SSH;
 7. pushes and signs the image only after the tests pass.
 
 Tests cover the bootc deployment, OSTree and composefs mounts, writable state, bootloader assets, initramfs contents, networking, package repacks, and first-boot tooling. Architecture-specific checks are gated in the test manifest.
@@ -77,16 +77,22 @@ Examples include `latest_amd64_autoupdate`, `minimal_arm64_autoupdate`, and `min
 
 ## Installation media
 
-The ISO workflow currently targets amd64. It starts from a Fedora Server net-install environment because Anaconda provides the installer runtime used by the project.
+The ISO workflow currently targets amd64. `Containerfile.iso` derives from the
+published `debian-bootc` base image and adds a thin installer layer: `cage` as a
+single-app Wayland compositor, the `fisherman` backend and the `bootc-installer`
+GTK4 wizard, a live user with autologin on tty1, and a polkit rule letting that
+user run fisherman through `pkexec` without a password prompt. `bootc-image-builder`
+converts the result to an ISO through dracut's live squashfs path.
 
-The Kickstart runs the actual installation from `%pre`:
+The wizard drives the installation:
 
-- the operator selects the target disk;
-- the installer creates EFI, ext4 `/boot`, and Btrfs system partitions;
-- the Btrfs pool contains `root`, `var`, and `varlog` subvolumes;
-- `/var/log` receives a 2 GiB qgroup limit;
-- `bootc install to-filesystem` deploys the image;
+- the operator selects the target disk and filesystem (the recipe offers Btrfs and XFS);
+- fisherman creates the partitions and calls `bootc install to-filesystem` to deploy the image;
 - an existing compatible pool may keep its `var` subvolume during reinstall.
+
+The graphical installer replaces the earlier Anaconda/Kickstart flow. The live
+image is the same base the installed system runs, so installer and target stay
+in step.
 
 The online ISO pulls the registry image during installation. The offline ISO embeds an OCI archive. Both retain the registry reference as the future upgrade source.
 

@@ -48,13 +48,19 @@ CONFIG_ARCH_ROCKCHIP=y
 # next deployment.
 # =============================================================================
 
-# DWMAC_GENERIC: built-in. Generic DWMAC platform driver, used by the RK3588
-#                for its GMAC.
-CONFIG_DWMAC_GENERIC=y
+# DWMAC_GENERIC: module. Generic DWMAC platform driver, used by the RK3588
+#                for its GMAC. Kept as =m: STMMAC_ETH selects PHYLINK, so
+#                forcing it built-in promotes PHYLINK to =y which removes
+#                phylink.ko from the build and breaks macb.ko / pcs-lynx.ko
+#                at modpost (phylink_* undefined). Network is not needed in
+#                early boot (bootc pulls updates from userspace).
+CONFIG_DWMAC_GENERIC=m
 
-# STMMAC_ETH: built-in. The stmmac core driver required by DWMAC_GENERIC
-#             above.
-CONFIG_STMMAC_ETH=y
+# STMMAC_ETH: module. Core driver required by DWMAC_GENERIC above.
+#             Kept as =m for the same PHYLINK/modpost reason.
+CONFIG_STMMAC_ETH=m
+# Pin PHYLINK to =m so STMMAC_ETH's select cannot promote it to =y.
+CONFIG_PHYLINK=m
 
 # =============================================================================
 # USB — built-in. USB is used on several RK3588 boards as the only way to

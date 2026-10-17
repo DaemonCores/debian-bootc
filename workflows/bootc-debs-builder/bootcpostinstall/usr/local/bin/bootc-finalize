@@ -43,43 +43,48 @@ dracut --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"
 # sources are gone. Each staging step below is therefore guarded on its source
 # still being present. On the base build every source exists, so behaviour is
 # byte-identical to before; downstream it simply skips the already-staged EFI.
-SHIM_VER=$(dpkg-query -W -f='${Version}' shim-signed)
-GRUB_VER=$(dpkg-query -W -f='${Version}' grub-efi-amd64-signed)
+# On arm64 (u-boot-tools, no grub/shim), both dpkg-query calls return empty;
+# the EFI staging section is skipped entirely and generate-update-metadata runs
+# against an empty /usr/lib/efi (bootupd treats that as no-op).
+SHIM_VER=$(dpkg-query -W -f='${Version}' shim-signed 2>/dev/null || true)
+GRUB_VER=$(dpkg-query -W -f='${Version}' grub-efi-amd64-signed 2>/dev/null || true)
 
-mkdir -p \
-  "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT" \
-  "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
-  "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
+if [ -n "${SHIM_VER}" ] && [ -n "${GRUB_VER}" ]; then
+  mkdir -p \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT" \
+    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" \
+    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian"
 
-# GRUB EFI binary - custom Fedora build with blscfg embedded.
-if [ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]; then
-  mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
-    "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+  # GRUB EFI binary - custom Fedora build with blscfg embedded.
+  if [ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]; then
+    mv /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
+      "/usr/lib/efi/grub2/${GRUB_VER}/EFI/debian/grubx64.efi"
+  fi
+
+  # Shim in BOOT/ for UEFI firmware.
+  if [ -f /usr/lib/shim/shimx64.efi.signed ]; then
+    mv /usr/lib/shim/shimx64.efi.signed \
+      "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
+  fi
+
+  # Shim also in vendor dir - bootupd looks for shimx64.efi there.
+  if [ -f "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" ]; then
+    cp "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" \
+      "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
+  fi
+
+  # Fallback and MokManager.
+  if [ -f /usr/lib/shim/fbx64.efi.signed ]; then
+    mv /usr/lib/shim/fbx64.efi.signed \
+      "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
+  fi
+  if [ -f /usr/lib/shim/mmx64.efi.signed ]; then
+    mv /usr/lib/shim/mmx64.efi.signed \
+      "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
+  fi
 fi
 
-# Shim in BOOT/ for UEFI firmware.
-if [ -f /usr/lib/shim/shimx64.efi.signed ]; then
-  mv /usr/lib/shim/shimx64.efi.signed \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI"
-fi
-
-# Shim also in vendor dir - bootupd looks for shimx64.efi there.
-if [ -f "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" ]; then
-  cp "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/BOOTX64.EFI" \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/shimx64.efi"
-fi
-
-# Fallback and MokManager.
-if [ -f /usr/lib/shim/fbx64.efi.signed ]; then
-  mv /usr/lib/shim/fbx64.efi.signed \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/fbx64.efi"
-fi
-if [ -f /usr/lib/shim/mmx64.efi.signed ]; then
-  mv /usr/lib/shim/mmx64.efi.signed \
-    "/usr/lib/efi/shim/${SHIM_VER}/EFI/BOOT/mmx64.efi"
-fi
-
-bootupctl backend generate-update-metadata /
+command -v bootupctl >/dev/null 2>&1 && bootupctl backend generate-update-metadata /
 
 # Brand the shim fallback's boot entry with the product name so the firmware
 # NVRAM entry matches this image instead of a hardcoded distro. fbx64 reads
@@ -89,7 +94,7 @@ bootupctl backend generate-update-metadata /
 # Written after generate-update-metadata so it is not regenerated away, into the
 # vendor dir bootupd lays onto the ESP. Runs in every image (base + any
 # downstream) via the autonomous finalize, so each brands its own entry.
-if [ -d "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" ]; then
+if [ -n "${SHIM_VER}" ] && [ -d "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" ]; then
   product=$(cat /usr/lib/bootc/product-name 2>/dev/null || true)
   if [ -z "${product}" ]; then
     product=$(. /etc/os-release 2>/dev/null && printf '%s' "${NAME:-Linux}")

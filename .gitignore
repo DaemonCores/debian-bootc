@@ -1,5 +1,6 @@
 # Build artifacts
 *.iso
+!Containerfile.iso
 out/
 tmp/
 

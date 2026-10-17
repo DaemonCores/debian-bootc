@@ -9,7 +9,7 @@ case "$1" in
     # the grub-efi-amd64-signed package under /usr/lib/efi/grub2/...; here we add
     # shim (from shim-signed, a Pre-Depend) under /usr/lib/efi/shim/<ver>/EFI in
     # the 3-level <name>/<version>/EFI layout bootupd reads (cf. bootupd v0.2.35
-    # src/efi.rs and workflows/image-tests/tests.yml), then generate the update
+    # src/efi.rs and workflows/tests.yml), then generate the update
     # metadata bootupd needs to actually install the bootloader. This runs at
     # image build time (writable /usr); bootc systems never apt-install on a
     # booted, read-only /usr.
@@ -18,8 +18,11 @@ case "$1" in
     mkdir -p "${efidir}/BOOT" "${efidir}/debian"
     # shimx64.efi.signed is the boot entrypoint: it lands as the removable-media
     # fallback EFI/BOOT/BOOTX64.EFI and as the vendor EFI/debian/shimx64.efi.
-    cp /usr/lib/shim/shimx64.efi.signed "${efidir}/BOOT/BOOTX64.EFI"
-    cp /usr/lib/shim/shimx64.efi.signed "${efidir}/debian/shimx64.efi"
+    # Guard: absent on arm64 (u-boot-tools, no x86 shim).
+    if [ -f /usr/lib/shim/shimx64.efi.signed ]; then
+      cp /usr/lib/shim/shimx64.efi.signed "${efidir}/BOOT/BOOTX64.EFI"
+      cp /usr/lib/shim/shimx64.efi.signed "${efidir}/debian/shimx64.efi"
+    fi
     # MokManager, for MOK enrollment; best-effort. Only launched on a pending
     # MOK request, so harmless. We deliberately do NOT ship fbx64.efi (the shim
     # fallback): booted from the removable path with no NVRAM entry, shim would

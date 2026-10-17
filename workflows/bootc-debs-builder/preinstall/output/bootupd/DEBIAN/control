@@ -1,14 +1,14 @@
 Source: bootupd
 Package: bootupd
 Version: {{ VER }}
-Architecture: amd64
+Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: required
 Conflicts: grub-pc, grub-pc-bin
-Breaks: grub-efi-amd64 (<< 2.12-1)
-Pre-Depends: grub-efi-amd64, grub-efi-amd64-signed, shim-signed
+Breaks: grub-efi-{{ GRUB_ARCH }} (<< 2.12-1)
+Pre-Depends: grub-efi-{{ GRUB_ARCH }}, grub-efi-{{ GRUB_ARCH }}-signed, shim-signed
 Depends: {{ DEPS }}, util-linux
 Description: cross-distribution EFI bootloader update manager
  Manages updates to EFI bootloader components (shim, GRUB) independently

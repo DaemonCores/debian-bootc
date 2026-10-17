@@ -46,7 +46,7 @@
 # Per-arch kernel modules (optional):
 #   The image installs ALL modules matching the target arch in a separate
 #   conditional RUN block below (after the main apt install): x86_64 ->
-#   linux-modules-x86_64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/rk3588
+#   linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/rk3588
 #   overlays so a single arm64 image boots on every SBC the project targets.
 #   The modules are optional — the base kernel (linux-image-common) works
 #   without them. Replaces the previous per-device DEVICE build-arg +
@@ -173,7 +173,7 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
-# amd64 -> linux-modules-x86_64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
+# amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
 # rk3588 overlays. The modules are OPTIONAL — the base image works without them.
 RUN apt update \
     && apt install -y --no-install-recommends \
@@ -182,6 +182,7 @@ RUN apt update \
         dracut \
         ${BOOT_PKG} \
         ${FIRMWARE_PKGS} \
+        btrfs-progs \
         iproute2 \
         systemd-timesyncd \
         ca-certificates \
@@ -189,69 +190,22 @@ RUN apt update \
         /tmp/* \
         /var/tmp/* \
         /run/* \
-        /usr/sbin/policy-rc.d
-
-# -----------------------------------------------------------------------------
-# Phase 3.1: Per-arch kernel modules (optional)
-# -----------------------------------------------------------------------------
-# Install ALL modules matching the target arch. amd64 gets the x86_64 module
-# set; arm64 gets the arm64 module set PLUS the Raspberry Pi 3/4/5 and Rockchip
-# RK3588 SBC overlays so a single arm64 image boots on every SBC the project
-# targets. The modules are OPTIONAL — the base kernel works without them, so a
-# failure to find a module package (rare on non-SBC arm64 hosts) is tolerated.
-# Replaces the previous per-device DEVICE build-arg + linux-modules-${DEVICE}
-# pattern: the device dimension is now collapsed into the arch dimension.
-RUN if [ "${ARCH}" = "amd64" ]; then \
-        apt update \
-        && apt install -y --no-install-recommends \
-            linux-modules-x86_64 \
-        && rm -rf /var/lib/apt/lists/*; \
+        /usr/sbin/policy-rc.d \
+    && apt update \
+    && if [ "${ARCH}" = "amd64" ]; then \
+        apt install -y --no-install-recommends \
+            linux-modules-x86-64; \
     else \
-        apt update \
-        && apt install -y --no-install-recommends \
+        apt install -y --no-install-recommends \
             linux-modules-arm \
             linux-modules-rpi3 \
             linux-modules-rpi4 \
             linux-modules-rpi5 \
-            linux-modules-rk3588 \
-        && rm -rf /var/lib/apt/lists/*; \
+            linux-modules-rk3588; \
     fi
 
 # -----------------------------------------------------------------------------
-# Phase 4: ostree filesystem migration
-# -----------------------------------------------------------------------------
-# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
-# read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# Mirrors the main Containerfile exactly; do NOT change the layout or bootc fails.
-RUN mkdir -p /var/home \
-        /var/roothome \
-        /var/mnt \
-        /var/srv \
-        /var/opt \
-        /var/usr/lib/locale \
-        /sysroot/ostree \
-    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
-    && rm -rf /home /root /mnt /srv /opt /usr/lib/locale \
-    && ln -s var/home /home \
-    && ln -s var/mnt /mnt \
-    && ln -s var/srv /srv \
-    && ln -s var/opt /opt \
-    && ln -s var/roothome /root \
-    && ln -s sysroot/ostree /ostree \
-    && ln -s var/usr/lib/locale /usr/lib/locale
-
-# -----------------------------------------------------------------------------
-# Phase 5: journald configuration — Storage=none
-# -----------------------------------------------------------------------------
-# Storage=none drops log lines after forwarding (no journald process, no disk I/O,
-# no growing /var/log/journal). Removes the largest always-on userspace memory
-# consumer after systemd. Trade-off: no log persistence across boots.
-RUN mkdir -p /etc/systemd/journald.conf.d \
-    && printf '[Journal]\nStorage=none\n' \
-        > /etc/systemd/journald.conf.d/00-minimal.conf
-
-# -----------------------------------------------------------------------------
-# Phase 6: GRUB kernel command line (arch-conditional)
+# Phase 3: GRUB kernel command line (arch-conditional)
 # -----------------------------------------------------------------------------
 # quiet: suppress kernel boot messages. init_on_alloc=0: disable default-on page
 # zeroing hardening (unjustified on a no-untrusted-workload minimal image; saves
@@ -263,32 +217,15 @@ RUN mkdir -p /etc/systemd/journald.conf.d \
 # Idempotent upsert without a conditional: touch guarantees the file exists (u-boot
 # on arm64 ships no /etc/default/grub), sed -i /d removes any prior directive line,
 # printf >> appends the fresh value. Fixes A3 (no duplication on rebuild).
-RUN touch /etc/default/grub \
-    && sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub \
+COPY ./src/minimalpostinstall /
+RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
     && printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0%s%s"\n' \
         "${KERNEL_CMDLINE_SERIAL:+ }" "${KERNEL_CMDLINE_SERIAL}" \
-        >> /etc/default/grub
-
-# -----------------------------------------------------------------------------
-# Phase 6.1: Enable systemd-networkd and ship a default DHCP .network
-# -----------------------------------------------------------------------------
-# systemd-networkd is disabled by default on Debian. Without enabling the
-# socket+service and a .network file, the image boots with no network config and
-# bootc cannot fetch the next deployment. Fixes B4.
-RUN mkdir -p /etc/systemd/network \
-    && printf '[Match]\nName=en*\nName=eth*\n\n[Network]\nDHCP=yes\n' \
-        > /etc/systemd/network/20-wired.network \
+        >> /etc/default/grub \
     && systemctl enable systemd-networkd.service \
     && systemctl enable systemd-networkd.socket \
-    && systemctl enable systemd-timesyncd.service
-
-# -----------------------------------------------------------------------------
-# Phase 7: Service masking
-# -----------------------------------------------------------------------------
-# Masking (not just disabling) prevents the unit from being started manually or
-# pulled in by dependencies. Use `systemctl unmask <name>` to re-enable.
-# The list is identical on both architectures.
-RUN systemctl mask -- \
+    && systemctl enable systemd-timesyncd.service \
+    && systemctl mask -- \
         cron.service \
         getty@tty2.service \
         getty@tty3.service \
@@ -312,7 +249,39 @@ RUN systemctl mask -- \
         logrotate.service
 
 # -----------------------------------------------------------------------------
-# Phase 8: Healthcheck
+# Phase 4: ostree filesystem migration
+# -----------------------------------------------------------------------------
+# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
+# read-only /usr tree can be swapped atomically while mutable state persists in /var.
+# Mirrors the main Containerfile exactly; do NOT change the layout or bootc fails.
+RUN mkdir -p /var/home \
+        /var/roothome \
+        /var/mnt \
+        /var/srv \
+        /var/opt \
+        /var/usr/lib/locale \
+        /sysroot/ostree \
+    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
+    && rm -rf /home \
+        /root \
+        /mnt \
+        /srv \
+        /opt \
+        /usr/lib/locale \
+        /tmp/* \
+        /var/tmp/* \
+        /run/* \
+        /usr/sbin/policy-rc.d \
+    && ln -s var/home / \
+    && ln -s var/mnt / \
+    && ln -s var/srv / \
+    && ln -s var/opt / \
+    && ln -s var/roothome /root \
+    && ln -s sysroot/ostree /ostree \
+    && ln -s var/usr/lib/locale /usr/lib/locale
+
+# -----------------------------------------------------------------------------
+# Phase 5: Healthcheck
 # -----------------------------------------------------------------------------
 # bootc images are updated in-place via ostree; a healthcheck would spawn a
 # process on a schedule, defeating the minimal RAM target.
