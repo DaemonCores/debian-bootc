@@ -59,7 +59,6 @@
 #   (auto-update disabled for minimal RAM). See P04 in todo/registry.md.
 #
 # Trade-offs (documented in docs/minimal.md):
-#   - No SSH server (use console or downstream layer to add openssh-server)
 #   - No man pages, no nano, no bash-completion
 #   - No logging persistence (journald volatile only)
 #   - No getty on tty2-6 (single tty1 console)
@@ -179,6 +178,10 @@ RUN apt update \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}-${ARCH} \
         bootc \
+        bootupd \
+        podman \
+        skopeo \
+        openssh-server \
         dracut \
         ${BOOT_PKG} \
         ${FIRMWARE_PKGS} \
