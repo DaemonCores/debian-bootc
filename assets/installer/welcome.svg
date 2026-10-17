@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    DaemonCores installer welcome icon
+    Debian swirl — 512×512 source, displayed at 128px
+    Transparent background · carmine #d70a53
+  -->
+  <!-- Outer C-arc: 315° clockwise, gap at ~1 o'clock -->
+  <path
+    d="M 434.7 208.1 A 185 185 0 1 1 348.5 95.8"
+    fill="none"
+    stroke="#d70a53"
+    stroke-width="51"
+    stroke-linecap="round"/>
+  <!-- Inner spiral arc: 188° clockwise from 7-8 o'clock toward 2 o'clock -->
+  <path
+    d="M 180.4 243.6 A 89 89 0 1 1 342.6 315.8"
+    fill="none"
+    stroke="#d70a53"
+    stroke-width="42"
+    stroke-linecap="round"/>
+</svg>

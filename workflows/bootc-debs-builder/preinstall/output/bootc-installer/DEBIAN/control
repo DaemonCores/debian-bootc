@@ -1,0 +1,27 @@
+Source: bootc-installer
+Package: bootc-installer
+Version: {{ VER }}
+Architecture: all
+Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
+Homepage: https://github.com/frostyard/bootc-installer
+Section: admin
+Priority: optional
+Depends: fisherman,
+ polkitd,
+ pkexec,
+ python3 (>= 3.11),
+ python3-gi,
+ gir1.2-gtk-4.0,
+ gir1.2-adw-1,
+ gir1.2-glib-2.0,
+ gir1.2-nm-1.0,
+ gir1.2-gnomedesktop-4.0,
+ gir1.2-gweather-4.0
+Description: graphical GTK4 frontend for bootc OS installation
+ GTK4/Libadwaita graphical installer for bootc-based operating systems.
+ Presents a step-by-step wizard covering disk selection, encryption,
+ language, timezone, user creation, keyboard layout and network setup,
+ then delegates the actual install to fisherman via pkexec.
+ .
+ The image catalog is configured via /etc/bootc-installer/recipe.json,
+ which controls which OS images are offered, branding, and installer steps.

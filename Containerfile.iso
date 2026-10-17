@@ -1,0 +1,93 @@
+#####################################################################################
+# Containerfile.iso — DaemonCores graphical installer live image
+#
+# Derives FROM the official debian-bootc base image to produce a live installer.
+# bootc-image-builder converts this image to an ISO (dracut live squashfs).
+#
+# The live environment IS the base image + a thin installer layer on top:
+#   - cage (single-app Wayland compositor, no full DE needed)
+#   - fisherman .deb (Go bootc install backend)
+#   - bootc-installer .deb (GTK4/Adwaita wizard frontend)
+#   - Mesa software renderer (llvmpipe) for display without specific GPU driver
+#   - live user with autologin on tty1 → cage → bootc-installer
+#   - polkit rule: live user runs fisherman via pkexec without password prompt
+#   - DaemonCores recipe.json (image catalog for bootc-installer)
+#
+# bootc-image-builder is invoked with --bootc-installer-payload-ref pointing to
+# the clean base image (no installer layer), so the payload installed on disk
+# is the base image only.
+#
+# No bootc-finalize here: the base image already ran it (kernel in
+# /usr/lib/modules, initramfs present, ostree filesystem layout done).
+#####################################################################################
+
+ARG ARCH=amd64
+# Derives directly from the published base — no duplication.
+# The base already carries: kernel, firmware, bootc, systemd, ostree migration,
+# initramfs (bootc-finalize), APT sources, GPG key, /sysroot.
+FROM ghcr.io/daemoncores/debian-bootc:latest-${ARCH}-autoupdate
+ARG ARCH=amd64
+
+LABEL org.opencontainers.image.title="DaemonCores Installer"
+LABEL org.opencontainers.image.description="Graphical bootc installer live image (bootc-installer + fisherman)"
+LABEL org.opencontainers.image.base.name="ghcr.io/daemoncores/debian-bootc:latest-${ARCH}-autoupdate"
+LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
+
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# -----------------------------------------------------------------------------
+# Phase 1: Graphical installer stack
+# fisherman + bootc-installer are installed from our APT repo.
+# cage: minimal single-app Wayland compositor (no full DE required).
+# Mesa llvmpipe: software renderer — works on any GPU without specific drivers.
+# Fonts: minimal set for GTK4 rendering.
+# Network deps: libnm / NM for the bootc-installer network configuration page.
+# -----------------------------------------------------------------------------
+COPY ./src/buildisopreinstall /
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        fisherman \
+        bootc-installer \
+        cage \
+        libgl1-mesa-dri \
+        libdrm2 \
+        fonts-dejavu-core \
+        fonts-noto-core \
+        network-manager \
+        libnm0 \
+        gir1.2-nm-1.0 \
+        libgnome-desktop-4-2t64 \
+        gir1.2-gnomedesktop-4.0 \
+        libgweather-4-0t64 \
+        gir1.2-gweather-4.0 \
+        xdg-utils \
+        adwaita-icon-theme
+
+# -----------------------------------------------------------------------------
+# Phase 2: Live user config, autologin, polkit rule, image catalog
+# src/buildisopreinstall/ mirrors the target filesystem layout, copied to /.
+# Contains: .bash_profile, getty override, polkit rule, recipe.json,
+#           podman containers.conf + storage.conf (cgroupfs/fuse-overlayfs).
+# -----------------------------------------------------------------------------
+RUN useradd \
+        --uid 1000 \
+        --no-create-home \
+        --home-dir /var/home/live \
+        --shell /bin/bash \
+        --comment "Live installer user" \
+        live \
+    && passwd -d live \
+    && usermod -aG video,render,input,plugdev live \
+    && chown -R live:live /var/home/live \
+    && rm -rf \
+        /tmp/* \
+        /var/tmp/* \
+        /run/* \
+        /usr/sbin/policy-rc.d
+
+# bootc images are updated in-place via ostree; no runtime healthcheck applies.
+HEALTHCHECK NONE
