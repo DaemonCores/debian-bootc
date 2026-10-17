@@ -27,7 +27,7 @@ if timeout 8 dhclient -4 -1 -timeout 6 -q \
    -lf /run/dhcp4-probe.leases \
    "$IFACE" >/dev/null 2>&1; then
   IPV4_STANZA="iface ${IFACE} inet dhcp
-    dns-nameservers 194.242.2.2 1.1.1.1"
+    dns-nameservers 1.1.1.1 8.8.8.8"
 fi
 rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases
 
@@ -40,7 +40,7 @@ IPV6_STANZA=""
 if timeout 5 dhclient -6 -1 -q -pf /run/dhcp6-probe.pid \
   -lf /run/dhcp6-probe.leases "$IFACE" >/dev/null 2>&1; then
   IPV6_STANZA="iface ${IFACE} inet6 auto
-    dns-nameservers 2a07:e340::2 2606:4700:4700::1111"
+    dns-nameservers 2606:4700:4700::1111 2001:4860:4860::8888"
 fi
 dhclient -6 -x -pf /run/dhcp6-probe.pid "$IFACE" >/dev/null 2>&1 || true
 rm -f /run/dhcp6-probe.pid /run/dhcp6-probe.leases
