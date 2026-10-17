@@ -1,0 +1,11 @@
+signing:
+  modules:
+    # Default module signing mode for this distribution.
+    # nosign — modules are built unsigned (default; extensible image).
+    # sign   — modules are signed with the persistent MODULE_SIGNING_KEY secret.
+    # both   — produce both a signed and an unsigned image (future).
+    #
+    # Can be overridden per-run via the sign_modules workflow_dispatch input.
+    # On the first run with sign/both, the key is auto-generated and stored as
+    # a GitHub secret; signing becomes active from the second run onward.
+    default: both

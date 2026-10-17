@@ -96,8 +96,8 @@ by memory.
     - Zero regression: ISO build skipped on arm64 (`run_iso: ${{ matrix.arch == 'arm64' && false || inputs.run_iso }}`) because arm64 SBCs boot via U-Boot not ISO; amd64 path unchanged.
     - ITERATION 2 FIX BREAK1 (pipeline.yml:124): `INPUT="${{ inputs.archs }}"` interpolated the workflow_dispatch input directly in the `run:` block, allowing shell injection (CWE-78) if the input ever carried shell metacharacters. Fixed by isolating the input via `env: ARCHS: ${{ inputs.archs }}` on the step, then using `INPUT="${ARCHS}"` in the run block. The `env:` mapping passes the value as a plain environment variable, which the shell expands safely — GitHub Actions does not interpret `${{ }}` inside `env:` values the same way it does inside `run:` (the value is set as-is, no shell interpolation). Comment block (lines 118-123) documents the CWE-78 rationale. The prior CWE-20 sanitization (sed trim) is kept as defense-in-depth.
   - `workflows/bootc-debs-builder/packages.yml` (modified): 6 packages use `${ARCH}` (resolved from `dpkg --print-architecture`); `grub-efi-amd64-signed` gated with `when: {arch: amd64}`.
-  - `workflows/build-env/env.yml` (modified): arch-aware yq binary download via `dpkg --print-architecture`.
-  - `workflows/image-tests/tests.yml` (modified): 11 arch-gated tests.
+  - `workflows/env.yml` (modified): arch-aware yq binary download via `dpkg --print-architecture`.
+  - `workflows/tests.yml` (modified): 11 arch-gated tests.
   - The shared CI workflow (`DaemonCores/DaemonCores-CI/.github/workflows/full-pipeline.yml`) is NOT in this repo — the caller declares the arch intent via `with: arch:` and the matrix; the shared workflow must honour the `arch` input to actually dispatch arm64 builds.
 - DECISION: ARM64 CI/CD support was already added (prior runs). This iteration-2 round corrected BREAK1 (shell injection via non-isolated `${{ inputs.archs }}` → `env:` isolation). No other CI change.
 - PLAN: Done — pipeline.yml step `set-matrix` now uses `env: ARCHS:` + `INPUT="${ARCHS}"`.
@@ -108,7 +108,7 @@ by memory.
   - Proof (grep, BREAK1 uses env var): `grep -n 'INPUT="\${ARCHS}"' .github/workflows/pipeline.yml` → line 134 (uses the env var).
   - Proof (grep, sanitize kept): `grep -n 'sed.*space' .github/workflows/pipeline.yml` → line 139 (trim per entry, defense-in-depth).
   - Proof (grep, arch-aware debs): `grep -nE 'ARCH' workflows/bootc-debs-builder/packages.yml` → 6 packages use `${ARCH}`.
-  - Proof (grep, tests): `grep -nE 'arch: (amd64|arm64)' workflows/image-tests/tests.yml` → 11 arch-gated tests.
+  - Proof (grep, tests): `grep -nE 'arch: (amd64|arm64)' workflows/tests.yml` → 11 arch-gated tests.
 <!-- END P05 -->
 
 <!-- BEGIN P06 -->

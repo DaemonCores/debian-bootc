@@ -1,0 +1,87 @@
+{
+    "log_file": "/var/log/bootc-installer.log",
+    "distro_name": "DaemonCores",
+    "distro_logo": "resource:///org/bootcinstaller/Installer/assets/welcome.png",
+    "imgref": "ghcr.io/daemoncores/debian-bootc:latest-amd64-autoupdate",
+    "images": [
+        {
+            "name": "DaemonCores Standard (amd64)",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:latest-amd64-autoupdate",
+            "bootloader": "grub2",
+            "filesystem": "btrfs",
+            "composefs": false,
+            "needs_user_creation": true,
+            "filesystems": [
+                "btrfs",
+                "xfs"
+            ]
+        },
+        {
+            "name": "DaemonCores Standard (arm64)",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:latest-arm64-autoupdate",
+            "bootloader": "grub2",
+            "filesystem": "btrfs",
+            "composefs": false,
+            "needs_user_creation": true,
+            "filesystems": [
+                "btrfs",
+                "xfs"
+            ]
+        },
+        {
+            "name": "DaemonCores Minimal (amd64) — net install",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:minimal-amd64-autoupdate",
+            "bootloader": "grub2",
+            "filesystem": "btrfs",
+            "composefs": false,
+            "needs_user_creation": true,
+            "filesystems": [
+                "btrfs",
+                "xfs"
+            ]
+        },
+        {
+            "name": "DaemonCores Minimal (arm64) — net install",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:minimal-arm64-autoupdate",
+            "bootloader": "grub2",
+            "filesystem": "btrfs",
+            "composefs": false,
+            "needs_user_creation": true,
+            "filesystems": [
+                "btrfs",
+                "xfs"
+            ]
+        }
+    ],
+    "welcome_title": "Install DaemonCores",
+    "welcome_subtitle": "A minimal Debian 13 Trixie bootc system — atomic updates, rollback on failure, managed as a container image.",
+    "credits_data": "/org/bootcinstaller/Installer/data/credits.json",
+    "tour": {
+        "welcome": {
+            "resource": "/org/bootcinstaller/Installer/assets/welcome.png",
+            "title": "Installing DaemonCores",
+            "description": "A minimal Debian bootc system with atomic updates and built-in rollback. This will take a few minutes."
+        },
+        "completed": {
+            "resource": "/org/bootcinstaller/Installer/assets/complete.svg",
+            "title": "Installation Complete",
+            "description": "DaemonCores is ready to use. Remove the installation media and reboot."
+        }
+    },
+    "steps": {
+        "welcome": {
+            "template": "welcome",
+            "protected": true
+        },
+        "disk": {
+            "template": "disk"
+        },
+        "encryption": {
+            "template": "encryption"
+        },
+        "user": {
+            "template": "user"
+        }
+    },
+    "selinuxDisabled": true
+}

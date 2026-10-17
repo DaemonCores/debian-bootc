@@ -46,7 +46,7 @@ The tests validate the virtualized reference environment. Hardware-specific firm
 
 ## First-boot credential provisioning
 
-The current Kickstart performs the storage and bootc deployment without embedding a default root password. The console first-boot wizard creates the initial user and sets the root password with `chpasswd` before marking setup complete.
+The live installer runs the storage and bootc deployment without embedding a default root password. The console first-boot wizard creates the initial user and sets the root password with `chpasswd` before marking setup complete.
 
 This avoids a shared fallback credential, but makes the tty1 setup path part of system recovery. Changes to the getty drop-in or wizard must be tested for interruption and restart behaviour so a failed setup cannot leave the host permanently inaccessible.
 
