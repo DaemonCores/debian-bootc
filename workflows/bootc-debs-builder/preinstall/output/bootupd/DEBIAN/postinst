@@ -32,6 +32,16 @@ case "$1" in
     # owns the real NVRAM entry via efibootmgr, so the fallback is redundant.
     cp /usr/lib/shim/mmx64.efi.signed "${efidir}/BOOT/mmx64.efi" 2>/dev/null || true
 
+    # shimaa64.efi.signed is the arm64 boot entrypoint: it lands as the removable-media
+    # fallback EFI/BOOT/BOOTAA64.EFI and as the vendor EFI/debian/shimaa64.efi.
+    # Guard: absent on amd64 (no arm64 shim there).
+    if [ -f /usr/lib/shim/shimaa64.efi.signed ]; then
+      cp /usr/lib/shim/shimaa64.efi.signed "${efidir}/BOOT/BOOTAA64.EFI"
+      cp /usr/lib/shim/shimaa64.efi.signed "${efidir}/debian/shimaa64.efi"
+    fi
+    # MokManager for arm64; best-effort.
+    cp /usr/lib/shim/mmaa64.efi.signed "${efidir}/BOOT/mmaa64.efi" 2>/dev/null || true
+
     # bootupd v0.2.35 write_update_metadata does open_dir(usr/lib/bootupd/updates)
     # (not create) and fails ENOENT if it is missing; the deb ships no empty dir.
     mkdir -p /usr/lib/bootupd/updates
@@ -46,6 +56,8 @@ case "$1" in
     # it on the ESP and the fallback works as designed. After generate-update-
     # metadata so it is not clobbered.
     cp /usr/lib/shim/BOOTX64.CSV "${efidir}/debian/BOOTX64.CSV" \
+      2>/dev/null || true
+    cp /usr/lib/shim/BOOTAA64.CSV "${efidir}/debian/BOOTAA64.CSV" \
       2>/dev/null || true
     ;;
 esac
