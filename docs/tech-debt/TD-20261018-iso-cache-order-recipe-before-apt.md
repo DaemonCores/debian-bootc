@@ -19,7 +19,7 @@ metadata:
 - **Area**: Infra
 - **Category**: docker
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -38,3 +38,6 @@ Move the `RUN apt update && apt install ...` block above the `COPY Containerfile
 
 ## Next step
 `create ticket`
+
+## Resolution
+The recipe generation (`COPY Containerfile*`, `COPY gen-recipe.py`, generator `RUN`) now follows the installer-stack `apt install` in `Containerfile.iso`, so editing a Containerfile or the generator no longer invalidates the apt layer. `COPY ./src/buildisopreinstall /` stays first. Not yet verified by a real ISO build.

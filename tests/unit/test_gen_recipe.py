@@ -64,3 +64,10 @@ def test_main_usage_error():
                             capture_output=True,
                             check=False)
     assert result.returncode == 1
+
+
+def test_build_images_filters_on_arch(tmp_path):
+    """With an arch filter only matching images are listed."""
+    (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
+    images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "arm64")
+    assert [i["imgref"] for i in images] == ["reg/x:latest-arm64-autoupdate"]
