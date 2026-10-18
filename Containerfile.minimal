@@ -191,6 +191,7 @@ RUN for _r in 1 2 3 4 5; do \
         btrfs-progs \
         iproute2 \
         systemd-timesyncd \
+        systemd-networkd \
         ca-certificates \
     && rm -rf \
         /tmp/* \
@@ -252,8 +253,7 @@ RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
         fstrim.timer \
         fstrim.service \
         logrotate.timer \
-        logrotate.service \
-        systemd-logind.service
+        logrotate.service
 
 # -----------------------------------------------------------------------------
 # Phase 4: ostree filesystem migration
