@@ -191,7 +191,6 @@ RUN for _r in 1 2 3 4 5; do \
         btrfs-progs \
         iproute2 \
         systemd-timesyncd \
-        systemd-networkd \
         ca-certificates \
     && rm -rf \
         /tmp/* \
