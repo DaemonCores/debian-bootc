@@ -19,7 +19,7 @@ metadata:
 - **Area**: Infra
 - **Category**: docker
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -38,5 +38,5 @@ Local or remote builds ship agent state, MCP config and any `.env.<suffix>` file
 ## Suggested direction
 Invert to an allow-list (`*` then `!src/`, `!scripts/gen-recipe.py`, `!Containerfile*`) or at least add `.env*`, `.secrets*`, `.kronn/`, `.claude/`, `.codex/`, `.gemini/`, `.copilot/`, `.mcp.json*`, `docs/`, `todo/`, `**/__pycache__/`.
 
-## Next step
-`create ticket`
+## Resolution
+Added `.env*`, `.secrets*`, agent state dirs, `.mcp.json*`, `docs/`, `todo/`, `tests/`, `.venv/`, cache dirs and `**/__pycache__/` to `.dockerignore`. The allow-list variant was not chosen: the shared CI may add files to the build context, which cannot be checked from this repo. `tests/integration/test_build_context.py` asserts that no `COPY` source is excluded.
