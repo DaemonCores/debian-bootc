@@ -10,7 +10,7 @@
 - Follow existing naming in adjacent code. Avoid generic names (`Helper`, `Utils`).
 - **Follow the test policy:** see [AGENTS](AGENTS.md) § Project parameters. The test manifest is `workflows/tests.yml` [src: file: workflows/tests.yml:1].
 - **Comment sparingly — explain *why*, never *what*.** A comment earns its place only if it adds what the code can't say: a non-obvious rationale or a real gotcha. Do NOT narrate what the code does, restate the line above, or leave "this is now loaded from X — see Y" pointers the code/ticket already makes obvious. Match the file's existing comment density; a clear name beats a paragraph. Ticket references in code comments: not observed in this repo (see [AGENTS](AGENTS.md) § Project parameters).
-- Repo-wide tooling: the repo has no linter, formatter or type-checker config files (no `.shellcheckrc`, `.hadolint*`, `.editorconfig`, `.pre-commit-config.yaml`, `pyproject.toml`, `.yamllint*`). The only `*.toml` is the cargo vendoring config `workflows/bootc-debs-builder/preinstall/build/rust/config.toml` [src: file: workflows/bootc-debs-builder/preinstall/build/rust/config.toml:1]. CI job logic, including any checks, lives in the external `DaemonCores/DaemonCores-CI` reusable workflow [src: file: .github/workflows/pipeline.yml:71]. This gap is a known problem to fix, not a choice: see [quality targets](conventions/quality-targets.md).
+- Repo-wide tooling: configured via a root `Makefile` (single entry point for lint, format, test, build — [src: file: Makefile:1]) with per-tool config files: `.shellcheckrc` [src: file: .shellcheckrc:1], `.hadolint.yaml` [src: file: .hadolint.yaml:1], `.yamllint.yml` [src: file: .yamllint.yml:1], `pyproject.toml` (ruff — [src: file: pyproject.toml:1]). The Rust vendoring config is at `workflows/bootc-debs-builder/preinstall/build/rust/config.toml` [src: file: workflows/bootc-debs-builder/preinstall/build/rust/config.toml:1]. CI job logic lives in the external `DaemonCores/DaemonCores-CI` reusable workflow [src: file: .github/workflows/pipeline.yml:71]; local checks run via `make lint` / `make test`. See [quality targets](conventions/quality-targets.md) for the full KT roadmap.
 
 ## Containerfile (Podman / Dockerfile syntax)
 
@@ -18,10 +18,10 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 
 ### Tools
 
-- Linter: Not configured in this repo (no hadolint config). At build time the image is checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:26].
+- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:26].
 - Formatter: Not configured.
 - Type checker: N/A — not used in this project.
-- Build / check command: `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:60].
+- Build / check command: `make build` or directly `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:60].
 
 ### Conventions
 
@@ -45,9 +45,9 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 ### Tools
 
-- Linter: shellcheck is used ad hoc. There is no config file, but inline `# shellcheck disable=` directives appear in the scripts [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:10] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60], and a split-packages pass ran shellcheck on the extracted kernel build scripts [src: file: todo/registry-split-packages.md:68]. Run command: not recorded in the repo.
+- Linter: shellcheck, global config at `.shellcheckrc` [src: file: .shellcheckrc:1]. Run: `make lint-shell`. Inline `# shellcheck disable=` directives appear in scripts [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:10] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60].
 - Syntax check: package builds run `bash -n` on shipped scripts as a content check [src: file: workflows/bootc-debs-builder/packages.yml:36].
-- Formatter: Not configured.
+- Formatter: shfmt. Run: `make format-shell`.
 - Type checker: N/A — not used in this project.
 
 ### Conventions
@@ -70,7 +70,7 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 ### Tools
 
-- Linter: Not configured (no yamllint config). The test harness validates `workflows/tests.yml` and fails the build if any test lacks `diag` [src: file: workflows/tests.yml:9].
+- Linter: yamllint, config at `.yamllint.yml` [src: file: .yamllint.yml:1]. Run: `make lint-yaml`. The test harness also validates `workflows/tests.yml` and fails the build if any test lacks `diag` [src: file: workflows/tests.yml:9].
 - Formatter: Not configured.
 - Type checker: N/A — not used in this project.
 
@@ -91,9 +91,9 @@ File: `scripts/gen-recipe.py`, the repo's only Python file [src: file: scripts/g
 
 ### Tools
 
-- Linter: Not configured.
-- Formatter: Not configured.
-- Type checker: Not configured. The script uses type hints (`def main() -> None`) but no checker config exists [src: file: scripts/gen-recipe.py:22].
+- Linter: ruff, config in `pyproject.toml` [src: file: pyproject.toml:1]. Run: `make lint-python`.
+- Formatter: ruff format. Run: `make format-python`.
+- Type checker: not configured yet (KT-2; basedpyright is the target per [quality-targets](conventions/quality-targets.md)).
 
 ### Conventions
 

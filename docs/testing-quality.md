@@ -15,7 +15,7 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 | bootc validation (lint) | Runs in the shared image workflow after the build [src: file: docs/architecture.md:60]; a second `/usr/lib/modules/<kver>/` fails it [src: file: Containerfile:21] | Every image | Yes |
 | Runtime boot tests | `workflows/tests.yml`, run over SSH on a QEMU/KVM boot of the installed image [src: file: workflows/tests.yml:1] | 35 tests, see [Test suites](#test-suites) | Yes: a failing test blocks the push [src: file: workflows/tests.yml:3] |
 | Test manifest integrity | The harness refuses to run if any test lacks `diag` [src: file: workflows/tests.yml:11] | `workflows/tests.yml` | Yes |
-| Format / lint of shell, YAML, Python | None configured: no shellcheck, hadolint, yamllint, pre-commit or Python linter config in the repo | — | — |
+| Format / lint of shell, YAML, Python | shellcheck (`.shellcheckrc`), hadolint (`.hadolint.yaml`), yamllint (`.yamllint.yml`), ruff (`pyproject.toml`) — run via `make lint` [src: file: Makefile:1] | All scripts, Containerfiles, YAML manifests, `scripts/gen-recipe.py` | No (not yet wired into CI; run locally) |
 <!-- kronn:section:end -->
 
 <!-- kronn:section name="test-infrastructure" curated="ai" owner="audit" audit="2026-10-18" -->
@@ -23,6 +23,7 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 
 | Layer | Runner | Config file | Runtime / version |
 |-------|--------|-------------|-------------------|
+| Local smoke checks | `make test` — manifest integrity (name/diag count), Python syntax, ruff [src: file: Makefile:1] | `workflows/tests.yml`, `scripts/gen-recipe.py` | Local, no container needed |
 | Runtime image tests | DaemonCores-CI image workflow harness: `bootc install` to a virtual disk, QEMU/KVM + UEFI boot, then SSH [src: file: docs/architecture.md:61] | `workflows/tests.yml` (`boot_timeout: 900`, `reboot_timeout: 300`) [src: file: workflows/tests.yml:24] | Debian 13 Trixie image under test [src: file: Containerfile:5]; arches amd64 and arm64 [src: file: workflows/tests.yml:13] |
 | Rust unit test (bootupd) | `cargo test` inside the package build [src: file: workflows/bootc-debs-builder/packages.yml:1307] | `/build/bootupd/Cargo.toml` (upstream source, not in repo) | Rust via rustup, minimal profile, unpinned [src: file: workflows/env.yml:101] |
 | Build-time content checks | Bash, `set -euo pipefail` [src: file: workflows/bootc-debs-builder/packages.yml:20] | `workflows/bootc-debs-builder/packages.yml` | `-buildenv` image built from `workflows/env.yml` [src: file: workflows/env.yml:5] |

@@ -1,0 +1,27 @@
+# yamllint config — debian-bootc
+# See: https://yamllint.readthedocs.io/en/stable/configuration.html
+
+extends: default
+
+rules:
+  # packages.yml embeds multi-line bash build scripts; lines up to ~130 chars
+  # appear in those strings.  160 covers all current cases with headroom.
+  line-length:
+    max: 160
+    level: error
+
+  # All project YAML files start without a document-start marker (---).
+  document-start: disable
+
+  # Comments in packages.yml and tests.yml follow the existing style which
+  # does not always put a space before the hash when used as inline labels.
+  comments-indentation: disable
+
+  # Build scripts in packages.yml use multi-line block scalars (|) with
+  # trailing spaces in some edge cases.
+  trailing-spaces: enable
+
+  # Bracket spacing — allow both {key: val} and { key: val }.
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1

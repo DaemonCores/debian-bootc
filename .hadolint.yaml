@@ -1,0 +1,19 @@
+# hadolint config — debian-bootc
+# See: https://github.com/hadolint/hadolint#configure
+#
+# These are OS image Containerfiles built with Podman, not application images.
+# Some standard Docker/hadolint advice does not apply.
+
+ignore:
+  # DL3008: Pin versions in apt-get — the project uses the project's own APT
+  # repo and does not pin versions; version drift is tracked in packages.yml.
+  - DL3008
+  # DL3028: Use apt-get instead of apt — project convention uses `apt` (not
+  # apt-get) intentionally; see docs/coding-rules.md § Containerfile.
+  - DL3028
+  # DL3059: Multiple consecutive RUN — phases are deliberately split for
+  # readability and cache efficiency; merging them is not appropriate here.
+  - DL3059
+  # SC2086: Double-quote to prevent globbing — these fire inside RUN
+  # heredocs/scripts that hadolint analyses; real suppressions are inline.
+  - SC2086

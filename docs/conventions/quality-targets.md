@@ -10,10 +10,10 @@ The goal is faster development and debugging. CI has been broken since arm64 sup
 
 | Area | Target | Current state |
 |------|--------|---------------|
-| Linter, formatter, type-checker | One of each per language, configured in versioned config files. Their absence is a problem to fix | None configured [src: file: docs/coding-rules.md:13] |
-| Code and comment conventions | Mostly follow the Google style guides. Write structured comments so CI/CD can generate technical and API documentation | No style guide adopted; no doc generation |
+| Linter, formatter, type-checker | One of each per language, configured in versioned config files. Their absence is a problem to fix | **KT-1 done:** shellcheck + shfmt (shell), hadolint (Containerfile), yamllint (YAML), ruff (Python) — configs at `.shellcheckrc`, `.hadolint.yaml`, `.yamllint.yml`, `pyproject.toml` [src: file: Makefile:1]. Type-checker (basedpyright): not yet (KT-2). |
+| Code and comment conventions | Mostly follow the Google style guides. Write structured comments so CI/CD can generate technical and API documentation | No style guide adopted; no doc generation (KT-2) |
 | Tests | Unit, integration and end-to-end | Only build-time content checks, one `cargo test`, and QEMU runtime tests [src: file: docs/testing-quality.md:10-17] |
-| Local execution | Every test that can run locally must be runnable locally, not only in CI | Runtime tests run in CI only; no local runner [src: file: docs/operations/debug-operations.md:15] |
+| Local execution | Every test that can run locally must be runnable locally, not only in CI | **KT-1 done:** `make test` runs local smoke checks (manifest integrity, Python syntax, ruff); `make lint` runs all linters locally [src: file: Makefile:1]. Runtime QEMU tests remain CI-only. |
 
 ## Chosen tooling (KT-1)
 
@@ -48,4 +48,4 @@ Decided by the maintainer on 2026-10-18 [src: user:pikatsuto:2026-10-18: disc-dc
 
 After the code is proven and stable, a large refactor will align the project with ublue. Its goal is to get official Debian support into bootc and ublue, which upstream has requested since 2024 [src: user:pikatsuto:2026-10-18: disc-dc54c008]. Do not start it before the targets above are met.
 
-Plan tasks: KT-1 (tooling), KT-2 (conventions + doc generation), KT-3 (tests), KT-4 (deferred ublue refactor).
+Plan tasks: KT-1 (tooling — **done 2026-10-18**), KT-2 (conventions + doc generation), KT-3 (tests), KT-4 (deferred ublue refactor).
