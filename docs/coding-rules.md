@@ -91,9 +91,9 @@ File: `scripts/gen-recipe.py`, the repo's only Python file [src: file: scripts/g
 
 ### Tools
 
-- Linter: ruff, config in `pyproject.toml` [src: file: pyproject.toml:1]. Run: `make lint-python`.
-- Formatter: ruff format. Run: `make format-python`.
-- Type checker: not configured yet (KT-2; basedpyright is the target per [quality-targets](conventions/quality-targets.md)).
+- Linter: ruff + pydoclint + bandit, config in `pyproject.toml` [src: file: pyproject.toml:1]. Run: `make check-py`.
+- Formatter: yapf + docformatter + ruff (--fix). Run: `make format-python`. Config in `pyproject.toml` [src: file: pyproject.toml:1].
+- Type checker: mypy + basedpyright (strict mode), config in `pyproject.toml` [src: file: pyproject.toml:1]. Run: `make check-py`.
 
 ### Conventions
 
