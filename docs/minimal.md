@@ -18,11 +18,13 @@ The image retains the OSTree filesystem layout used by the full image.
 
 ## Deliberate omissions
 
-The minimal image does not install the full image's SSH server, Podman, ifupdown2, administration manuals, editor, shell-completion set, broad firmware set, or general troubleshooting utilities.
+The minimal image does not install the full image's ifupdown2, administration manuals, editor, shell-completion set, broad firmware set, or general troubleshooting utilities.
+
+`openssh-server` is installed to support the CI SSH test harness (QEMU boot tests connect over SSH). Deployments that do not need an SSH server should remove it in a downstream image.
 
 Operational consequences:
 
-- use the local console or add SSH in a downstream image;
+- use the local console or a downstream image for interactive access without the SSH server;
 - do not expect Podman to be available on the deployed host;
 - use systemd-networkd rather than `/etc/network/interfaces`;
 - diagnostics must fit the smaller installed toolset;

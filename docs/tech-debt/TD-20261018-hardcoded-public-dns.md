@@ -35,5 +35,5 @@ Hosts send DNS queries to third-party US resolvers by default, which is a data-t
 ## Suggested direction
 Use only DHCP-provided resolvers, falling back to public ones only when DHCP supplies none. Alternatively make the fallback list configurable and document it.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+Removed `dns-nameservers 1.1.1.1 8.8.8.8` from the generated DHCPv4 stanza and `dns-nameservers 2606:4700:4700::1111 2001:4860:4860::8888` from the DHCPv6 stanza in `ifupdown2-autoconf`. DHCP-provided resolvers now take effect exclusively.
