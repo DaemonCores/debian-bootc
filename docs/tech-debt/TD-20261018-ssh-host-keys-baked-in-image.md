@@ -41,5 +41,8 @@ If the keys are baked in, every machine installed from the same image digest has
 ## Suggested direction
 `rm -f /etc/ssh/ssh_host_*` in the final RUN of each Containerfile, and ship a `ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key` oneshot (`ssh-keygen -A`, `Before=ssh.service`). Add a `workflows/tests.yml` check that host keys exist at boot and differ from the image layer.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+- `rm -f /etc/ssh/ssh_host_*` added at the end of Phase 4 RUN in both `Containerfile` and `Containerfile.minimal`.
+- `src/debianpostinstall/etc/systemd/system/ssh-host-keygen.service` and its minimal counterpart created: `ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key`, `ExecStart=/usr/bin/ssh-keygen -A`, `Before=ssh.service`.
+- Unit enabled in Phase 4 RUN (`Containerfile`) and Phase 3 RUN (`Containerfile.minimal`).
+- Runtime test `SSH host keys regenerated at first boot` added to `workflows/tests.yml`.

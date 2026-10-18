@@ -41,5 +41,5 @@ A broken ostree layout is not caught at build time. It surfaces only later at QE
 ## Suggested direction
 Scope the tolerance to the copy only: `&& { cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true; } &&`, or test that the source glob is non-empty before copying.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+Changed `&& cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \` to `&& { cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true; } \` in both `Containerfile` and `Containerfile.minimal`. The `|| true` now only catches the cp failure (source glob empty or copy error); a failing mkdir now exits the build under `set -euo pipefail` as intended.
