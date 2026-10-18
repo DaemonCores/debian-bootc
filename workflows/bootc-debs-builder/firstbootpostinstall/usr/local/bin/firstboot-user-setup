@@ -54,17 +54,25 @@ exec </dev/tty1 >/dev/tty1 2>/dev/tty1
 export TERM=linux
 clear
 
-# Build display name from /etc/hostname (e.g. my-system -> My System)
-# cut -d. -f1: strip the domain if a FQDN was set (e.g. host.local → host)
-DISPLAY_NAME=$(
-  # shellcheck disable=SC2002  # keep the exact pipeline; behavior identical
-  cat /etc/hostname \
+#######################################
+# Turn a hostname into a title-case display name (my-system -> My System).
+# Strips any domain part; maps - and _ to spaces and squeezes repeated spaces.
+# Arguments:
+#   $1: Hostname, optionally a FQDN.
+# Outputs:
+#   The display name on stdout.
+#######################################
+_display_name() {
+  printf '%s' "$1" \
     | cut -d. -f1 \
     | tr -d '\n' \
     | tr -- '-_' ' ' \
     | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1' \
     | tr -s ' '
-)
+}
+
+# Build display name from /etc/hostname (e.g. my-system -> My System)
+DISPLAY_NAME=$(_display_name "$(cat /etc/hostname)")
 
 # whiptail helpers
 _title="Setup -- ${DISPLAY_NAME}"
@@ -116,6 +124,33 @@ _yesno() { whiptail --title "$_title" --yesno "$1" 12 65; }
 #######################################
 _msg() { whiptail --title "$_title" --msgbox "$1" 12 65; }
 
+#######################################
+# Ask for a password twice until it is long enough and both entries match.
+# The result goes into a caller variable (not stdout) so the _msg dialogs
+# shown on error are not captured.
+# Globals:
+#   _title
+# Arguments:
+#   $1: Name of the variable that receives the password.
+#   $2: Prompt for the first entry.
+#   $3: Prompt for the confirmation.
+#######################################
+_ask_password() {
+  local -n _out="$1"
+  local first second
+  while true; do
+    first=$(_pass "$2" || true)
+    [[ ${#first} -lt 8 ]] && {
+      _msg "Password must be at least 8 characters."
+      continue
+    }
+    second=$(_pass "$3" || true)
+    [[ "$first" == "$second" ]] && break
+    _msg "Passwords do not match."
+  done
+  _out="$first"
+}
+
 # Welcome
 _msg "Welcome to ${DISPLAY_NAME}!\n\nThis wizard will create your user\
  account.\nPress Enter to continue."
@@ -146,8 +181,7 @@ while true; do
   break
 done
 # Update wizard title with the new hostname
-DISPLAY_NAME=$(echo "$NEWHOSTNAME" | tr -- '-' ' ' \
-  | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1))substr($i,2)}1')
+DISPLAY_NAME=$(_display_name "$NEWHOSTNAME")
 _title="Setup -- ${DISPLAY_NAME}"
 
 # ── Username ──────────────────────────────────────────────────────────────
@@ -173,29 +207,10 @@ done
 FULLNAME=$(_input "Full name (optional, Enter to skip):" "" || echo "")
 
 # ── User password ─────────────────────────────────────────────────────────
-while true; do
-  PASS1=$(_pass "Password for '${USERNAME}':" || true)
-  [[ ${#PASS1} -lt 8 ]] && {
-    _msg "Password must be at least 8 characters."
-    continue
-  }
-  PASS2=$(_pass "Confirm password:" || true)
-  [[ "$PASS1" == "$PASS2" ]] && break
-  _msg "Passwords do not match."
-done
+_ask_password PASS1 "Password for '${USERNAME}':" "Confirm password:"
 
 # ── Root password (required) ─────────────────────────────────────────────
-ROOT_PASS=""
-while true; do
-  ROOT_PASS=$(_pass "Root password (required):" || true)
-  [[ ${#ROOT_PASS} -lt 8 ]] && {
-    _msg "Password must be at least 8 characters."
-    continue
-  }
-  ROOT2=$(_pass "Confirm root password:" || true)
-  [[ "$ROOT_PASS" == "$ROOT2" ]] && break
-  _msg "Passwords do not match."
-done
+_ask_password ROOT_PASS "Root password (required):" "Confirm root password:"
 
 # ── Sudo privileges ───────────────────────────────────────────────────────
 IS_SUDOER=no

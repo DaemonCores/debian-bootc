@@ -19,7 +19,7 @@ metadata:
 - **Area**: Backend
 - **Category**: code-quality
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -38,5 +38,5 @@ A change to the password policy, such as a new minimum length, has to be made tw
 ## Suggested direction
 Add `_ask_password <label>` and `_display_name <host>` helpers next to the existing `_input`/`_pass` helpers.
 
-## Next step
-`create ticket`
+## Resolution
+Added `_display_name` and `_ask_password` helpers in `firstboot-user-setup`. Both display names now share one pipeline (the second one now also maps `_` and squeezes spaces). `_ask_password` returns through a named variable so error dialogs are not captured by command substitution. Covered by `tests/unit/test_firstboot_helpers.py`; the wizard itself has no runtime test in `workflows/tests.yml` beyond the existing firstboot checks.
