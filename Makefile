@@ -1,11 +1,15 @@
 # Single entry point for all project actions (KT-1).
-# Local runs and CI call the same targets — see docs/conventions/quality-targets.md.
+# Local runs and CI call the same targets.
+# See docs/conventions/quality-targets.md for the full roadmap.
 #
-# Required tools: shellcheck, shfmt, hadolint, yamllint, ruff
-# Install (Debian/Ubuntu): apt install shellcheck shfmt hadolint yamllint
-#                          pip install ruff   (or: pipx install ruff)
+# Makefile structure follows cunegonde-ai/agentic-backend (the reference repo).
 
 SHELL := /bin/bash -euo pipefail
+
+# ---- Python venv (tools only — debian-bootc is not a Python package) ------ #
+
+VENV = .venv
+VBIN = $(VENV)/bin
 
 # ---- file sets ------------------------------------------------------------ #
 
@@ -19,7 +23,7 @@ SHELL_SRCS := \
 	workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize \
 	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup
 
-# DEBIAN/postinst scripts use `set -e` (not full pipefail); linted as sh.
+# DEBIAN/postinst files use `set -e` (POSIX sh, not full bash pipefail).
 POSTINST_SRCS := \
 	workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst \
 	workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst \
@@ -37,62 +41,97 @@ YAML_SRCS := \
 
 PYTHON_SRCS := scripts/gen-recipe.py
 
-# ---- guards --------------------------------------------------------------- #
-# Each guard prints a hint and exits when the tool is absent so contributors
-# see a clear message instead of a cryptic "command not found".
+# ---- venv bootstrap ------------------------------------------------------- #
 
-define require
-$(if $(shell command -v $(1) 2>/dev/null),,\
-  $(error "$(1) not found — install it: $(2)"))
-endef
+$(VBIN)/python:
+	@if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>/dev/null; then \
+		python3 -m venv $(VENV); \
+	elif command -v python3.11 >/dev/null 2>&1; then \
+		python3.11 -m venv $(VENV); \
+	else \
+		echo "No Python >= 3.11 found" >&2; exit 1; \
+	fi
 
-# ---- targets -------------------------------------------------------------- #
+# Install the admission toolchain (lint, type, security).
+# Versions pinned to match cunegonde-ai/agentic-backend setup.cfg [admission].
+admission: $(VBIN)/python
+	@$(VBIN)/pip install --quiet --upgrade \
+		'ruff>=0.16.8' \
+		'yapf>=0.43.0' \
+		'docformatter>=1.7.8' \
+		'mypy>=2.3.1' \
+		'basedpyright>=1.40.1' \
+		'pydoclint>=0.9.1' \
+		'bandit>=1.9.4'
 
-.PHONY: all lint lint-shell lint-containerfile lint-yaml lint-python \
-        format format-shell format-python \
-        test build help
+# No-op once the toolchain is provisioned (fast path for every py-using target).
+py-ready:
+	@test -x $(VBIN)/ruff || $(MAKE) admission
 
-all: lint test
+# ---- check (verification gate) ------------------------------------------- #
+# Mirrors the reference `check-back` target: format-diff, lint, types, security.
+# All four sub-checks must pass for the gate to be green.
 
-# ---------- lint -----------------------------------------------------------
+.PHONY: check check-py check-shell check-containerfile check-yaml
 
-lint: lint-shell lint-containerfile lint-yaml lint-python
+check: check-py check-shell check-containerfile check-yaml
 
-lint-shell:
-	$(call require,shellcheck,apt install shellcheck)
+check-py: py-ready
+	$(VBIN)/yapf --diff --recursive $(PYTHON_SRCS)
+	$(VBIN)/docformatter --check --diff --recursive $(PYTHON_SRCS)
+	$(VBIN)/ruff check $(PYTHON_SRCS)
+	$(VBIN)/mypy --explicit-package-bases $(PYTHON_SRCS)
+	$(VBIN)/basedpyright $(PYTHON_SRCS)
+	$(VBIN)/pydoclint $(PYTHON_SRCS)
+	$(VBIN)/bandit -q -r $(PYTHON_SRCS) --severity-level medium
+
+check-shell:
+	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found — apt install shellcheck" >&2; exit 1; }
 	shellcheck $(SHELL_SRCS)
 	shellcheck --shell=sh $(POSTINST_SRCS)
 
-lint-containerfile:
-	$(call require,hadolint,apt install hadolint  # or: brew install hadolint)
+check-containerfile:
+	@command -v hadolint >/dev/null 2>&1 || { echo "hadolint not found — apt install hadolint" >&2; exit 1; }
 	hadolint $(CONTAINERFILES)
 
-lint-yaml:
-	$(call require,yamllint,pip install yamllint)
+check-yaml:
+	@command -v yamllint >/dev/null 2>&1 || { echo "yamllint not found — pip install yamllint" >&2; exit 1; }
 	yamllint $(YAML_SRCS)
 
-lint-python:
-	$(call require,ruff,pip install ruff)
-	ruff check $(PYTHON_SRCS)
+# ---- lint (alias for check, for discoverability) -------------------------- #
 
-# ---------- format ---------------------------------------------------------
+.PHONY: lint lint-shell lint-containerfile lint-yaml lint-python
 
-format: format-shell format-python
+lint: check
+lint-shell: check-shell
+lint-containerfile: check-containerfile
+lint-yaml: check-yaml
+lint-python: check-py
+
+# ---- format --------------------------------------------------------------- #
+
+.PHONY: format format-shell format-python
+
+format: format-python format-shell
+
+# Auto-format the Python code (yapf + docformatter + ruff --fix).
+# Mirrors the reference `format` target (without the frontend half).
+format-python: py-ready
+	$(VBIN)/ruff check --fix --exit-zero $(PYTHON_SRCS)
+	$(VBIN)/yapf --in-place --recursive $(PYTHON_SRCS)
+	$(VBIN)/docformatter --in-place --recursive $(PYTHON_SRCS) || [ $$? -eq 3 ]
 
 format-shell:
-	$(call require,shfmt,apt install shfmt)
+	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not found — apt install shfmt" >&2; exit 1; }
 	shfmt -w $(SHELL_SRCS)
 	shfmt -w -ln posix $(POSTINST_SRCS)
 
-format-python:
-	$(call require,ruff,pip install ruff)
-	ruff format $(PYTHON_SRCS)
+# ---- test (local smoke checks — no container needed) ---------------------- #
+# Mirrors docs/testing-quality.md § Smoke checks.
 
-# ---------- test (local smoke checks) --------------------------------------
-# Mirrors docs/testing-quality.md § Smoke checks; runnable without a container.
+.PHONY: test
 
-test:
-	$(call require,ruff,pip install ruff)
+test: py-ready
 	@# 1. Every runtime test has a diag; counts must match.
 	@name_count=$$(grep -c '^  - name:' workflows/tests.yml); \
 	 diag_count=$$(grep -c '^    diag:' workflows/tests.yml); \
@@ -104,33 +143,51 @@ test:
 	@# 2. Syntax-check the installer recipe generator.
 	python3 -m py_compile $(PYTHON_SRCS)
 	@echo "OK  gen-recipe.py syntax"
-	@# 3. Lint the Python script.
-	ruff check $(PYTHON_SRCS)
+	@# 3. Ruff lint gate.
+	$(VBIN)/ruff check $(PYTHON_SRCS)
 	@echo "OK  ruff"
-	@# 4. Build-script inputs declared: warn if packages.yml was changed without
-	@#    a corresponding sources/env update (non-blocking, informational only).
+	@# 4. Warn when bootc-debs-builder inputs changed without a sources/env update.
 	@if git diff --name-only 2>/dev/null | grep -q 'workflows/bootc-debs-builder/'; then \
-	   echo "INFO: bootc-debs-builder files modified — confirm sources/env are declared in packages.yml"; \
+	   echo "INFO: bootc-debs-builder files modified — confirm sources/env declared in packages.yml"; \
 	 fi
 
-# ---------- build ----------------------------------------------------------
+# ---- docs (KT-2 — not yet implemented) ------------------------------------ #
+# Target declared now so `make docs` fails with a clear message rather than
+# "no rule to make target".  Implementation deferred to KT-2.
+
+.PHONY: docs
+
+docs:
+	@echo "docs generation not yet configured (KT-2 — see docs/conventions/quality-targets.md)" >&2
+	@exit 1
+
+# ---- build ---------------------------------------------------------------- #
+
+.PHONY: build
 
 build:
 	podman build --format docker \
 	  --build-arg PRODUCT_NAME="debian bootc" \
 	  -f Containerfile -t debian-bootc:local .
 
-# ---------- help -----------------------------------------------------------
+# ---- help ----------------------------------------------------------------- #
+
+.PHONY: help all
+
+all: check test
 
 help:
 	@echo "Targets:"
-	@echo "  make lint                 — shellcheck + hadolint + yamllint + ruff"
-	@echo "  make lint-shell           — shellcheck on bash/sh scripts"
-	@echo "  make lint-containerfile   — hadolint on Containerfile*"
-	@echo "  make lint-yaml            — yamllint on config/workflow YAML"
-	@echo "  make lint-python          — ruff on scripts/gen-recipe.py"
-	@echo "  make format               — shfmt + ruff format"
-	@echo "  make format-shell         — shfmt on bash/sh scripts"
-	@echo "  make format-python        — ruff format on Python"
+	@echo "  make admission            — install Python lint/type/security tools into .venv"
+	@echo "  make check                — full gate: yapf + docformatter + ruff + mypy +"
+	@echo "                              basedpyright + pydoclint + bandit + shellcheck +"
+	@echo "                              hadolint + yamllint"
+	@echo "  make check-py             — Python gate only"
+	@echo "  make check-shell          — shellcheck only"
+	@echo "  make check-containerfile  — hadolint only"
+	@echo "  make check-yaml           — yamllint only"
+	@echo "  make lint                 — alias for check"
+	@echo "  make format               — yapf + docformatter + ruff --fix + shfmt"
 	@echo "  make test                 — local smoke checks (no container needed)"
 	@echo "  make build                — podman build (amd64 host, full image)"
+	@echo "  make docs                 — doc generation (KT-2, not yet implemented)"

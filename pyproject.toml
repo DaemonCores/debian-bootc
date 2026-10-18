@@ -1,20 +1,23 @@
 # pyproject.toml — debian-bootc
-# Lint/format config for scripts/gen-recipe.py (the repo's only Python file).
-# Ruff config copied from cunegonde-ai/agentic-backend (the reference repo);
-# see docs/conventions/quality-targets.md § Reference configuration.
+# Lint/format/type config for scripts/gen-recipe.py (the repo's only Python
+# file).  Config sections copied as-is from cunegonde-ai/agentic-backend
+# (the reference repo); path- and version-specific values adapted.
+# See docs/conventions/quality-targets.md § Reference configuration.
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py311"   # Debian Trixie ships Python 3.11
 line-length = 80
+extend-exclude = ["docs", ".kronn", ".git"]
 
 [tool.ruff.lint]
+# Broad but curated set (copied from reference; ruff advises against "ALL").
 select = [
     "F",      # pyflakes
     "E", "W", # pycodestyle
     "I",      # isort
     "N",      # pep8-naming
     "D",      # pydocstyle (google convention below)
-    "ANN",    # flake8-annotations
+    "ANN",    # flake8-annotations: explicit types required; ANN401 forbids Any
     "UP",     # pyupgrade
     "B",      # flake8-bugbear
     "A",      # flake8-builtins
@@ -23,8 +26,62 @@ select = [
     "RET",    # flake8-return
     "PIE",    # flake8-pie
     "PERF",   # perflint
+    "PT",     # flake8-pytest-style
     "RUF",    # ruff-specific
 ]
 
 [tool.ruff.lint.pydocstyle]
+# Google-style docstrings enforced everywhere (copied from reference).
 convention = "google"
+
+[tool.yapf]
+# Copied from reference: low-code, well-aerated, trailing-comma drives wrapping.
+based_on_style = "pep8"
+column_limit = 80
+split_arguments_when_comma_terminated = true
+dedent_closing_brackets = true
+coalesce_brackets = true
+blank_line_before_nested_class_or_def = true
+blank_lines_around_top_level_definition = 2
+
+[tool.docformatter]
+# Copied from reference: prose wrapped to 80 columns; summaries untouched.
+recursive = true
+wrap-summaries = 0
+wrap-descriptions = 80
+
+[tool.pydoclint]
+# Copied from reference: strict Google docstrings.
+style = "google"
+skip-checking-short-docstrings = false
+arg-type-hints-in-docstring = false
+check-return-types = false
+require-return-section-when-returning-nothing = false
+allow-init-docstring = true
+exclude = '\.git|\.tox'
+
+[tool.mypy]
+# scripts/ is the import root for the one Python file in this repo.
+mypy_path = "scripts"
+explicit_package_bases = true
+namespace_packages = true
+exclude = ["^docs/", "^\\.kronn/"]
+
+[tool.basedpyright]
+# Copied from reference (strict explicit typing); adapted paths for the
+# single-file scripts/ surface.
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+extraPaths = ["scripts"]
+typeCheckingMode = "strict"
+reportAny = "error"
+reportExplicitAny = "error"
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    ".venv",
+    "docs",
+    ".kronn",
+]
