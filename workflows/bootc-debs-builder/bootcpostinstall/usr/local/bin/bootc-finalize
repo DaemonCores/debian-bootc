@@ -102,5 +102,5 @@ if [ -n "${SHIM_VER}" ] && [ -d "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" ]; th
   fi
   printf 'shimx64.efi,%s,,This is the boot entry for %s\n' "${product}" "${product}" \
     | iconv -f UTF-8 -t UTF-16LE \
-      > "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/BOOTX64.CSV"
+      >"/usr/lib/efi/shim/${SHIM_VER}/EFI/debian/BOOTX64.CSV"
 fi
