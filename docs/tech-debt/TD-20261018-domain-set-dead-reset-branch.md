@@ -40,5 +40,5 @@ Today: none at runtime, because the branch never runs. The script's own comment 
 ## Suggested direction
 Delete `resetdomaine` and the line-count check, and always render from `/etc/hosts.tpl`. Otherwise fix the variable to `${HOST}`, anchor the deletes and quote `"${HOSTS}"`.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+Deleted `resetdomaine` and the unreachable line-count check. `setdomaine` is now always called unconditionally, which was the only reachable path anyway. The `HOSTS` variable was also removed.

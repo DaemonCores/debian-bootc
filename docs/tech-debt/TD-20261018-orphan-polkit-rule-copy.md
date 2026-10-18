@@ -40,5 +40,5 @@ Dead file in the live image. A future edit to only one copy creates confusion ab
 ## Suggested direction
 Delete `src/buildisopreinstall/etc/rules.d/`.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+Deleted `src/buildisopreinstall/etc/rules.d/` entirely. The effective rule at `src/buildisopreinstall/etc/polkit-1/rules.d/50-bootc-installer-live.rules` is unchanged.

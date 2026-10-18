@@ -40,5 +40,7 @@ A maintainer reading config.yml expects unsigned modules while CI builds both. A
 ## Suggested direction
 Align the config.yml comment with the chosen default, or the value with the comment. Rewrite the minimal header kernel lines to the KERNEL_VARIANT scheme, and change the Containerfile:170 wording to 'Mirrored in Containerfile.minimal'.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+- `config.yml`: comment updated — `nosign` is no longer labelled "default", `both` is now labelled "default".
+- `Containerfile.minimal` header: lines 11-19 now name `linux-image-${KERNEL_VARIANT}-amd64` / `linux-image-${KERNEL_VARIANT}-arm64` instead of the bare `linux-image-${ARCH}` form that would install Debian's conflicting kernel.
+- `Containerfile:170`: Phase 4 comment changed from "Mirrors the main Containerfile exactly" (inside the main Containerfile) to "Mirrored in Containerfile.minimal".

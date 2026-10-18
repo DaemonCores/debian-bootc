@@ -52,19 +52,20 @@ Upstream versions came from `https://api.github.com/repos/<owner>/<repo>/release
 
 | ID | Area | Severity | Status | Summary |
 |---|---|---|---|---|
-| [TD-20261018-dhcp-domain-unsanitized-sed](tech-debt/TD-20261018-dhcp-domain-unsanitized-sed.md) | Security | Medium | Verified in source | DHCP domain is interpolated unescaped into root sed on `/etc/hosts` (`domain-set:32-36`) |
+| [TD-20261018-ssh-host-keys-baked-in-image](tech-debt/TD-20261018-ssh-host-keys-baked-in-image.md) | Security | High | **Fixed** | openssh-server postinst bakes host keys into the image; all deployments share the same private key |
+| [TD-20261018-dhcp-domain-unsanitized-sed](tech-debt/TD-20261018-dhcp-domain-unsanitized-sed.md) | Security | Medium | **Fixed** | DHCP domain is interpolated unescaped into root sed on `/etc/hosts` (`domain-set:32-36`) |
 | [TD-20261018-reusable-workflow-main-ref](tech-debt/TD-20261018-reusable-workflow-main-ref.md) | CI | Medium | Verified in source | Shared workflows called `@main` with `secrets: inherit` and id-token write |
 | [TD-20261018-unverified-build-downloads](tech-debt/TD-20261018-unverified-build-downloads.md) | Security | Medium | Verified in source | yq/gh `latest`, `curl \| sh` rustup, ostree tarball without checksum |
-| [TD-20261018-hardcoded-public-dns](tech-debt/TD-20261018-hardcoded-public-dns.md) | Other | Medium | Verified in source | ifupdown2 autoconf forces Cloudflare/Google DNS on every host |
+| [TD-20261018-hardcoded-public-dns](tech-debt/TD-20261018-hardcoded-public-dns.md) | Other | Medium | **Fixed** | ifupdown2 autoconf forces Cloudflare/Google DNS on every host |
 | [TD-20261018-unpinned-base-images](tech-debt/TD-20261018-unpinned-base-images.md) | Infra | Low | Verified in source | `FROM debian:trixie` / `:latest-<arch>-autoupdate` without digest (documented trade-off) |
 | [TD-20261018-full-image-install-recommends](tech-debt/TD-20261018-full-image-install-recommends.md) | Infra | Low | Verified in source | `Containerfile:101` installs ~50 packages with Recommends |
 | [TD-20261018-bootc-stack-behind-upstream](tech-debt/TD-20261018-bootc-stack-behind-upstream.md) | Backend | Low | Verified in source | bootupd/bootc/ostree pins trail upstream; no automated bump |
-| [TD-20261018-domain-set-dead-reset-branch](tech-debt/TD-20261018-domain-set-dead-reset-branch.md) | Backend | Low | Verified in source | Unreachable `resetdomaine` writes `${HOSTS}` (whole file) instead of `${HOST}` |
-| [TD-20261018-swallowed-errors-ostree-migration](tech-debt/TD-20261018-swallowed-errors-ostree-migration.md) | Infra | Low | Verified in source | `&& cp ... \|\| true &&` swallows mkdir failures in the ostree layout phase |
+| [TD-20261018-domain-set-dead-reset-branch](tech-debt/TD-20261018-domain-set-dead-reset-branch.md) | Backend | Low | **Fixed** | Unreachable `resetdomaine` writes `${HOSTS}` (whole file) instead of `${HOST}` |
+| [TD-20261018-swallowed-errors-ostree-migration](tech-debt/TD-20261018-swallowed-errors-ostree-migration.md) | Infra | Low | **Fixed** | `&& cp ... \|\| true &&` swallows mkdir failures in the ostree layout phase |
 | [TD-20261018-containerfile-phase-duplication](tech-debt/TD-20261018-containerfile-phase-duplication.md) | Infra | Low | Verified in source | SSL/APT-key/ostree phases copy-pasted between the two Containerfiles |
 | [TD-20261018-installer-catalog-arch-bootloader](tech-debt/TD-20261018-installer-catalog-arch-bootloader.md) | Other | Low | Verified in source | gen-recipe.py offers both arches on every ISO and hardcodes `grub2` |
-| [TD-20261018-config-and-comment-drift](tech-debt/TD-20261018-config-and-comment-drift.md) | Docs | Low | Verified in source | `config.yml` comment says default `nosign` while the value is `both`; minimal header names the wrong kernel package |
-| [TD-20261018-orphan-polkit-rule-copy](tech-debt/TD-20261018-orphan-polkit-rule-copy.md) | Other | Low | Verified in source | Duplicate polkit rule under `/etc/rules.d/`, which polkit never reads |
+| [TD-20261018-config-and-comment-drift](tech-debt/TD-20261018-config-and-comment-drift.md) | Docs | Low | **Fixed** | `config.yml` comment says default `nosign` while the value is `both`; minimal header names the wrong kernel package |
+| [TD-20261018-orphan-polkit-rule-copy](tech-debt/TD-20261018-orphan-polkit-rule-copy.md) | Other | Low | **Fixed** | Duplicate polkit rule under `/etc/rules.d/`, which polkit never reads |
 
 ## Dimension coverage
 
@@ -74,7 +75,7 @@ Upstream versions came from `https://api.github.com/repos/<owner>/<repo>/release
 | Security | findings | unsanitized DHCP domain in sed (`workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:32-36`); `@main` + `secrets: inherit` (`.github/workflows/pipeline.yml:71`, `:84`); unverified downloads (`workflows/env.yml:74-102`, `workflows/bootc-debs-builder/packages.yml:1411-1413`). Also reviewed and found sound: first-boot wizard input validation and `chpasswd` via printf (`firstboot-user-setup:141`, `:160`, `:241-244`), APT key digest check (`Containerfile:76-80`), and the live polkit rule scoped to `org.tunaos.Installer` |
 | Code quality | findings | dead/buggy `resetdomaine` (`domain-set:44-58`); `\|\| true` precedence (`Containerfile:179`, `Containerfile.minimal:271`); orphan polkit rule copy. `packages.yml` is 1713 lines, but it is a declarative per-package manifest, not a god-file |
 | Scalability | N/A: no long-running service, request path, DB or queue in this repo | Output is OS images and `.deb` packages; the only runtime code is one-shot boot scripts (`bootc-finalize`, `ifupdown2-autoconf`, `domain-set`, `firstboot-user-setup`) |
-| Maintainability | findings | hand-synced duplicate phases (`Containerfile.minimal:262`); `scripts/gen-recipe.py` has no tests and hardcodes arch/bootloader (`scripts/gen-recipe.py:33`, `:51`). Runtime tests exist (`workflows/tests.yml`, 35 `- name:` entries) |
+| Maintainability | findings | hand-synced duplicate phases (`Containerfile.minimal:262`); `scripts/gen-recipe.py` has no tests and hardcodes arch/bootloader (`scripts/gen-recipe.py:33`, `:51`). Runtime tests exist (`workflows/tests.yml`, 42 `- name:` entries) |
 | Accessibility (a11y) | N/A: no web UI or library API in this repo | The only interactive surface is the whiptail TTY wizard (`firstboot-user-setup:82-117`); the GTK installer is built from the external `frostyard/bootc-installer` repo (`packages.yml:1633`) |
 | Observability | scanned — nothing substantiable | The full image keeps default journald. The minimal image sets `Storage=none` on purpose (`src/minimalpostinstall/etc/systemd/journald.conf.d/00-minimal.conf:2`, `Containerfile.minimal:26`). Boot scripts log to the journal via systemd units; error trackers, metrics and health endpoints do not apply to an OS image (`HEALTHCHECK NONE`, `Containerfile:199`) |
 | Compliance | findings | hardcoded Cloudflare/Google DNS (`ifupdown2-autoconf:30`, `:50`). License is LGPL-2.1 (`LICENSE:1`, `Containerfile:13`); a per-package license audit of the built debs was not run (no `cargo deny` / license-checker config in the repo) |

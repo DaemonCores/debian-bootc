@@ -34,17 +34,17 @@ Test-entry fields: `name`, `run` (pass on exit 0), `expect` (optional output mat
 <!-- kronn:section name="test-suites" curated="ai" owner="audit" audit="2026-10-18" -->
 ## Test suites
 
-All runtime suites are section groups in `workflows/tests.yml` (35 tests, each with a `diag`).
+All runtime suites are section groups in `workflows/tests.yml` (42 tests, each with a `diag`).
 
 | Suite (section in `workflows/tests.yml`) | Tests | Gating |
 |-------|-------|--------|
-| bootc / ostree / immutability [src: file: workflows/tests.yml:30] | 8 | all targets |
+| bootc / ostree / immutability / service stability [src: file: workflows/tests.yml:30] | 10 | 8 all targets; logind not-masked and FailureAction=none: all targets |
 | bootloader / secure boot [src: file: workflows/tests.yml:72] | 6 | 5 × `arch: amd64` (bootupd, GRUB, shim, SB cert); 1 × `arch: arm64` (u-boot-tools) [src: file: workflows/tests.yml:105] |
 | kernel / initramfs / dracut [src: file: workflows/tests.yml:112] | 4 | all targets |
 | filesystems (btrfs) [src: file: workflows/tests.yml:135] | 2 | `arch: amd64` |
 | podman [src: file: workflows/tests.yml:154] | 2 | `arch: amd64` |
-| networking / repacked packages [src: file: workflows/tests.yml:169] | 4 | ifupdown2 `variant: main`; sshd `arch: amd64` [src: file: workflows/tests.yml:191] |
-| first-boot tooling [src: file: workflows/tests.yml:198] | 2 | firstboot wizard `variant: main` [src: file: workflows/tests.yml:202] |
+| networking / repacked packages [src: file: workflows/tests.yml:169] | 9 | ifupdown2 / autoconf / IP: `variant: main`; sshd: `arch: amd64`; SSH host keys: all targets; networkd active / IP: `variant: minimal` |
+| first-boot tooling [src: file: workflows/tests.yml:198] | 2 | firstboot wizard `variant: main` |
 | rollback preparation, pre-reboot [src: file: workflows/tests.yml:211] | 3 | all targets |
 | post-rollback verification, after reboot [src: file: workflows/tests.yml:233] | 4 | all targets |
 
@@ -54,7 +54,7 @@ Build-time suites: 13 labelled content checks across the `packages.yml` build sc
 <!-- kronn:section name="coverage" curated="ai" owner="audit" audit="2026-10-18" -->
 ## Coverage
 
-- Current status: no code-coverage tooling. Coverage is behavioural: 35 runtime assertions on the booted image [src: file: workflows/tests.yml:29] and build-time content checks per package [src: file: workflows/bootc-debs-builder/packages.yml:34].
+- Current status: no code-coverage tooling. Coverage is behavioural: 42 runtime assertions on the booted image [src: file: workflows/tests.yml:29] and build-time content checks per package [src: file: workflows/bootc-debs-builder/packages.yml:34].
 - Target: no numeric target is defined. The test policy requires a runtime test with a `diag` for every change to boot, filesystem, networking or service behaviour [src: file: docs/AGENTS.md:15].
 <!-- kronn:section:end -->
 
@@ -65,7 +65,7 @@ Build-time suites: 13 labelled content checks across the `packages.yml` build sc
 - Installer ISOs (`Containerfile.iso`, `bootc-installer`): `workflows/tests.yml` has no installer/ISO test; the build only checks that the launcher and GResource bundle exist [src: file: workflows/bootc-debs-builder/packages.yml:1683].
 - `fisherman`: no runtime test in `workflows/tests.yml` [src: file: workflows/bootc-debs-builder/packages.yml:1541].
 - Minimal image autoupdate behaviour (`/usr/lib/bootc/autoupdate`, `AUTOUPDATE` arg): no runtime test [src: file: Containerfile.minimal:158].
-- arm64 image: only the u-boot-tools test is arm64-specific [src: file: workflows/tests.yml:105]; bootloader, btrfs, podman and sshd tests are amd64-only.
+- arm64 image: only the u-boot-tools test is arm64-specific [src: file: workflows/tests.yml:105]; bootloader, btrfs, podman and sshd tests are amd64-only. The 5 networking tests added in the stabilization pass are split: SSH host keys is all-targets; ifupdown2-autoconf, main-IP are variant:main; networkd-active, minimal-IP are variant:minimal.
 - Raspberry Pi `.img` artifacts (`run_img_rpi`): no boot test in this repo [src: file: .github/workflows/pipeline.yml:44].
 - Linux kernel and module `.deb`s: build-time existence checks only (`test -s` on the output deb) [src: file: workflows/bootc-debs-builder/packages.yml:412]; runtime checks cover only the modules tree and btrfs loading [src: file: workflows/tests.yml:113].
 <!-- kronn:section:end -->

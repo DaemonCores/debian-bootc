@@ -43,5 +43,5 @@ A DHCP server on the LAN controls part of a root sed program. A domain containin
 ## Suggested direction
 Validate FQDN against a hostname/domain regex (`^[A-Za-z0-9.-]{1,253}$`) and fall back to `local` otherwise. Render with a non-sed method, or escape `|`, `&` and `\`. Add a `workflows/tests.yml` check that `/etc/hosts` has no `{{` left.
 
-## Next step
-`create ticket`
+## Resolution (commit c083560)
+Added `[[ "${FQDN}" =~ ^[A-Za-z0-9.-]{1,253}$ ]] || FQDN="local"` in `domain-set` before the sed substitution. Values containing `|`, `&`, `\`, or other sed-special characters are rejected and replaced with `"local"`. This makes the guard explicit rather than relying on dhclient escaping behaviour.
