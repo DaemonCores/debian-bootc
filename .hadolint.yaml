@@ -4,13 +4,20 @@
 # These are OS image Containerfiles built with Podman, not application images.
 # Some standard Docker/hadolint advice does not apply.
 
-ignore:
+# Info-level findings (DL3009, DL3047) are reported but do not fail the gate.
+failure-threshold: warning
+
+ignored:
   # DL3008: Pin versions in apt-get — the project uses the project's own APT
   # repo and does not pin versions; version drift is tracked in packages.yml.
   - DL3008
-  # DL3028: Use apt-get instead of apt — project convention uses `apt` (not
+  # DL3027: Use apt-get instead of apt — project convention uses `apt` (not
   # apt-get) intentionally; see docs/coding-rules.md § Containerfile.
-  - DL3028
+  - DL3027
+  # SC2114: the postinstall layer deletes /home, /root, /mnt... on purpose to
+  # relocate them under /var for ostree; the Containerfile says not to change
+  # that layout.
+  - SC2114
   # DL3059: Multiple consecutive RUN — phases are deliberately split for
   # readability and cache efficiency; merging them is not appropriate here.
   - DL3059
