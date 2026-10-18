@@ -140,9 +140,9 @@ format-shell:
 
 .PHONY: test test-unit
 
-# Unit tests (pytest) for the Python scripts.
+# Unit and static integration tests (pytest).
 test-unit: py-ready
-	$(VBIN)/pytest -q tests/unit
+	$(VBIN)/pytest -q tests/unit tests/integration
 
 test: py-ready test-unit
 	@# 1. Every runtime test has a diag; counts must match.
