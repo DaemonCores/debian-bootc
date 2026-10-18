@@ -20,8 +20,7 @@ def _load():
 
 def test_build_images_covers_variants_and_arches(tmp_path):
     """Each Containerfile yields one entry per arch; .iso is skipped."""
-    for name in ("Containerfile", "Containerfile.minimal",
-                 "Containerfile.iso"):
+    for name in ("Containerfile", "Containerfile.minimal", "Containerfile.iso"):
         (tmp_path / name).write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
     assert [i["imgref"] for i in images] == [
@@ -47,8 +46,9 @@ def test_main_updates_only_images_fields(tmp_path):
         encoding="utf-8",
     )
     subprocess.run(
-        [sys.executable, str(SCRIPT),
-         str(tmp_path), str(recipe)],
+        [sys.executable,
+         str(SCRIPT), str(tmp_path),
+         str(recipe)],
         check=True,
         env={"IMAGE_REGISTRY": "reg/x"},
     )

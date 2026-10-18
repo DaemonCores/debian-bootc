@@ -11,8 +11,10 @@ import gen_docs  # noqa: E402
 def test_shell_header_extracts_comment_block(tmp_path):
     """The header is the comment block right after the shebang."""
     script = tmp_path / "s.sh"
-    script.write_text("#!/bin/bash\n#\n# name - purpose\n# more\nset -e\n# x\n",
-                      encoding="utf-8")
+    script.write_text(
+        "#!/bin/bash\n#\n# name - purpose\n# more\nset -e\n# x\n",
+        encoding="utf-8"
+    )
     assert gen_docs._shell_header(script) == "name - purpose\nmore"
 
 
