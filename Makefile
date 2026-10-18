@@ -22,8 +22,7 @@ SHELL_SRCS := \
 	workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize \
 	workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize \
 	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup \
-	scripts/e2e-local.sh \
-	scripts/rotate-apt-key.sh
+	scripts/e2e-local.sh
 
 # DEBIAN/postinst files use `set -e` (POSIX sh, not full bash pipefail).
 POSTINST_SRCS := \
