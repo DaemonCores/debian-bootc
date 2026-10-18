@@ -20,100 +20,108 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ROOT / 'workflows' / 'bootc-debs-builder'
 CONTAINERFILES = sorted(ROOT.glob('Containerfile*'))
-COPY_RE = re.compile(r'^(?:COPY|ADD)\s+(?!--from)(?:--\S+\s+)*(\S+)\s+\S+',
-                     re.MULTILINE)
+COPY_RE = re.compile(
+    r'^(?:COPY|ADD)\s+(?!--from)(?:--\S+\s+)*(\S+)\s+\S+', re.MULTILINE
+)
 
 
 def _local_sources(containerfile: Path) -> list[str]:
-  return [
-      m for m in COPY_RE.findall(containerfile.read_text())
-      if not m.startswith(('http://', 'https://'))
-  ]
+    return [
+        m for m in COPY_RE.findall(containerfile.read_text())
+        if not m.startswith(('http://', 'https://'))
+    ]
 
 
 def _packages() -> list[dict[str, Any]]:
-  data = yaml.safe_load((PACKAGES / 'packages.yml').read_text())
-  return cast(list[dict[str, Any]], data['packages'])
+    data = yaml.safe_load((PACKAGES / 'packages.yml').read_text())
+    return cast(list[dict[str, Any]], data['packages'])
 
 
 def test_containerfiles_found() -> None:
-  """The glob finds the three image definitions."""
-  assert len(CONTAINERFILES) >= 3
+    """The glob finds the three image definitions."""
+    assert len(CONTAINERFILES) >= 3
 
 
 @pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
 def test_copy_sources_exist(containerfile: Path) -> None:
-  """Every local COPY/ADD source resolves in the build context."""
-  for source in _local_sources(containerfile):
-    pattern = source.removeprefix('./')
-    assert list(ROOT.glob(pattern)), f'{containerfile.name}: {source} missing'
+    """Every local COPY/ADD source resolves in the build context."""
+    for source in _local_sources(containerfile):
+        pattern = source.removeprefix('./')
+        assert list(
+            ROOT.glob(pattern)
+        ), f'{containerfile.name}: {source} missing'
 
 
 def test_package_names_unique() -> None:
-  """Package names are unique and non-empty."""
-  names = [p['name'] for p in _packages()]
-  assert all(names)
-  assert len(names) == len(set(names))
+    """Package names are unique and non-empty."""
+    names = [p['name'] for p in _packages()]
+    assert all(names)
+    assert len(names) == len(set(names))
 
 
 def test_package_deps_resolve() -> None:
-  """Every dependency names another package of the manifest."""
-  packages = _packages()
-  names = {p['name'] for p in packages}
-  for pkg in packages:
-    for dep in pkg.get('deps') or []:
-      assert dep in names, f"{pkg['name']} depends on unknown {dep}"
+    """Every dependency names another package of the manifest."""
+    packages = _packages()
+    names = {p['name'] for p in packages}
+    for pkg in packages:
+        for dep in pkg.get('deps') or []:
+            assert dep in names, f"{pkg['name']} depends on unknown {dep}"
 
 
 def test_package_sources_exist() -> None:
-  """Every hashed source path exists under the builder directory."""
-  for pkg in _packages():
-    for source in pkg.get('sources') or []:
-      assert (PACKAGES / source).exists(), f"{pkg['name']}: {source} missing"
+    """Every hashed source path exists under the builder directory."""
+    for pkg in _packages():
+        for source in pkg.get('sources') or []:
+            assert (PACKAGES /
+                    source).exists(), f"{pkg['name']}: {source} missing"
 
 
 def test_package_has_build_or_upstream() -> None:
-  """Each package either repacks an upstream deb or carries a build script."""
-  for pkg in _packages():
-    assert pkg.get('upstream') or str(pkg.get('build', '')).strip(), pkg['name']
+    """Each package either repacks an upstream deb or carries a build script."""
+    for pkg in _packages():
+        assert pkg.get('upstream') or str(pkg.get('build', '')
+                                          ).strip(), pkg['name']
 
 
 def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
-  """gen-recipe.py updates a recipe from the repo's Containerfiles."""
-  recipe = tmp_path / 'recipe.json'
-  recipe.write_text(json.dumps({'distro_name': 'debian bootc', 'keep': 1}))
-  subprocess.run(
-      [sys.executable, '-I',
-       str(ROOT / 'scripts' / 'gen-recipe.py'),
-       str(ROOT),
-       str(recipe)],
-      check=True,
-      capture_output=True,
-      env={'IMAGE_REGISTRY': 'ghcr.io/example/repo'},
-  )
-  result = json.loads(recipe.read_text())
-  assert result['keep'] == 1
-  assert result['images']
+    """gen-recipe.py updates a recipe from the repo's Containerfiles."""
+    recipe = tmp_path / 'recipe.json'
+    recipe.write_text(json.dumps({'distro_name': 'debian bootc', 'keep': 1}))
+    subprocess.run(
+        [
+            sys.executable, '-I',
+            str(ROOT / 'scripts' / 'gen-recipe.py'),
+            str(ROOT),
+            str(recipe)
+        ],
+        check=True,
+        capture_output=True,
+        env={'IMAGE_REGISTRY': 'ghcr.io/example/repo'},
+    )
+    result = json.loads(recipe.read_text())
+    assert result['keep'] == 1
+    assert result['images']
 
 
 def _ignore_patterns() -> list[str]:
-  lines = (ROOT / '.dockerignore').read_text().splitlines()
-  return [l.strip() for l in lines if l.strip() and not l.startswith('#')]
+    lines = (ROOT / '.dockerignore').read_text().splitlines()
+    return [l.strip() for l in lines if l.strip() and not l.startswith('#')]
 
 
 @pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
 def test_dockerignore_keeps_copy_sources(containerfile: Path) -> None:
-  """No COPY source is excluded from the build context by .dockerignore."""
-  patterns = [p.rstrip('/') for p in _ignore_patterns()]
-  for source in _local_sources(containerfile):
-    top = source.removeprefix('./').split('/')[0]
-    for pattern in patterns:
-      assert not fnmatch.fnmatch(top, pattern), (
-          f'{containerfile.name}: {source} excluded by .dockerignore {pattern}')
+    """No COPY source is excluded from the build context by .dockerignore."""
+    patterns = [p.rstrip('/') for p in _ignore_patterns()]
+    for source in _local_sources(containerfile):
+        top = source.removeprefix('./').split('/')[0]
+        for pattern in patterns:
+            assert not fnmatch.fnmatch(top, pattern), (
+                f'{containerfile.name}: {source} excluded by .dockerignore {pattern}'
+            )
 
 
 def test_dockerignore_excludes_local_state() -> None:
-  """Agent state, MCP config and env files stay out of the build context."""
-  patterns = set(_ignore_patterns())
-  for required in ('.env*', '.kronn/', '.claude/', '.mcp.json*', 'docs/'):
-    assert required in patterns, f'{required} missing from .dockerignore'
+    """Agent state, MCP config and env files stay out of the build context."""
+    patterns = set(_ignore_patterns())
+    for required in ('.env*', '.kronn/', '.claude/', '.mcp.json*', 'docs/'):
+        assert required in patterns, f'{required} missing from .dockerignore'
