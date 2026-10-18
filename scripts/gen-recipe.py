@@ -14,7 +14,9 @@ The script replaces only the ``imgref`` and ``images`` fields; all other fields
 (branding, tour, steps, …) are preserved from the existing file.
 
 Reads ``IMAGE_REGISTRY`` from the environment.  Defaults to the DaemonCores
-registry when the variable is absent (for local/manual builds).
+registry when the variable is absent (for local/manual builds).  When ``ARCH``
+is set (``amd64`` or ``arm64``), only images for that architecture are listed:
+an installer ISO cannot install an image built for another CPU.
 """
 
 import json
@@ -29,6 +31,7 @@ def _build_images(
     ctx_dir: str,
     registry: str,
     distro_name: str,
+    arch_filter: str = "",
 ) -> list[JsonObject]:
     """Return the image list built from the Containerfile* files in ctx_dir.
 
@@ -36,11 +39,12 @@ def _build_images(
         ctx_dir: Directory containing Containerfile* files.
         registry: Container registry prefix (e.g. ghcr.io/owner/repo).
         distro_name: Distribution name read from the existing recipe.
+        arch_filter: When non-empty, keep only this architecture.
 
     Returns:
         List of image descriptor dicts ready for recipe["images"].
     """
-    arches = ["amd64", "arm64"]
+    arches = [a for a in ("amd64", "arm64") if arch_filter in ("", a)]
     images: list[JsonObject] = []
 
     containerfiles = sorted(
@@ -82,7 +86,9 @@ def main() -> None:
         recipe = cast(JsonObject, json.load(fh))
 
     distro_name = str(recipe.get("distro_name", "Debian bootc"))
-    images = _build_images(ctx_dir, registry, distro_name)
+    images = _build_images(
+        ctx_dir, registry, distro_name, os.environ.get("ARCH", "")
+    )
 
     recipe["imgref"] = images[0]["imgref"] if images else ""
     recipe["images"] = images

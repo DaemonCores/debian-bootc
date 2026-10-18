@@ -51,17 +51,6 @@ SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 # Network deps: libnm / NM for the bootc-installer network configuration page.
 # -----------------------------------------------------------------------------
 COPY ./src/buildisopreinstall /
-# Bring the Containerfile list and the recipe generator script into the build
-# context so the generator can scan which variants the CI is programmed to build.
-COPY Containerfile* /tmp/recipe-gen/
-COPY ./scripts/gen-recipe.py /tmp/gen-recipe.py
-# Regenerate /etc/bootc-installer/recipe.json from available Containerfiles so
-# adding a new variant automatically appears in the installer without manual edits.
-RUN IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
-    python3 /tmp/gen-recipe.py \
-        /tmp/recipe-gen \
-        /etc/bootc-installer/recipe.json \
-    && rm -rf /tmp/recipe-gen /tmp/gen-recipe.py
 RUN apt update \
     && apt install -y --no-install-recommends \
         fisherman \
@@ -80,6 +69,21 @@ RUN apt update \
         gir1.2-gweather-4.0 \
         xdg-utils \
         adwaita-icon-theme
+
+# Placed after the apt layer: editing a Containerfile* or the generator must not
+# invalidate the cached installer-stack install.
+# Bring the Containerfile list and the recipe generator script into the build
+# context so the generator can scan which variants the CI is programmed to build.
+COPY Containerfile* /tmp/recipe-gen/
+COPY ./scripts/gen-recipe.py /tmp/gen-recipe.py
+# Regenerate /etc/bootc-installer/recipe.json from available Containerfiles so
+# adding a new variant automatically appears in the installer without manual edits.
+RUN IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
+    ARCH="${ARCH}" \
+    python3 /tmp/gen-recipe.py \
+        /tmp/recipe-gen \
+        /etc/bootc-installer/recipe.json \
+    && rm -rf /tmp/recipe-gen /tmp/gen-recipe.py
 
 # -----------------------------------------------------------------------------
 # Phase 2: Live user config, autologin, polkit rule, image catalog

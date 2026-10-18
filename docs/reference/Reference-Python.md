@@ -20,7 +20,9 @@ The script replaces only the ``imgref`` and ``images`` fields; all other fields
 (branding, tour, steps, …) are preserved from the existing file.
 
 Reads ``IMAGE_REGISTRY`` from the environment.  Defaults to the DaemonCores
-registry when the variable is absent (for local/manual builds).
+registry when the variable is absent (for local/manual builds).  When ``ARCH``
+is set (``amd64`` or ``arm64``), only images for that architecture are listed:
+an installer ISO cannot install an image built for another CPU.
 
 ### `_build_images()`
 
@@ -31,6 +33,7 @@ Args:
     ctx_dir: Directory containing Containerfile* files.
     registry: Container registry prefix (e.g. ghcr.io/owner/repo).
     distro_name: Distribution name read from the existing recipe.
+    arch_filter: When non-empty, keep only this architecture.
 
 Returns:
     List of image descriptor dicts ready for recipe["images"].
