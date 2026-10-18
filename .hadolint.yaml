@@ -4,10 +4,13 @@
 # These are OS image Containerfiles built with Podman, not application images.
 # Some standard Docker/hadolint advice does not apply.
 
-# Info-level findings (DL3009, DL3047) are reported but do not fail the gate.
+# Info-level findings are reported but do not fail the gate.
 failure-threshold: warning
 
 ignored:
+  # DL3009: Delete apt lists — done globally by the DPkg::Post-Invoke hook in
+  # src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean, after every apt run.
+  - DL3009
   # DL3008: Pin versions in apt-get — the project uses the project's own APT
   # repo and does not pin versions; version drift is tracked in packages.yml.
   - DL3008
