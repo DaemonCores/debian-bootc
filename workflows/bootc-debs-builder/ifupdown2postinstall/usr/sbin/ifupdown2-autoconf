@@ -22,10 +22,10 @@ ip link set "$IFACE" up 2>/dev/null || true
 # configuration.
 IPV4_STANZA="iface ${IFACE} inet manual"
 if timeout 8 dhclient -4 -1 -timeout 6 -q \
-   -sf /dev/null \
-   -pf /run/dhcp4-probe.pid \
-   -lf /run/dhcp4-probe.leases \
-   "$IFACE" >/dev/null 2>&1; then
+  -sf /dev/null \
+  -pf /run/dhcp4-probe.pid \
+  -lf /run/dhcp4-probe.leases \
+  "$IFACE" >/dev/null 2>&1; then
   IPV4_STANZA="iface ${IFACE} inet dhcp"
 fi
 # Capture the DHCP-advertised domain from the probe lease before deleting it.
@@ -34,7 +34,7 @@ fi
 # here (synchronously, during ExecStartPre) and saving it to a well-known path
 # is the only reliable way to hand it to domain-set.
 sed -n 's/.*option domain-name "\([^"]*\)".*/\1/p' \
-  /run/dhcp4-probe.leases 2>/dev/null | head -1 > /run/ifupdown2-dhcp-domain || true
+  /run/dhcp4-probe.leases 2>/dev/null | head -1 >/run/ifupdown2-dhcp-domain || true
 rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases
 
 # Probe for a DHCPv6 server before writing the config. The "inet6 auto" stanza

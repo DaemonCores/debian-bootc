@@ -33,6 +33,10 @@ POSTINST_SRCS := \
 
 CONTAINERFILES := Containerfile Containerfile.minimal Containerfile.iso
 
+# Google Shell Style: 2 spaces, operators on the continuation line, indented case.
+# Explicit flags: shfmt ignores .editorconfig once any flag is given (-ln).
+SHFMT_FLAGS := -i 2 -bn -ci
+
 YAML_SRCS := \
 	config.yml \
 	workflows/bootc-debs-builder/packages.yml \
@@ -89,6 +93,9 @@ check-shell:
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found — apt install shellcheck" >&2; exit 1; }
 	shellcheck $(SHELL_SRCS)
 	shellcheck --shell=sh $(POSTINST_SRCS)
+	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not found — apt install shfmt" >&2; exit 1; }
+	shfmt -d $(SHFMT_FLAGS) $(SHELL_SRCS)
+	shfmt -d $(SHFMT_FLAGS) -ln posix $(POSTINST_SRCS)
 
 check-containerfile:
 	@command -v hadolint >/dev/null 2>&1 || { echo "hadolint not found — apt install hadolint" >&2; exit 1; }
@@ -123,8 +130,8 @@ format-python: py-ready
 
 format-shell:
 	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not found — apt install shfmt" >&2; exit 1; }
-	shfmt -w $(SHELL_SRCS)
-	shfmt -w -ln posix $(POSTINST_SRCS)
+	shfmt -w $(SHFMT_FLAGS) $(SHELL_SRCS)
+	shfmt -w $(SHFMT_FLAGS) -ln posix $(POSTINST_SRCS)
 
 # ---- test (local smoke checks — no container needed) ---------------------- #
 # Mirrors docs/testing-quality.md § Smoke checks.
