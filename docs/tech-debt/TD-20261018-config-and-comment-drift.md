@@ -18,7 +18,7 @@ metadata:
 
 - **Area**: Docs
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
