@@ -36,3 +36,5 @@ jobs:
         run: make admission
       - name: Run all checks
         run: make check
+      - name: Check generated reference is up to date
+        run: make docs-check

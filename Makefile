@@ -43,7 +43,7 @@ YAML_SRCS := \
 	workflows/env.yml \
 	workflows/tests.yml
 
-PYTHON_SRCS := scripts/gen-recipe.py
+PYTHON_SRCS := scripts/gen-recipe.py scripts/gen_docs.py
 
 # ---- venv bootstrap ------------------------------------------------------- #
 
@@ -158,15 +158,19 @@ test: py-ready
 	   echo "INFO: bootc-debs-builder files modified — confirm sources/env declared in packages.yml"; \
 	 fi
 
-# ---- docs (KT-2 — not yet implemented) ------------------------------------ #
-# Target declared now so `make docs` fails with a clear message rather than
-# "no rule to make target".  Implementation deferred to KT-2.
+# ---- docs (KT-2) --------------------------------------------------------- #
+# Generates docs/reference/ from the Python docstrings and the shell header
+# comments. `docs-check` fails when the committed pages are stale (CI gate).
+# Unlike the reference, ast + regex replace pydoc-markdown: the file names
+# contain hyphens, which pydoc-markdown cannot import.
 
-.PHONY: docs
+.PHONY: docs docs-check
 
 docs:
-	@echo "docs generation not yet configured (KT-2 — see docs/conventions/quality-targets.md)" >&2
-	@exit 1
+	python3 scripts/gen_docs.py
+
+docs-check:
+	python3 scripts/gen_docs.py --check
 
 # ---- build ---------------------------------------------------------------- #
 
