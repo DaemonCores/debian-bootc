@@ -1,6 +1,8 @@
 name: Lint
 
-# Same entry point as local runs: `make check` (KT-1).
+# Thin caller: the toolchain setup and the gate run in the shared reusable
+# workflow DaemonCores-CI/.github/workflows/lint.yml, which runs this repo's
+# `make admission check docs-check` (same entry point as local runs).
 
 on:
   push:
@@ -18,23 +20,5 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install shell/Containerfile/YAML linters
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck shfmt yamllint
-          sudo curl -fsSL -o /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
-          sudo chmod +x /usr/local/bin/hadolint
-      - name: Install Python admission toolchain
-        run: make admission
-      - name: Run all checks
-        run: make check
-      - name: Check generated reference is up to date
-        run: make docs-check
+  lint:
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/lint.yml@main
