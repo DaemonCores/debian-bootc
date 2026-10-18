@@ -149,6 +149,7 @@ COPY ./src/bootcpreinstall /
 RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
         /etc/apt/sources.list.d/debian-bootc.sources \
     && wget \
+        --progress=dot:giga \
         -O /usr/share/keyrings/debian-bootc-keyring.gpg \
         https://daemoncores.github.io/debian-bootc/gpg.key \
     && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
