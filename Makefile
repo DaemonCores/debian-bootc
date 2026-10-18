@@ -29,8 +29,7 @@ POSTINST_SRCS := \
 	workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst \
 	workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst \
 	workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst \
-	workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst \
-	workflows/bootc-debs-builder/preinstall/output/grub-efi-arm64-signed/DEBIAN/postinst
+	workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst
 
 CONTAINERFILES := Containerfile Containerfile.minimal Containerfile.iso
 
