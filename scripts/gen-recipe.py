@@ -2,11 +2,13 @@
 """gen-recipe.py — regenerate /etc/bootc-installer/recipe.json image list.
 
 Usage:
-    IMAGE_REGISTRY=ghcr.io/owner/repo python3 gen-recipe.py <ctx_dir> <recipe_path>
+    IMAGE_REGISTRY=ghcr.io/owner/repo \
+        python3 gen-recipe.py <ctx_dir> <recipe_path>
 
 Args:
     ctx_dir: Directory containing the Containerfile* files to scan.
-    recipe_path: Path to the recipe.json to update in-place (static fields kept).
+    recipe_path: Path to the recipe.json to update in-place (static fields
+        kept).
 
 The script replaces only the ``imgref`` and ``images`` fields; all other fields
 (branding, tour, steps, …) are preserved from the existing file.
@@ -18,14 +20,16 @@ registry when the variable is absent (for local/manual builds).
 import json
 import os
 import sys
-from typing import Any
+from typing import cast
+
+JsonObject = dict[str, object]
 
 
 def _build_images(
     ctx_dir: str,
     registry: str,
     distro_name: str,
-) -> list[dict[str, Any]]:
+) -> list[JsonObject]:
     """Return the image list built from the Containerfile* files in ctx_dir.
 
     Args:
@@ -37,13 +41,11 @@ def _build_images(
         List of image descriptor dicts ready for recipe["images"].
     """
     arches = ["amd64", "arm64"]
-    images: list[dict[str, Any]] = []
+    images: list[JsonObject] = []
 
     containerfiles = sorted(
-        cf for cf in os.listdir(ctx_dir)
-        if cf.startswith("Containerfile")
-        and os.path.isfile(os.path.join(ctx_dir, cf))
-        and cf != "Containerfile.iso"
+        cf for cf in os.listdir(ctx_dir) if cf.startswith("Containerfile") and
+        os.path.isfile(os.path.join(ctx_dir, cf)) and cf != "Containerfile.iso"
     )
 
     for cf in containerfiles:
@@ -77,7 +79,7 @@ def main() -> None:
     )
 
     with open(recipe_path, encoding="utf-8") as fh:
-        recipe: dict[str, Any] = json.load(fh)
+        recipe = cast(JsonObject, json.load(fh))
 
     distro_name = str(recipe.get("distro_name", "Debian bootc"))
     images = _build_images(ctx_dir, registry, distro_name)

@@ -97,6 +97,7 @@ command -v bootupctl >/dev/null 2>&1 && bootupctl backend generate-update-metada
 if [ -n "${SHIM_VER}" ] && [ -d "/usr/lib/efi/shim/${SHIM_VER}/EFI/debian" ]; then
   product=$(cat /usr/lib/bootc/product-name 2>/dev/null || true)
   if [ -z "${product}" ]; then
+    # shellcheck source=/dev/null  # runtime file, absent from the build host
     product=$(. /etc/os-release 2>/dev/null && printf '%s' "${NAME:-Linux}")
   fi
   printf 'shimx64.efi,%s,,This is the boot entry for %s\n' "${product}" "${product}" \
