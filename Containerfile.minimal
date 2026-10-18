@@ -252,7 +252,8 @@ RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
         fstrim.timer \
         fstrim.service \
         logrotate.timer \
-        logrotate.service
+        logrotate.service \
+        systemd-logind.service
 
 # -----------------------------------------------------------------------------
 # Phase 4: ostree filesystem migration
