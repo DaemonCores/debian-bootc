@@ -19,7 +19,7 @@ metadata:
 - **Area**: Infra
 - **Category**: docker
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -40,3 +40,6 @@ Drop `git` and `curl` from Phase 1, and `apt purge --autoremove wget` after the 
 
 ## Next step
 `create ticket`
+
+## Resolution
+`git` and `curl` are no longer installed in `Containerfile.minimal` (nothing in the file, the shipped scripts or `workflows/tests.yml` uses them), and `wget` is purged with `--autoremove` right after the signing-key download and its `sha256sum -c`. Packages that depend on one of these tools still pull it in. Not yet verified by a real minimal image build.
