@@ -66,7 +66,8 @@ admission: $(VBIN)/python
 		'mypy>=2.3.1' \
 		'basedpyright>=1.40.1' \
 		'pydoclint>=0.9.1' \
-		'bandit>=1.9.4'
+		'bandit>=1.9.4' \
+		'pytest>=8'
 
 # No-op once the toolchain is provisioned (fast path for every py-using target).
 py-ready:
@@ -136,9 +137,13 @@ format-shell:
 # ---- test (local smoke checks — no container needed) ---------------------- #
 # Mirrors docs/testing-quality.md § Smoke checks.
 
-.PHONY: test
+.PHONY: test test-unit
 
-test: py-ready
+# Unit tests (pytest) for the Python scripts.
+test-unit: py-ready
+	$(VBIN)/pytest -q tests/unit
+
+test: py-ready test-unit
 	@# 1. Every runtime test has a diag; counts must match.
 	@name_count=$$(grep -c '^  - name:' workflows/tests.yml); \
 	 diag_count=$$(grep -c '^    diag:' workflows/tests.yml); \
