@@ -19,7 +19,7 @@ metadata:
 - **Area**: Backend
 - **Category**: code-quality
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -35,10 +35,12 @@ If nothing consumes it, a full GRUB compile and signing run on every cache miss 
 - `Containerfile.minimal:13-14` — 'arm64 uses u-boot-tools instead of grub-efi-arm64'
 - `workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:50` — only grub-efi-amd64-signed queried
 
-<!-- TODO: ask user — is grub-efi-arm64-signed consumed by a downstream image or by a BOOT_PKG override in the shared DaemonCores-CI pipeline? -->
 
 ## Suggested direction
 If the package has no consumer, remove the entry. If one exists, document it in the entry's comment.
 
 ## Next step
 `ask user`
+
+## Resolution
+Removed by user decision (2026-10-18): the `grub-efi-arm64-signed` entry in `workflows/bootc-debs-builder/packages.yml`, its `preinstall/output/grub-efi-arm64-signed/` control files and its Makefile postinst entry are deleted. arm64 images keep using `u-boot-tools` (`BOOT_PKG`). Nothing else referenced the package in this repo or in DaemonCores-CI.
