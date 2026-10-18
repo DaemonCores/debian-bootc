@@ -94,6 +94,27 @@ Environment:
 The harness installs QEMU with apt-get and needs sudo, so this runs on a
 Debian/Ubuntu host with /dev/kvm. It is not usable inside the dev container.
 
+## `scripts/rotate-apt-key.sh`
+
+rotate-apt-key.sh - rotate the APT repository signing key from CI.
+
+Subcommands:
+  rotate           Generate a fresh key pair and store the private key as the
+                   APT_GPG_KEY secret.  The private key only ever travels
+                   through a pipe into `gh secret set`: it is never kept in a
+                   variable, a file outside the throw-away GNUPGHOME, a log
+                   or an artifact.  Prints the public fingerprint on stdout.
+  publish-hash FPR Wait until the published gpg.key carries the fingerprint
+                   FPR, then rewrite BOOTC_GPG_SHA256 in the Containerfiles
+                   with the SHA-256 of the file as served.
+
+Environment:
+  GH_TOKEN          token with secrets:write (PAT_SECRETS); for `rotate`
+  KEY_URL           published public key (default: the GitHub Pages URL)
+  ROOT_DIR          repository root (default: parent of this script)
+  WAIT_ATTEMPTS     polling attempts for publish-hash (default 60)
+  WAIT_SECONDS      delay between attempts (default 20)
+
 ## `workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst`
 
 (no header comment)
