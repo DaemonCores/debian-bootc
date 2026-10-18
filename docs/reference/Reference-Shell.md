@@ -79,6 +79,21 @@ The interactive wizard creates the user account, sets the root
 password, and configures sudo, the SSH root-login policy, the
 hostname, and the locale/keyboard layout.
 
+## `scripts/e2e-local.sh`
+
+e2e-local.sh - run the CI boot test (workflows/tests.yml) against a local
+image, using the same harness as CI (DaemonCores-CI/image-test/image-test.sh).
+
+Usage: scripts/e2e-local.sh IMAGE [ARCH]
+  IMAGE  image already present in local podman storage (e.g. localhost/x:minimal)
+  ARCH   amd64 (default) or arm64
+
+Environment:
+  CI_REPO  path to a DaemonCores-CI checkout (default: ../DaemonCores-CI)
+
+The harness installs QEMU with apt-get and needs sudo, so this runs on a
+Debian/Ubuntu host with /dev/kvm. It is not usable inside the dev container.
+
 ## `workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst`
 
 (no header comment)

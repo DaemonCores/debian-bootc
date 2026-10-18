@@ -24,10 +24,11 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 | Layer | Runner | Config file | Runtime / version |
 |-------|--------|-------------|-------------------|
 | Local smoke checks | `make test` — manifest integrity (name/diag count), Python syntax, ruff [src: file: Makefile:1] | `workflows/tests.yml`, `scripts/gen-recipe.py` | Local, no container needed |
+| Unit tests (pytest) | `make test-unit`: `tests/unit/` covers `gen-recipe.py`, `gen_docs.py`, the `domain-set` / `ifupdown2-autoconf` boot scripts (sandboxed root, stub binaries) and a static check of `workflows/tests.yml` (name/run/diag, arch/variant values) [src: file: tests/unit/test_shell_scripts.py:1] [src: file: tests/unit/test_tests_manifest.py:1] | `pyproject.toml` | Local, no container, no privilege |
+| Local boot test (e2e) | `make e2e IMAGE=<ref> [ARCH=amd64]` runs the CI harness `DaemonCores-CI/image-test/image-test.sh` on a local image [src: file: scripts/e2e-local.sh:1] | `workflows/tests.yml` | Needs podman, sudo, apt-get and `/dev/kvm` on a Debian/Ubuntu host; the sibling `../DaemonCores-CI` checkout or `CI_REPO` |
 | Runtime image tests | DaemonCores-CI image workflow harness: `bootc install` to a virtual disk, QEMU/KVM + UEFI boot, then SSH [src: file: docs/architecture.md:61] | `workflows/tests.yml` (`boot_timeout: 900`, `reboot_timeout: 300`) [src: file: workflows/tests.yml:24] | Debian 13 Trixie image under test [src: file: Containerfile:5]; arches amd64 and arm64 [src: file: workflows/tests.yml:13] |
 | Rust unit test (bootupd) | `cargo test` inside the package build [src: file: workflows/bootc-debs-builder/packages.yml:1307] | `/build/bootupd/Cargo.toml` (upstream source, not in repo) | Rust via rustup, minimal profile, unpinned [src: file: workflows/env.yml:101] |
 | Build-time content checks | Bash, `set -euo pipefail` [src: file: workflows/bootc-debs-builder/packages.yml:20] | `workflows/bootc-debs-builder/packages.yml` | `-buildenv` image built from `workflows/env.yml` [src: file: workflows/env.yml:5] |
-| Python | No test runner (no pytest/unittest config) | — | Python 3, unpinned [src: file: scripts/gen-recipe.py:1] |
 
 Test-entry fields: `name`, `run` (pass on exit 0), `expect` (optional output match), `diag` (required), `arch` (`amd64`/`arm64`), `variant` (`main`/`minimal`). A gated test that does not match the current target reports SKIP, not FAIL [src: file: workflows/tests.yml:5-22].
 <!-- kronn:section:end -->
@@ -62,7 +63,8 @@ Build-time suites: 13 labelled content checks across the `packages.yml` build sc
 <!-- kronn:section name="untested" curated="ai" owner="audit" audit="2026-10-18" -->
 ## Untested components
 
-- `scripts/gen-recipe.py`: no unit tests [src: file: scripts/gen-recipe.py:1].
+- `bootc-finalize`, `firstboot-user-setup`, `policy-rc.d`: no unit tests (only `domain-set` and `ifupdown2-autoconf` are covered) [src: file: tests/unit/test_shell_scripts.py:1].
+- `make e2e` has only been exercised up to its prerequisite check (no `/dev/kvm` in the dev container); the full boot path is validated by CI only.
 - Installer ISOs (`Containerfile.iso`, `bootc-installer`): `workflows/tests.yml` has no installer/ISO test; the build only checks that the launcher and GResource bundle exist [src: file: workflows/bootc-debs-builder/packages.yml:1683].
 - `fisherman`: no runtime test in `workflows/tests.yml` [src: file: workflows/bootc-debs-builder/packages.yml:1541].
 - Minimal image autoupdate behaviour (`/usr/lib/bootc/autoupdate`, `AUTOUPDATE` arg): no runtime test [src: file: Containerfile.minimal:158].
