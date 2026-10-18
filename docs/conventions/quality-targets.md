@@ -33,7 +33,15 @@ Decided by the maintainer on 2026-10-18 [src: user:pikatsuto:2026-10-18: disc-dc
 
 The maintainer's `cunegonde-ai/agentic-backend` repository is the reference for lint and documentation generation. Copy its lint config (including its custom rules) and its doc-generation config **as is** into this project [src: user:pikatsuto:2026-10-18: disc-dc54c008 quality-targets-docgen]. Where its lint config differs from the tool table above, the reference config wins. Its organisation of handoff `.md` files is also a candidate model for this repo [src: user:pikatsuto:2026-10-18: disc-dc54c008 quality-targets-docgen].
 
-That repository is separate from this one and has not been read yet. List the exact tools, files and rules it contains during KT-1/KT-2, when copying them. Do not describe them here from memory.
+**KT-1 audit of the reference (2026-10-18):** tools found and copied/not-copied:
+
+| Item | Copied | Note |
+|------|--------|------|
+| `pyproject.toml` — ruff, yapf, docformatter, pydoclint, mypy, basedpyright sections | ✓ copied as-is into this repo; only `target-version` (py311), `mypy_path`, `basedpyright.extraPaths` and `basedpyright.pythonVersion` adapted for the single-file scripts/ surface | |
+| `setup.cfg` admission extras (ruff, yapf, docformatter, mypy, basedpyright, pydoclint, bandit versions) | ✓ pinned in `Makefile` `admission` target; not a Python package so no setup.cfg | |
+| `scripts/style.py` — custom readability gate | ✗ not portable: imports from `tests.enforcement.*` (a cunegonde-ai internal package); equivalent rules for debian-bootc deferred to KT-2 | |
+| `scripts/gen_docs.py` — API/docstring reference generation | ✗ not portable: tightly coupled to the cunegonde-ai Python package structure; doc generation target deferred to KT-2 | |
+| `hooks/pre-commit` | ✗ not applicable: tied to cunegonde-ai's doc-submodule, facet architecture and frontend; debian-bootc pre-commit (optional) is deferred to KT-2 | |
 
 ## Languages without a Google style guide
 
