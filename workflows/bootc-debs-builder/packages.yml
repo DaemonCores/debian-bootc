@@ -1710,4 +1710,3 @@ packages:
 
       test -s "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb" \
         || { echo "ERROR: bootc-installer deb empty or missing" >&2; exit 1; }
-
