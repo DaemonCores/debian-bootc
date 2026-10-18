@@ -6,6 +6,7 @@ coherent (unique names, resolvable deps and sources) and ``gen-recipe.py``
 runs end to end against the real Containerfiles.
 """
 
+import fnmatch
 import json
 import re
 import subprocess
@@ -93,3 +94,26 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
   result = json.loads(recipe.read_text())
   assert result['keep'] == 1
   assert result['images']
+
+
+def _ignore_patterns() -> list[str]:
+  lines = (ROOT / '.dockerignore').read_text().splitlines()
+  return [l.strip() for l in lines if l.strip() and not l.startswith('#')]
+
+
+@pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
+def test_dockerignore_keeps_copy_sources(containerfile: Path) -> None:
+  """No COPY source is excluded from the build context by .dockerignore."""
+  patterns = [p.rstrip('/') for p in _ignore_patterns()]
+  for source in _local_sources(containerfile):
+    top = source.removeprefix('./').split('/')[0]
+    for pattern in patterns:
+      assert not fnmatch.fnmatch(top, pattern), (
+          f'{containerfile.name}: {source} excluded by .dockerignore {pattern}')
+
+
+def test_dockerignore_excludes_local_state() -> None:
+  """Agent state, MCP config and env files stay out of the build context."""
+  patterns = set(_ignore_patterns())
+  for required in ('.env*', '.kronn/', '.claude/', '.mcp.json*', 'docs/'):
+    assert required in patterns, f'{required} missing from .dockerignore'
