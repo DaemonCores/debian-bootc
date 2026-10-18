@@ -1,18 +1,5 @@
+# ifupdown2-autoconf: auto-configured on boot, remove this line to disable
+# interfaces(5) file used by ifup(8) and ifdown(8)
+
 auto lo
 iface lo inet loopback
-
-# QEMU Q35 virtio-net — interface name depends on QEMU/kernel version
-allow-hotplug enp0s3
-iface enp0s3 inet dhcp
-
-allow-hotplug enp0s4
-iface enp0s4 inet dhcp
-
-allow-hotplug enp1s0
-iface enp1s0 inet dhcp
-
-allow-hotplug enp2s0
-iface enp2s0 inet dhcp
-
-allow-hotplug eth0
-iface eth0 inet dhcp
