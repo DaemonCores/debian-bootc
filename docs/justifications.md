@@ -28,7 +28,7 @@ Any downstream image must preserve those links. Replacing them with ordinary dir
 
 ## Two networking profiles
 
-The full image uses ifupdown2 because it is also the networking model expected by the Proxmox downstream. The package carries bootc-specific ordering and first-boot autoconfiguration.
+The full image uses ifupdown2 because it is also the networking model expected by the DaemonCores-VE downstream (the maintainer's renamed Proxmox VE fork; see [glossary](glossary.md)). The package carries bootc-specific ordering and first-boot autoconfiguration.
 
 The minimal image uses systemd-networkd to reduce dependencies and background processes. This is an intentional image-level difference, not two interchangeable configurations.
 

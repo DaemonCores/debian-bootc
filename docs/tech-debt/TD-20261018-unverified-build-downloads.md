@@ -1,0 +1,48 @@
+---
+name: td-20261018-unverified-build-downloads
+description: Build recipes fetch toolchains and the OSTree source tarball over the network without checksum or version pinning.
+metadata:
+  type: tech-debt
+  audit_history:
+    - date: 2026-10-18
+      status: Verified in source
+      reviewer: Full audit
+      note: first detection
+    - date: 2026-10-18
+      status: Verified in source
+      reviewer: Security audit 0.8.2
+      note: re-confirmed at cited lines; ID reused, no slug change
+    - date: 2026-10-18
+      status: Confirmed by user
+      reviewer: Kronn audit validation card
+      note: "Confirmed through an audit validation card."
+---
+
+# TD-20261018-unverified-build-downloads
+
+- **Area**: Security
+- **Category**: security
+- **Severity**: Medium
+- **Status**: Confirmed by user
+- **Effort**: M
+- **Blast radius**: module (5-10 files)
+
+## Problem (fact)
+The buildenv recipe downloads `yq` from `releases/latest`, resolves `gh` from the `releases/latest` API, and pipes `sh.rustup.rs` into `sh`, all without a checksum. In `packages.yml`, the OSTree release tarball is piped straight into `tar` with no `sha256sum -c`, while the bootupd and bootc downloads are checksum-verified.
+
+## Impact
+A compromised or changed upstream artifact enters the build environment, or the shipped `ostree` package, which is part of the boot path, without detection. `latest` resolution also makes buildenv rebuilds non-reproducible: a monthly rebuild can silently pick up a breaking yq/gh major version.
+
+## Where (pointers)
+- `workflows/env.yml:74-83` — yq from releases/latest, no checksum
+- `workflows/env.yml:89-97` — gh version resolved from releases/latest, no checksum
+- `workflows/env.yml:99-102` — `curl https://sh.rustup.rs | sh`
+- `workflows/bootc-debs-builder/packages.yml:1411-1413` — ostree tarball piped to tar, no checksum
+- `workflows/bootc-debs-builder/packages.yml:1291-1295` — bootupd download IS checksum-verified (contrast)
+- `workflows/bootc-debs-builder/packages.yml:1483-1487` — bootc download IS checksum-verified (contrast)
+
+## Suggested direction
+Pin yq/gh/rustup-init versions with per-arch SHA-256 values in env.yml, as is already done for `BOOTC_GPG_SHA256`. Add an `OSTREE_SHA256` env var and `sha256sum -c` to the ostree build, following the bootupd/bootc pattern.
+
+## Next step
+`create ticket`
