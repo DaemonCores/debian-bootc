@@ -19,7 +19,7 @@ metadata:
 - **Area**: Backend
 - **Category**: code-quality
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Mitigated
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -39,3 +39,6 @@ Use one entry parameterised on `dpkg --print-architecture` (target and EFI suffi
 
 ## Next step
 `create ticket`
+
+## Resolution
+Partially addressed: `tests/unit/test_packages_manifest.py` fails when `GRUB_VER`, `GRUB_FEDORA_BRANCH` or `GRUB_PINNED_COMMIT` differ between the two entries, so a one-sided bump can no longer ship unnoticed. The duplicated build script itself is unchanged: merging it into one parameterised entry cannot be validated without a real amd64 and arm64 package build, so the debt stays open for that part.
