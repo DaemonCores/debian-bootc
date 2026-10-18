@@ -1,0 +1,1 @@
+Not applicable: this repository builds Debian bootc OS container images (Containerfile, Containerfile.minimal, Containerfile.iso, kernel configs, systemd/apt drop-ins) and exposes no HTTP/REST/GraphQL API — the only code is a CLI helper, `scripts/gen-recipe.py`.

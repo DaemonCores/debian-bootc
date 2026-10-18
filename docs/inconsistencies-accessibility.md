@@ -1,0 +1,1 @@
+Not applicable: this repo builds Debian bootc OS images (Containerfiles, shell scripts, config files) and ships no HTML/CSS/JS or GUI code — the only UI-adjacent files are branding SVGs in `assets/installer/` consumed by the external GTK bootc-installer, whose widgets live outside this repo.
