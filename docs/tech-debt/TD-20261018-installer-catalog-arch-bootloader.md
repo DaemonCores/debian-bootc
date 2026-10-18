@@ -18,7 +18,7 @@ metadata:
 
 - **Area**: Other
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Mitigated
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -39,3 +39,6 @@ Pass `ARCH` to gen-recipe.py and emit only matching images, with the bootloader 
 
 ## Next step
 `create ticket`
+
+## Resolution
+`gen-recipe.py` reads `ARCH` and lists only images of that architecture; `Containerfile.iso` passes its `ARCH` build argument, and `tests/unit/test_gen_recipe.py` covers the filter. The per-arch `bootloader` value is unchanged (`grub2` for every entry): the values the installer accepts for the u-boot arm64 images are not documented in this repo, so that part stays open. Not yet verified by a real ISO build.
