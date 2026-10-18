@@ -21,7 +21,8 @@ SHELL_SRCS := \
 	workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf \
 	workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize \
 	workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize \
-	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup
+	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup \
+	scripts/e2e-local.sh
 
 # DEBIAN/postinst files use `set -e` (POSIX sh, not full bash pipefail).
 POSTINST_SRCS := \
@@ -186,6 +187,14 @@ build:
 	  --build-arg PRODUCT_NAME="debian bootc" \
 	  -f Containerfile -t debian-bootc:local .
 
+# ---- end-to-end boot test (needs podman, sudo, /dev/kvm; Debian/Ubuntu host) - #
+
+.PHONY: e2e
+
+# Usage: make e2e IMAGE=debian-bootc:local [ARCH=amd64]
+e2e:
+	scripts/e2e-local.sh "$(IMAGE)" "$(or $(ARCH),amd64)"
+
 # ---- help ----------------------------------------------------------------- #
 
 .PHONY: help all
@@ -205,5 +214,6 @@ help:
 	@echo "  make lint                 — alias for check"
 	@echo "  make format               — yapf + docformatter + ruff --fix + shfmt"
 	@echo "  make test                 — local smoke checks (no container needed)"
+	@echo "  make e2e IMAGE=<ref>      — boot-test a local image like CI (needs /dev/kvm)"
 	@echo "  make build                — podman build (amd64 host, full image)"
 	@echo "  make docs                 — doc generation (KT-2, not yet implemented)"
