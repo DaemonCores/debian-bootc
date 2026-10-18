@@ -110,8 +110,4 @@ Debian/Ubuntu host with /dev/kvm. It is not usable inside the dev container.
 
 (no header comment)
 
-## `workflows/bootc-debs-builder/preinstall/output/grub-efi-arm64-signed/DEBIAN/postinst`
-
-(no header comment)
-
 <!-- gen:reference end -->
