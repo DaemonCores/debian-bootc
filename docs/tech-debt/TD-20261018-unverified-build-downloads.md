@@ -23,7 +23,7 @@ metadata:
 - **Area**: Security
 - **Category**: security
 - **Severity**: Medium
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: M
 - **Blast radius**: module (5-10 files)
 
@@ -46,3 +46,6 @@ Pin yq/gh/rustup-init versions with per-arch SHA-256 values in env.yml, as is al
 
 ## Next step
 `create ticket`
+
+## Resolution
+`workflows/env.yml` now pins yq (v4.54.1), gh (v2.102.0) and rustup-init (1.29.1, from the versioned `rustup/archive` path instead of `sh.rustup.rs`) with per-arch SHA-256 checked by `sha256sum -c`. `workflows/bootc-debs-builder/packages.yml` downloads the OSTree tarball to a file and checks `OSTREE_SHA256` before extraction, like bootupd and bootc. The digests come from the GitHub release API and the rustup `.sha256` files. Not yet exercised by a real buildenv or ostree build; bumping a version now requires updating its digest.
