@@ -1,0 +1,18 @@
+{
+  "_readme": "Managed by Kronn (https://github.com/DocRoms/Kronn). Tracks audit/validation state across machines. Do not delete or gitignore — required for accurate audit status when this repo is cloned to another Kronn instance.",
+  "audits": [
+    {
+      "date": "2026-10-18",
+      "kronn_version": "legacy",
+      "type": "legacy",
+      "provenance": "legacy_evidence"
+    },
+    {
+      "date": "2026-10-18",
+      "kronn_version": "0.15.0",
+      "type": "full",
+      "provenance": "kronn_audit"
+    }
+  ],
+  "validated_at": "2026-10-18"
+}

@@ -10,3 +10,22 @@ Archive.zip
 # Secrets
 .env
 .secrets
+.kronn/tmp/
+.kronn/
+.mcp.json
+/.claude/agents/architect.md
+/.claude/agents/tech-lead.md
+/.claude/agents/qa-engineer.md
+/.claude/agents/devils-advocate.md
+/.gemini/agents/architect.md
+/.gemini/agents/tech-lead.md
+/.gemini/agents/qa-engineer.md
+/.gemini/agents/devils-advocate.md
+/.codex/agents/architect.toml
+/.codex/agents/tech-lead.toml
+/.codex/agents/qa-engineer.toml
+/.codex/agents/devils-advocate.toml
+/.copilot/agents/architect.md
+/.copilot/agents/tech-lead.md
+/.copilot/agents/qa-engineer.md
+/.copilot/agents/devils-advocate.md

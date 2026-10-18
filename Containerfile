@@ -193,8 +193,7 @@ RUN mkdir -p /var/home \
     && ln -s var/opt / \
     && ln -s var/roothome /root \
     && ln -s sysroot/ostree /ostree \
-    && ln -s var/usr/lib/locale /usr/lib/locale \
-    && systemctl mask systemd-logind.service
+    && ln -s var/usr/lib/locale /usr/lib/locale 
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE

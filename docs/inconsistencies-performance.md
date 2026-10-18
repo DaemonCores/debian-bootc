@@ -1,0 +1,1 @@
+Not applicable: this repo builds bootable Debian OS container images (Containerfiles, shell scripts, systemd units) and has no database, HTTP service, frontend or request-serving backend to profile; build-cache and image-size concerns are already tracked by the Docker audit (TD-20261018-iso-cache-order-recipe-before-apt, TD-20261018-full-image-install-recommends).

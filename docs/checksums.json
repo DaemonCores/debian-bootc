@@ -1,0 +1,177 @@
+{
+  "audited_at": "2026-10-18T17:07:13.633383203+00:00",
+  "mappings": [
+    {
+      "ai_file": "docs/AGENTS.md",
+      "audit_step": 1,
+      "sources": [
+        "README.md",
+        "package.json",
+        "Cargo.toml",
+        "composer.json",
+        "go.mod",
+        "docker-compose.yml",
+        "Makefile",
+        "Dockerfile"
+      ],
+      "checksums": {
+        "README.md": "0be5d5fb600b5f104a7deb6e328dae1c582fefc63761aa9f2ce05f3be1295e68"
+      }
+    },
+    {
+      "ai_file": "docs/repo-map.md",
+      "audit_step": 3,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/coding-rules.md",
+      "audit_step": 4,
+      "sources": [
+        "package.json",
+        "Cargo.toml",
+        "tsconfig.json",
+        "rustfmt.toml",
+        "pyproject.toml"
+      ],
+      "checksums": {}
+    },
+    {
+      "ai_file": "docs/testing-quality.md",
+      "audit_step": 5,
+      "sources": [
+        "package.json",
+        "Cargo.toml",
+        "pyproject.toml"
+      ],
+      "checksums": {}
+    },
+    {
+      "ai_file": "docs/architecture/overview.md",
+      "audit_step": 6,
+      "sources": [
+        "docker-compose.yml",
+        "src/main.*",
+        "src/lib.*",
+        "src/index.*"
+      ],
+      "checksums": {}
+    },
+    {
+      "ai_file": "docs/operations/debug-operations.md",
+      "audit_step": 7,
+      "sources": [
+        "docker-compose.yml",
+        "Makefile",
+        "Dockerfile"
+      ],
+      "checksums": {}
+    },
+    {
+      "ai_file": "docs/inconsistencies-tech-debt.md",
+      "audit_step": 8,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/decisions.md",
+      "audit_step": 9,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/inconsistencies-security.md",
+      "audit_step": 10,
+      "sources": [
+        "docker-compose.yml",
+        "Dockerfile",
+        ".github/workflows",
+        ".gitlab-ci.yml",
+        "package.json",
+        "composer.json",
+        "Cargo.toml",
+        ".env",
+        ".env.dist",
+        ".env.example"
+      ],
+      "checksums": {}
+    },
+    {
+      "ai_file": "docs/inconsistencies-docker.md",
+      "audit_step": 11,
+      "sources": [
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "compose.yaml",
+        "compose.yml",
+        ".dockerignore"
+      ],
+      "checksums": {
+        ".dockerignore": "39352a8b63dd7649ed654448b32da1881571c69c016e9526d1b6473353a6e8ea"
+      }
+    },
+    {
+      "ai_file": "docs/inconsistencies-performance.md",
+      "audit_step": 12,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/inconsistencies-accessibility.md",
+      "audit_step": 13,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/inconsistencies-database.md",
+      "audit_step": 14,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/inconsistencies-api.md",
+      "audit_step": 15,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    },
+    {
+      "ai_file": "docs/inconsistencies-code-quality.md",
+      "audit_step": 16,
+      "sources": [
+        "__GIT_SOURCE_TREE__"
+      ],
+      "checksums": {
+        "__GIT_SOURCE_TREE__": "07ea7490e3fa76ccf446c8e63b00f45a27441c80bbb364c71670891f68d1ef06"
+      }
+    }
+  ]
+}
