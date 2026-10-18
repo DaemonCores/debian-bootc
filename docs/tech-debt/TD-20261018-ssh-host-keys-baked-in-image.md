@@ -19,7 +19,7 @@ metadata:
 - **Area**: Security
 - **Category**: security
 - **Severity**: High
-- **Status**: Confirmed by user
+- **Status**: Fixed
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 

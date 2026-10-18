@@ -167,7 +167,7 @@ RUN for _r in 1 2 3 4 5; do \
 # -----------------------------------------------------------------------------
 # bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
 # read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# Mirrors the main Containerfile exactly; do NOT change the layout or bootc fails.
+# Mirrored in Containerfile.minimal; do NOT change the layout or bootc fails.
 COPY ./src/debianpostinstall /
 RUN mkdir -p /var/home \
         /var/roothome \
@@ -176,7 +176,7 @@ RUN mkdir -p /var/home \
         /var/opt \
         /var/usr/lib/locale \
         /sysroot/ostree \
-    && cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true \
+    && { cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true; } \
     && rm -rf /home \
         /root \
         /mnt \
@@ -193,7 +193,9 @@ RUN mkdir -p /var/home \
     && ln -s var/opt / \
     && ln -s var/roothome /root \
     && ln -s sysroot/ostree /ostree \
-    && ln -s var/usr/lib/locale /usr/lib/locale 
+    && ln -s var/usr/lib/locale /usr/lib/locale \
+    && systemctl enable ssh-host-keygen.service \
+    && rm -f /etc/ssh/ssh_host_*
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE

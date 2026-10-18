@@ -17,16 +17,12 @@ HOST=$(hostname -s)
 # we read it now rather than from /etc/resolv.conf, which is written by dhclient
 # running in the background and is not yet populated when ExecStartPost fires.
 FQDN=$(cat /run/ifupdown2-dhcp-domain 2>/dev/null | tr -d '[:space:]' || echo "")
-HOSTS=$(cat /etc/hosts 2>/dev/null || true)
-
 [[ "${FQDN}" == "" ]] \
   && FQDN="local"
 
-#######################################
-# Render /etc/hosts from the template, substituting IP/host/domain.
-# Globals:
-#   IP, HOST, FQDN
-#######################################
+# Reject FQDN values that could break the sed substitution (| & \ characters).
+[[ "${FQDN}" =~ ^[A-Za-z0-9.-]{1,253}$ ]] || FQDN="local"
+
 setdomaine() {
   cp /etc/hosts.tpl /etc/hosts
   sed -i \
@@ -36,26 +32,7 @@ setdomaine() {
     /etc/hosts
 }
 
-#######################################
-# Rewrite the host's own entry in an already-populated /etc/hosts.
-# Globals:
-#   IP, HOST, FQDN, HOSTS
-#######################################
-resetdomaine() {
-  sed -i "/${HOST}/d" /etc/hosts
-  sed -i "/${IP}/d" /etc/hosts
-  echo "${IP}    ${HOSTS}.${FQDN} ${HOST}" >>/etc/hosts
-}
-
-# The unquoted ${HOSTS} is intentional: word-splitting collapses the file to a
-# single logical line so wc -l reports whether it holds one entry.
-# shellcheck disable=SC2086
-lines=$(echo ${HOSTS} | wc -l)
-if [[ ! -f "/etc/hosts" || "${HOSTS}" == "" || "${lines}" == "1" ]]; then
-  setdomaine || true
-else
-  resetdomaine || true
-fi
+setdomaine || true
 
 cp /etc/issue.tpl /etc/issue
 sed -i "s|{{ IP }}|${IP}|g" /etc/issue

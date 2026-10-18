@@ -205,6 +205,12 @@ tests:
     diag: |
       systemctl status ssh --no-pager -l 2>&1 | tail -n 15
       journalctl -b -u ssh --no-pager 2>&1 | tail -n 15
+  - name: SSH host keys regenerated at first boot
+    run: test -f /etc/ssh/ssh_host_ed25519_key
+    diag: |
+      ls -la /etc/ssh/ssh_host_* 2>&1 || echo "no host keys found"
+      systemctl status ssh-host-keygen --no-pager -l 2>&1 | tail -20
+      journalctl -u ssh-host-keygen --no-pager -b 2>&1 | tail -10
   - name: ifupdown2-autoconf marker present
     variant: main
     run: grep -q '^# ifupdown2-autoconf' /etc/network/interfaces
