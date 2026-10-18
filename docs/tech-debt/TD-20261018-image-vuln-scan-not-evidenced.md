@@ -24,7 +24,7 @@ metadata:
 - **Blast radius**: module (5-10 files)
 
 ## Problem (fact)
-`.github/workflows/pipeline.yml` only calls `DaemonCores/DaemonCores-CI/.github/workflows/full-pipeline.yml@main`; the image build, tag and push steps are defined there. No file in this repo references `trivy`, `grype`, `snyk` or an SBOM tool (grep over `.github/`, `workflows/`, `config.yml`). Whether the shared workflow scans images is not checkable from this repo. <!-- TODO: verify — DaemonCores-CI full-pipeline.yml is outside this repository -->
+`.github/workflows/pipeline.yml` only calls `DaemonCores/DaemonCores-CI/.github/workflows/full-pipeline.yml@main`; the image build, tag and push steps are defined there. No file in this repo references `trivy`, `grype`, `snyk` or an SBOM tool (grep over `.github/`, `workflows/`, `config.yml`). Whether the shared workflow scans images is not checkable from this repo. Checked 2026-10-18 in the DaemonCores-CI checkout: no `trivy`, `grype`, `snyk`, `sbom` or `syft` reference in its workflows, actions, scripts or image-test, so the shared pipeline does not scan images either.
 
 ## Impact
 Published OS images (kernel, firmware, openssh-server, podman, ~50 Debian packages) may ship known CVEs with no gate or report before cosign signing and push.
