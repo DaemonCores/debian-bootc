@@ -98,15 +98,15 @@ tests:
     run: test -f /usr/share/debian-bootc/sb_signing.crt
     diag: |
       ls -la /usr/share/debian-bootc/ 2>&1
-  # arm64: U-Boot tooling replaces GRUB/shim. Verify the U-Boot tools are
-  # present on an arm64 build (mkimage, fw_printenv, fw_setenv). Skipped on
-  # amd64 where the minimal image uses GRUB instead.
+  # arm64: U-Boot tooling replaces GRUB/shim. Verify mkimage is present on an
+  # arm64 build. Skipped on amd64 where the image uses GRUB instead.
+  # Note: Debian Trixie's u-boot-tools ships ONLY mkimage; fw_printenv and
+  # fw_setenv are not in the package (no /usr/bin/fw_printenv in the filelist).
   - name: u-boot-tools present (arm64 boot stack)
     arch: arm64
-    run: command -v mkimage && command -v fw_printenv && command -v fw_setenv
+    run: command -v mkimage
     diag: |
       command -v mkimage 2>&1 || echo absent
-      command -v fw_printenv 2>&1 || echo absent
       dpkg -l 2>&1 | grep -i u-boot
 
   # ── kernel / initramfs / dracut ────────────────────────────────────────
