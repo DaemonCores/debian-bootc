@@ -1,0 +1,12 @@
+# shellcheck global config — debian-bootc
+# See: https://github.com/koalaman/shellcheck/wiki/Ignore
+#
+# Per-script disables use inline `# shellcheck disable=SCxxxx` with a comment
+# explaining why (see docs/coding-rules.md § Shell).  Global disables here are
+# only for rules that would fire correctly but are inapplicable to the whole
+# project.
+
+# SC2250: Prefer putting braces around variable references — the project
+# already uses "${VAR}" everywhere; the rule fires on $? and $# in safe
+# contexts.  Suppressed globally; violations in new code are caught by review.
+disable=SC2250

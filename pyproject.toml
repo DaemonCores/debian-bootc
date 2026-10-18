@@ -1,0 +1,30 @@
+# pyproject.toml — debian-bootc
+# Lint/format config for scripts/gen-recipe.py (the repo's only Python file).
+# Ruff config copied from cunegonde-ai/agentic-backend (the reference repo);
+# see docs/conventions/quality-targets.md § Reference configuration.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 80
+
+[tool.ruff.lint]
+select = [
+    "F",      # pyflakes
+    "E", "W", # pycodestyle
+    "I",      # isort
+    "N",      # pep8-naming
+    "D",      # pydocstyle (google convention below)
+    "ANN",    # flake8-annotations
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "RET",    # flake8-return
+    "PIE",    # flake8-pie
+    "PERF",   # perflint
+    "RUF",    # ruff-specific
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
