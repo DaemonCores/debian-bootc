@@ -68,6 +68,17 @@ tests:
       systemctl status networking.service --no-pager -l 2>&1 | tail -20
       echo '--- networking.service journal ---'
       journalctl -u networking.service --no-pager -b 2>&1 | tail -30
+  - name: systemd-logind not masked
+    run: "! (systemctl is-enabled systemd-logind 2>&1 | grep -q masked)"
+    diag: |
+      systemctl is-enabled systemd-logind 2>&1
+      systemctl status systemd-logind --no-pager -l 2>&1 | tail -20
+      cat /etc/systemd/system/systemd-logind.service.d/headless.conf 2>&1 || echo "drop-in absent"
+  - name: systemd-logind FailureAction=none
+    run: systemctl show systemd-logind | grep -q '^FailureAction=none'
+    diag: |
+      systemctl show systemd-logind | grep FailureAction 2>&1
+      cat /etc/systemd/system/systemd-logind.service.d/headless.conf 2>&1 || echo "drop-in absent"
 
   # ── bootloader / secure boot ───────────────────────────────────────────
   - name: bootupd present
@@ -194,6 +205,35 @@ tests:
     diag: |
       systemctl status ssh --no-pager -l 2>&1 | tail -n 15
       journalctl -b -u ssh --no-pager 2>&1 | tail -n 15
+  - name: ifupdown2-autoconf marker present
+    variant: main
+    run: grep -q '^# ifupdown2-autoconf' /etc/network/interfaces
+    diag: |
+      cat /etc/network/interfaces 2>&1
+      ls -la /etc/network/ 2>&1
+  - name: main image interface has routable IP
+    variant: main
+    run: ip -4 addr show scope global | grep -q inet
+    diag: |
+      ip addr 2>&1
+      cat /etc/network/interfaces 2>&1
+      systemctl status networking.service --no-pager -l 2>&1 | tail -20
+      journalctl -u networking.service --no-pager -b 2>&1 | tail -30
+  - name: systemd-networkd active (minimal)
+    variant: minimal
+    run: systemctl is-active systemd-networkd
+    diag: |
+      systemctl status systemd-networkd --no-pager -l 2>&1 | tail -20
+      journalctl -u systemd-networkd --no-pager -b 2>&1 | tail -20
+      ip addr 2>&1
+  - name: minimal image interface has routable IP
+    variant: minimal
+    run: ip -4 addr show scope global | grep -q inet
+    diag: |
+      ip addr 2>&1
+      networkctl 2>&1 | head -20
+      systemctl status systemd-networkd --no-pager -l 2>&1 | tail -20
+      journalctl -u systemd-networkd --no-pager -b 2>&1 | tail -20
 
   # ── first-boot tooling shipped ─────────────────────────────────────────
   # firstboot-user-setup is installed in the MAIN image only; the minimal image
