@@ -29,3 +29,8 @@ Archive.zip
 /.copilot/agents/tech-lead.md
 /.copilot/agents/qa-engineer.md
 /.copilot/agents/devils-advocate.md
+__pycache__/
+.pytest_cache/
+.venv/
+.mypy_cache/
+.ruff_cache/
