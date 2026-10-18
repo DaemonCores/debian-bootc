@@ -12,7 +12,7 @@ Set once during audit; apply to every `docs/` file.
 - Documentation language: English. This governs new documentation only; preserve every existing document in its current language.
 - Ticket language: English.
 - Ticket IDs in code comments: not observed in the codebase. <!-- TODO: ask user -->
-- Test policy: every change to boot, filesystem, networking or service behaviour adds a runtime test with a `diag` command to `workflows/tests.yml`, gated by `arch`/`variant` when target-specific; tests run on a QEMU boot of the built image and a failure blocks the push. Target (not yet in place): unit, integration and end-to-end tests for every language, runnable locally wherever possible — see [quality-targets](conventions/quality-targets.md).
+- Test policy: every change to boot, filesystem, networking or service behaviour adds a runtime test with a `diag` command to `workflows/tests.yml`, gated by `arch`/`variant` when target-specific; tests run on a QEMU boot of the built image and a failure blocks the push. Local tooling in place: `make test` (pytest unit tests for Python and the ifupdown2 boot scripts, manifest checks) and `make e2e IMAGE=<ref>` (CI boot harness on a local image, needs `/dev/kvm`) — see [testing-quality](testing-quality.md). Still missing: build-level integration tests, see [quality-targets](conventions/quality-targets.md).
 
 > **Rules:** Use the project parameters above; never force-translate an existing document. Update `docs/` after learning something new.
 > **MCP:** No MCP server docs exist in this project yet (`docs/operations/mcp-servers/` is absent); if one is added later as `docs/operations/mcp-servers/<name>.md`, read it before calling that MCP tool.
