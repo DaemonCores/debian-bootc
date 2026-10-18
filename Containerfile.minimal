@@ -128,8 +128,6 @@ RUN apt update \
     && apt install -y --no-install-recommends \
         ca-certificates \
         openssl \
-        git \
-        curl \
         wget \
     && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
     && rm -f \
@@ -156,7 +154,8 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
         | sha256sum -c - \
     && mkdir -p /usr/lib/bootc \
     && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name \
-    && printf '%s' "${AUTOUPDATE}" > /usr/lib/bootc/autoupdate
+    && printf '%s' "${AUTOUPDATE}" > /usr/lib/bootc/autoupdate \
+    && apt-get purge -y --autoremove wget
 
 # -----------------------------------------------------------------------------
 # Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
