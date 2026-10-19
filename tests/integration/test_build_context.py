@@ -105,7 +105,7 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
 
 def _ignore_patterns() -> list[str]:
     lines = (ROOT / '.dockerignore').read_text().splitlines()
-    return [l.strip() for l in lines if l.strip() and not l.startswith('#')]
+    return [ln.strip() for ln in lines if ln.strip() and not ln.startswith('#')]
 
 
 @pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
@@ -116,7 +116,8 @@ def test_dockerignore_keeps_copy_sources(containerfile: Path) -> None:
         top = source.removeprefix('./').split('/')[0]
         for pattern in patterns:
             assert not fnmatch.fnmatch(top, pattern), (
-                f'{containerfile.name}: {source} excluded by .dockerignore {pattern}'
+                f'{containerfile.name}: {source} excluded by '
+                f'.dockerignore {pattern}'
             )
 
 
@@ -135,9 +136,11 @@ def test_kernel_prepare_users_hash_the_library() -> None:
         entry for entry in _packages()
         if 'kernel_prepare' in str(entry.get('build', ''))
     ]
-    assert {e['name'] for e in users} == {
-        'linux-modules-arm', 'linux-modules-arm-device', 'linux-modules-x86_64'
-    }
+    assert {e['name']
+            for e in users} == {
+                'linux-modules-arm', 'linux-modules-arm-device',
+                'linux-modules-x86_64'
+            }
     for entry in users:
         assert library in entry['sources'], entry['name']
         assert 'lib/kernel-prepare.sh' in entry['build']
