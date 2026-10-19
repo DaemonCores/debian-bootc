@@ -106,6 +106,14 @@ ARG KERNEL_CMDLINE_SERIAL=""
 # by the custom kernel .deb (`daemoncores-kernel-<kver>`, built from kernel/config by
 # the bootc-debs-builder pipeline). See docs/minimal.md ("Kernel and auto-update").
 ARG KERNEL_VARIANT=minimal
+# arm64 only. The arm64 distribution ships two kernels because the page size is a
+# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
+# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
+# `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name and
+# ARM_DEVICES lists the device module packages that kernel serves. The CI passes the
+# 16 KB values for the `-16k` image; the defaults build the 4 KB one.
+ARG KERNEL_SUFFIX=""
+ARG ARM_DEVICES="rpi3 rpi4"
 # `1` (default) writes /usr/lib/bootc/autoupdate so bootc performs automated ostree
 # upgrades (the `_autoupdate` tag variant); `0` writes `0` to that file, disabling
 # auto-update for the `_lock` tag variant (minimal RAM, no background upgrade
@@ -175,14 +183,14 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
-# amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/
-# rk3588 overlays. The modules are OPTIONAL — the base image works without them.
+# amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm<suffix> + the device
+# overlays of ARM_DEVICES (rpi3/rpi4 on the 4 KB kernel, rpi5/rk3588 on the 16 KB one). The modules are OPTIONAL — the base image works without them.
 RUN for _r in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/* && apt update && break; \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}-${ARCH} \
+        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
         bootc \
         bootupd \
         podman \
@@ -205,12 +213,11 @@ RUN for _r in 1 2 3 4 5; do \
         apt install -y --no-install-recommends \
             linux-modules-x86-64; \
     else \
+        arm_modules=(); \
+        for _d in ${ARM_DEVICES}; do arm_modules+=("linux-modules-${_d}"); done; \
         apt install -y --no-install-recommends \
-            linux-modules-arm \
-            linux-modules-rpi3 \
-            linux-modules-rpi4 \
-            linux-modules-rpi5 \
-            linux-modules-rk3588; \
+            linux-modules-arm${KERNEL_SUFFIX} \
+            "${arm_modules[@]}"; \
     fi
 
 # -----------------------------------------------------------------------------
