@@ -30,3 +30,109 @@ patches:
     stage: common
     license: GPL-2.0-only
     class: kernel
+
+  # ROCKNIX mainline device patches (https://github.com/ROCKNIX/distribution).
+  # Each file only touches tristate drivers or headers, so all are modules. They
+  # apply in this order on 7.2.11; the {series} directory follows the kernel.
+  # pwm_set_period helper (header) used by the handheld drivers
+  - name: rocknix-0003-pwm-add-pwm_set_period
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline/0003-pwm-add-pwm_set_period.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  # adc-keys keycode redirect for the ROCKNIX joypad
+  - name: rocknix-0004-input-adc-keys-redirect-keycode-316-to-rocknix-j
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline/0004-input-adc-keys-redirect-keycode-316-to-rocknix-joypa.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  # Realtek RTL8733BU Bluetooth
+  - name: rocknix-0005-Bluetooth-btrtl-Add-the-support-for-RTL8733BU
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline/0005-Bluetooth-btrtl-Add-the-support-for-RTL8733BU.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  # RK817 charger fixes (series 001-008)
+  - name: rocknix-001-power-supply-rk817-charger-Fix-NVRAM-SoC-Value
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline-rockchip/001-power-supply-rk817-charger-Fix-NVRAM-SoC-Value.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-002-power-supply-rk817-battery-resolve-boot-soc-from
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline-rockchip/002-power-supply-rk817-battery-resolve-boot-soc-from-counter.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-005-power-supply-rk817-charger-correct-gauge-across
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline-rockchip/005-power-supply-rk817-charger-correct-gauge-across-sleep.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-006-dt-bindings-power-supply-rk817-charger-add-rockc
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline-rockchip/006-dt-bindings-power-supply-rk817-charger-add-rockchip-gate-function-disable.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-007-power-supply-rk817-clear-sys-can-sd-register-by
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline-rockchip/007-power-supply-rk817-clear-sys-can-sd-register-by-default.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-008-power-supply-rk817-bound-the-boot-soc-with-the-o
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline-rockchip/008-power-supply-rk817-bound-the-boot-soc-with-the-ocv-table.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  # Qualcomm MSM display fixes for the SM8250/SM8550 handhelds (0010-0018)
+  - name: rocknix-0010-msm-resource-cleanup
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0010-msm-resource-cleanup.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0011-drm-msm-signal-hw_done-before-the-flip-event
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0011-drm-msm-signal-hw_done-before-the-flip-event.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0012-drm-msm-dpu-qos-lut-for-scaled-compressed-fetch
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0012-drm-msm-dpu-qos-lut-for-scaled-compressed-fetch.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0013-drm-msm-dpu-fix-inline-rotation
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0013-drm-msm-dpu-fix-inline-rotation.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0014-drm-msm-dpu-scaled-fetch-line-width
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0014-drm-msm-dpu-scaled-fetch-line-width.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0015-drm-msm-dpu-sm8250-linear-danger-lut
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0015-drm-msm-dpu-sm8250-linear-danger-lut.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0016-drm-msm-dp-return-0-from-audio_prepare-when-cabl
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0016-drm-msm-dp-return-0-from-audio_prepare-when-cable-is-disconnected.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0017-clk-qcom-blank-dsi-panels-before-dispcc-park
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0017-clk-qcom-blank-dsi-panels-before-dispcc-park.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  - name: rocknix-0018-drm-msm-dpu-preload-seven-pixels-in-qseed4-behin
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/0018-drm-msm-dpu-preload-seven-pixels-in-qseed4-behind-the-inline-rotator.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: module
+  # Silences the initramfs unpack warning. It edits init/initramfs.c, which is
+  # always built in, so it is a kernel patch.
+  - name: rocknix-9998-silence-initramfs-unpack-warn
+    url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/{series}/9998-silence-initramfs-unpack-warn.patch
+    stage: arm64
+    license: GPL-2.0-only
+    class: kernel

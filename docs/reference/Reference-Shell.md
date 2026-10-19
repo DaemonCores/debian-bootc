@@ -94,7 +94,7 @@ linux-modules-arm, linux-modules-arm-device and linux-modules-x86_64 in
 packages.yml. Listed in each entry's sources: so a change invalidates the
 cached debs.
 
-Inputs (set by the caller): DEB_ARCH.
+Inputs (set by the caller): DEB_ARCH, SAVE_PWD (repository root).
 Outputs (globals): COMMON_DEB, BUILT_VER, KVER, SRCDIR, ARCH (kernel arch).
 BUILT_VER and KVER are consumed by the sourcing build: blocks.
 Leaves the shell inside the kernel source tree with .config seeded from the
