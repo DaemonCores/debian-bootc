@@ -106,3 +106,34 @@ Not verified: that any board boots, that `make olddefconfig` keeps
 `DRM_ACCEL_ROCKET` (it could not run in the local environment; the Kconfig
 source promotes a bool under a modular dependency to `y`, `scripts/kconfig/symbol.c`),
 and that the Rocket driver works with the Mesa userspace on a real board.
+
+## Inference-oriented kernel options (KT-19)
+
+Added to `workflows/bootc-debs-builder/kernel/config` without measurement
+(decision of the maintainer); only userspace and hardware compatibility was
+checked.
+
+| Option | Choice | Compatibility check |
+| --- | --- | --- |
+| Preemption model | `PREEMPT_LAZY` (default) | `PREEMPT_NONE` needs `ARCH_NO_PREEMPT` and `PREEMPT_VOLUNTARY` needs `!ARCH_HAS_PREEMPT_LAZY`; both x86_64 and arm64 select `ARCH_HAS_PREEMPT_LAZY`, so lazy is the throughput-oriented model available. Per `kernel/Kconfig.preempt` |
+| `TRANSPARENT_HUGEPAGE` | on, `MADVISE` default | madvise only: no memory growth for processes that do not ask; userspace unchanged |
+| `LRU_GEN`, `LRU_GEN_ENABLED` | on | `mm/Kconfig`: depends on `MMU` and 64-bit; no userspace interface change |
+| `ZRAM` | module | inert until configured |
+| `ZSWAP` | built in, off by default | `ZSWAP_DEFAULT_ON` stays unset |
+
+### Rejected: 16 KB pages on arm64
+
+`ARM64_16K_PAGES` is **not** enabled. The kernel is a single image for
+Raspberry Pi 3/4/5, RK3588 and generic ARM. Raspberry Pi 3 (Cortex-A53) and
+Pi 4 (Cortex-A72) are, to my knowledge, ARMv8.0 cores without the optional
+16 KB translation granule, so such a kernel would not boot there. This is
+from memory of the core manuals and was not checked against them or on
+hardware. Even where the CPU supports it, `arch/arm64/Kconfig` notes that
+AArch32 applications must be built with 16 KB-aligned segments, and a 16 KB
+kernel would change the page size seen by every userspace on the shared
+image. A page-size split would need a second kernel, which the single-kernel
+decision (KT-13) rules out.
+
+Not verified: the kernel was not built or booted with these options;
+`make olddefconfig` cannot run on the current host, so symbol resolution is
+justified from the Kconfig sources of 7.2.11 only.
