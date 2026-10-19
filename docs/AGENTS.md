@@ -78,7 +78,7 @@ If T0–T2 are insufficient, state which additional file you need and why. Never
 - **Add a package build input without declaring it** in that package's `sources`/`env` in `packages.yml` — only declared paths and env are hashed, so the content cache would reuse a stale `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:7] [src: file: CONTRIBUTING.md:47].
 - **Install Debian's stock kernel** (`linux-image-amd64`/`linux-image-arm64`) in an image — use `linux-image-${KERNEL_VARIANT}-${ARCH}` from the custom deb; a second `/usr/lib/modules/<kver>/` fails bootc lint [src: file: Containerfile:21].
 - **Add a test to `workflows/tests.yml` without a `diag` command** — the harness fails the build if any test lacks one [src: file: workflows/tests.yml:9].
-- **Rotate/replace the APT signing key URL without updating `BOOTC_GPG_SHA256`** in both `Containerfile` and `Containerfile.minimal` — the build verifies the digest [src: file: Containerfile:43] [src: file: Containerfile.minimal:116].
+- **Change the APT signing key URL or default digest in only one of `Containerfile` and `Containerfile.minimal`** — both verify the digest (the CI passes `BOOTC_GPG_SHA256` and `BOOTC_APT_URL` as build arguments) [src: file: Containerfile:43] [src: file: Containerfile.minimal:116].
 - **Pin `debian:trixie` to a digest** — left unpinned on purpose for automatic security updates [src: file: Containerfile:3].
 - **Add job logic to `.github/workflows/pipeline.yml`** — it is a thin caller; the job graph lives in `DaemonCores/DaemonCores-CI` [src: file: .github/workflows/pipeline.yml:3].
 - **Guess** when info is missing — say `NOT_FOUND` and ask the user.
@@ -102,7 +102,7 @@ If T0–T2 are insufficient, state which additional file you need and why. Never
 | Network access | Build fetches the signing key and packages from `https://daemoncores.github.io/debian-bootc` [src: file: Containerfile:78] |
 | Minimal image build args | `ARCH`, `BOOT_PKG`, `FIRMWARE_PKGS`, `KERNEL_CMDLINE_SERIAL`, `AUTOUPDATE` [src: file: Containerfile.minimal:90] — see [minimal](minimal.md) |
 | Package builds | Run in CI inside the `ghcr.io/<owner>/<repo>-buildenv` image defined by `workflows/env.yml` [src: file: workflows/env.yml:5] |
-| CI secrets | `PAT_PKG`, `APT_GPG_KEY`, `SB_SIGNING_KEY`, `SB_SIGNING_CERT` [src: file: README.md:80] |
+| CI secrets | `PAT_SECRETS` (required for generation), optional `PAT_PKG`; `APT_GPG_KEY`, `SB_SIGNING_KEY`, `SB_SIGNING_CERT` and the cosign and module keys are generated [src: file: README.md:80] |
 
 ---
 
