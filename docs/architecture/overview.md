@@ -99,9 +99,9 @@ Sequence diagrams:
 
 | Area | Current state | Target |
 |------|---------------|--------|
-| Installer | Graphical cage + bootc-installer (GTK4) + fisherman ISO; Anaconda/Kickstart flow replaced [src: file: docs/architecture.md:93] | Done; the relative locale symlink kept for Anaconda compatibility is a leftover rationale [src: file: todo/registry.md:34] |
+| Installer | Graphical cage + bootc-installer (GTK4) + fisherman ISO; Anaconda/Kickstart flow replaced [src: file: docs/architecture.md:93] | Done; the relative locale symlink kept for Anaconda compatibility is a leftover rationale |
 | Architectures | arm64 build/test support present in CI, manifests and tests (`arch` gating), ISO amd64-only, full matrix "still being validated" [src: file: docs/architecture.md:109] | Validated amd64 + arm64 tag matrix <!-- TODO: ask user --> whether arm64 ISO is planned |
-| Kernel variant | `KERNEL_VARIANT=stock` via `linux-image-common` `Provides:`; `minimal` variant documented to build from `kernel/config-minimal-<arch>`, which is not present in `workflows/bootc-debs-builder/kernel/` [src: file: Containerfile.minimal:100] | Custom minimal kernel per arch (tracked in `todo/registry-kernel.md`) |
+| Kernel variant | `KERNEL_VARIANT=stock` via `linux-image-common` `Provides:`; `minimal` variant documented to build from `kernel/config-minimal-<arch>`, which is not present in `workflows/bootc-debs-builder/kernel/` [src: file: Containerfile.minimal:100] | Custom minimal kernel per arch (see [minimal](../minimal.md)) |
 | Module signing | `config.yml` default is `both`; comment marks `both` as "(future)" and calls `nosign` the default [src: file: config.yml:4] [src: file: config.yml:11] | <!-- TODO: ask user --> whether `both` is the intended live default |
 | Image tag separator | Docs describe `<variant>_<arch>_<mode>`; `Containerfile.iso` pulls hyphenated `latest-${ARCH}-autoupdate` [src: file: docs/architecture.md:73] [src: file: Containerfile.iso:28] | <!-- TODO: ask user --> canonical separator |
 | Raspberry Pi / Gallium disk images | `run_img_rpi` dispatch opt-in forwarded (default off); `run_img_gallium` intentionally not forwarded [src: file: .github/workflows/pipeline.yml:77] | N/A — Gallium not shipped by this repo |
