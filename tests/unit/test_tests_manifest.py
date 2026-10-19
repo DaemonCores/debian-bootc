@@ -31,9 +31,10 @@ def test_manifest_has_tests_and_timeouts() -> None:
     """The manifest declares tests and positive integer timeouts."""
     data = _load()
     assert data['tests']
-    assert isinstance(data['boot_timeout'], int) and data['boot_timeout'] > 0
-    assert isinstance(data['reboot_timeout'],
-                      int) and data['reboot_timeout'] > 0
+    assert isinstance(data['boot_timeout'], int)
+    assert data['boot_timeout'] > 0
+    assert isinstance(data['reboot_timeout'], int)
+    assert data['reboot_timeout'] > 0
 
 
 @pytest.mark.parametrize(('section', 'index', 'entry'), _entries())
@@ -44,7 +45,8 @@ def test_entry_has_name_run_diag(
     where = f'{section}[{index}]'
     for key in ('name', 'run', 'diag'):
         value = entry.get(key)
-        assert isinstance(value, str) and value.strip(), f'{where} lacks {key}'
+        assert isinstance(value, str), f'{where} lacks {key}'
+        assert value.strip(), f'{where} lacks {key}'
 
 
 @pytest.mark.parametrize(('section', 'index', 'entry'), _entries())

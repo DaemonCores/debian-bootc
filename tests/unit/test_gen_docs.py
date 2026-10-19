@@ -5,10 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-import gen_docs  # noqa: E402
+import gen_docs
 
 
-def test_shell_header_extracts_comment_block(tmp_path):
+def test_shell_header_extracts_comment_block(tmp_path: Path) -> None:
     """The header is the comment block right after the shebang."""
     script = tmp_path / "s.sh"
     script.write_text(
@@ -18,7 +18,7 @@ def test_shell_header_extracts_comment_block(tmp_path):
     assert gen_docs._shell_header(script) == "name - purpose\nmore"
 
 
-def test_page_replaces_only_generated_region():
+def test_page_replaces_only_generated_region() -> None:
     """Text outside the markers survives regeneration."""
     current = f"intro\n{gen_docs.START}\nold\n{gen_docs.END}\noutro\n"
     new = gen_docs._page("T", "new", current)

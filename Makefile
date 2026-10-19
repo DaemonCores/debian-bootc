@@ -46,6 +46,7 @@ YAML_SRCS := \
 	workflows/tests.yml
 
 PYTHON_SRCS := scripts/gen-recipe.py scripts/gen_docs.py
+PYTHON_TESTS := tests
 
 # ---- venv bootstrap ------------------------------------------------------- #
 
@@ -84,9 +85,9 @@ py-ready:
 check: check-py check-shell check-containerfile check-yaml
 
 check-py: py-ready
-	$(VBIN)/yapf --diff --recursive $(PYTHON_SRCS)
+	$(VBIN)/yapf --diff --recursive $(PYTHON_SRCS) $(PYTHON_TESTS)
 	$(VBIN)/docformatter --check --diff --recursive $(PYTHON_SRCS)
-	$(VBIN)/ruff check $(PYTHON_SRCS)
+	$(VBIN)/ruff check $(PYTHON_SRCS) $(PYTHON_TESTS)
 	$(VBIN)/mypy --explicit-package-bases $(PYTHON_SRCS)
 	$(VBIN)/basedpyright $(PYTHON_SRCS)
 	$(VBIN)/pydoclint $(PYTHON_SRCS)
