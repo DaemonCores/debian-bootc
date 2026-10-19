@@ -1,0 +1,19 @@
+name: Upstream releases
+
+# Thin caller: the check lives in DaemonCores-CI (every distribution of the
+# organisation follows its upstreams the same way).  The packages tracking an
+# upstream release (`track:` in packages.yml) are rebuilt on the latest release
+# by the pipeline; this weekly job fails when one of them is still published on
+# an older release, i.e. when the latest release did not build.
+
+on:
+  schedule:
+    - cron: '0 8 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/upstream-check.yml@main

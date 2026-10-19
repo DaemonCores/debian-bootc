@@ -144,10 +144,10 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | Technology | Version | Role |
 |------------|---------|------|
 | Debian | 13 Trixie (`debian:trixie`, unpinned) [src: file: Containerfile:5] | Base OS for images and build env |
-| bootc | v1.16.2 [src: file: workflows/bootc-debs-builder/packages.yml:1472] | Bootable container tooling (built from source) |
-| OSTree | 2026.1 [src: file: workflows/bootc-debs-builder/packages.yml:1404] | Immutable OS deployment |
-| composefs (libcomposefs) | v1.0.8 [src: file: workflows/bootc-debs-builder/packages.yml:1345] | Root filesystem integrity |
-| bootupd | v0.2.35 [src: file: workflows/bootc-debs-builder/packages.yml:1273] | Bootloader updates |
+| bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1124] | Bootable container tooling (built from source) |
+| OSTree | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1053] | Immutable OS deployment |
+| composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:994] | Root filesystem integrity |
+| bootupd | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:922] | Bootloader updates |
 | GRUB (BLS-capable, signed) | 1+2.12+9+fedora44 [src: file: workflows/bootc-debs-builder/packages.yml:975] | EFI bootloader (amd64/arm64) |
 | bootc-installer | 3.0.0+git0290d4f+bootc7 [src: file: workflows/bootc-debs-builder/packages.yml:1612] | Installer for ISOs |
 | fisherman | 0.3.0+git4dc8f1c [src: file: workflows/bootc-debs-builder/packages.yml:1546] | Go tool packaged as `.deb` (requires Go ≥ 1.22) [src: file: workflows/bootc-debs-builder/packages.yml:1552] |
