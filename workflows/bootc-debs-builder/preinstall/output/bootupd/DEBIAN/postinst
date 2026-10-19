@@ -46,7 +46,30 @@ case "$1" in
     # (not create) and fails ENOENT if it is missing; the deb ships no empty dir.
     mkdir -p /usr/lib/bootupd/updates
 
+    # arm64: grub-efi-amd64-signed is not built there, and Debian's own
+    # grub-efi-arm64-signed ships only /usr/lib/grub/arm64-efi-signed/, not the
+    # <name>/<version>/EFI layout bootupd reads. Without a grub2 component the
+    # metadata lists no bootloader and `bootupctl backend install` aborts with
+    # "Could not determine bootloader". Stage it like shim, under both the
+    # vendor and the removable-media directories (see the amd64 staging in
+    # packages.yml for why grub must sit next to shim in both).
+    grub_ver=$(dpkg-query -W -f='${Version}' grub-efi-arm64-signed \
+      2>/dev/null || true)
+    if [ -n "${grub_ver}" ] \
+      && [ -f /usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed ] \
+      && ! ls -d /usr/lib/efi/grub2/*/EFI >/dev/null 2>&1; then
+      for sub in debian BOOT; do
+        install -Dm0644 /usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
+          "/usr/lib/efi/grub2/${grub_ver}/EFI/${sub}/grubaa64.efi"
+      done
+    fi
+
     bootupctl backend generate-update-metadata /
+
+    # bootupd >= 0.3 refuses to install when the metadata does not name a
+    # default bootloader and it cannot pick exactly one itself. grub is the only
+    # bootloader this distribution ships, so record it explicitly.
+    bootupctl backend set-default-bootloader grub
 
     # generate-update-metadata re-stages the shim fallback fbx64.efi but not the
     # BOOTX64.CSV it needs. Booted from the removable path \EFI\BOOT\BOOTX64.EFI
