@@ -10,26 +10,26 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | OSTree | Content-addressed object store for bootable OS trees; provides the atomic `/usr` deployment [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/control:13]. |
 | composefs / libcomposefs | Integrity-protected filesystem image library used by OSTree; enabled for the root via `[composefs] enabled=yes` [src: file: workflows/bootc-debs-builder/ostreepostinstall/usr/lib/ostree/prepare-root.conf:5]. |
 | `prepare-root.conf` | OSTree config shipped in the `ostree` deb: read-only sysroot plus composefs root [src: file: workflows/bootc-debs-builder/ostreepostinstall/usr/lib/ostree/prepare-root.conf:1]. |
-| OSTree filesystem layout | `/home`, `/root`, `/mnt`, `/srv`, `/opt` are symlinks into `/var` so the read-only `/usr` can be swapped atomically [src: file: Containerfile:168]. See [justifications § OSTree filesystem layout](justifications.md#ostree-filesystem-layout). |
+| OSTree filesystem layout | `/home`, `/root`, `/mnt`, `/srv`, `/opt` are symlinks into `/var` so the read-only `/usr` can be swapped atomically [src: file: Containerfile:175]. See [justifications § OSTree filesystem layout](justifications.md#ostree-filesystem-layout). |
 | bootupd | Cross-distribution EFI bootloader update manager [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/control:13]. |
 | BLS | Boot Loader Specification entries; the custom GRUB is built with BLS support for the deployment model [src: file: workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/control:12]. |
 | dracut | Initramfs generator used for the bootc/OSTree boot path [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:5]. |
 | `bootc-finalize` | Build-time script: moves the newest kernel into `/usr/lib/modules/<kver>`, regenerates the initramfs and stages signed shim/GRUB EFI binaries for bootupd [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3]. |
 | `zz-bootc-finalize` | Kernel `postinst.d` hook shipped in the `bootc` deb so downstream images that install/update a kernel get it finalized [src: file: workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize:3]. |
 | bootc lint | bootc's image validation; fails if a second `/usr/lib/modules/<kver>/` exists (hence no stock Debian kernel) [src: file: Containerfile:26]. |
-| `policy-rc.d` | Build-time hook returning `101` so no daemon starts inside the build container; removed at the end of the build [src: file: src/debianpreinstall/usr/sbin/policy-rc.d:3] [src: file: Containerfile:189]. |
-| Preinstall / postinstall overlay | `src/*preinstall/` and `src/*postinstall/` trees copied into the image before/after package installation; `workflows/bootc-debs-builder/*postinstall/` are the equivalent per-package overlays [src: file: Containerfile:189] [src: file: docs/architecture.md:20]. See [architecture § Repository layout](architecture.md#repository-layout). |
+| `policy-rc.d` | Build-time hook returning `101` so no daemon starts inside the build container; removed at the end of the build [src: file: src/debianpreinstall/usr/sbin/policy-rc.d:3] [src: file: Containerfile:196]. |
+| Preinstall / postinstall overlay | `src/*preinstall/` and `src/*postinstall/` trees copied into the image before/after package installation; `workflows/bootc-debs-builder/*postinstall/` are the equivalent per-package overlays [src: file: Containerfile:196] [src: file: docs/architecture.md:20]. See [architecture § Repository layout](architecture.md#repository-layout). |
 | Full image (`main` variant) | General-purpose image defined by `Containerfile` [src: file: Containerfile:5]; called `main` in test gating [src: file: workflows/tests.yml:19]. |
 | Minimal image | Reduced image contract defined by `Containerfile.minimal` (networkd, no SSH/Podman, no persistent journal) [src: file: Containerfile.minimal:23]. See [minimal](minimal.md). |
-| Autoupdate / lock variant | `AUTOUPDATE=1` writes `1` to `/usr/lib/bootc/autoupdate` (automatic bootc upgrades, `_autoupdate` tag); `0` disables them (`_lock` tag) [src: file: Containerfile.minimal:57] [src: file: Containerfile.minimal:158]. |
+| Autoupdate / lock variant | `AUTOUPDATE=1` writes `1` to `/usr/lib/bootc/autoupdate` (automatic bootc upgrades, `_autoupdate` tag); `0` disables them (`_lock` tag) [src: file: Containerfile.minimal:57] [src: file: Containerfile.minimal:165]. |
 | `org.daemoncores.autoupdate-variants` | Image label declaring which update variants a Containerfile produces (`lock,autoupdate`) [src: file: Containerfile.minimal:85]. |
 | Image tag | `<variant>_<arch>_<autoupdate\|lock>` per architecture, plus manifest-list aliases such as `latest`, `minimal` [src: file: docs/architecture.md:73]. `Containerfile.iso` references the hyphenated form `latest-${ARCH}-autoupdate` [src: file: Containerfile.iso:28]. <!-- TODO: ask user --> which separator is canonical. |
 | Kernel variant (`KERNEL_VARIANT`) | Build arg selecting the kernel package `linux-image-${KERNEL_VARIANT}-${ARCH}`; default `stock` [src: file: Containerfile:21] [src: file: Containerfile:27]. |
 | `linux-image-stock-<arch>` | Virtual package name provided by the project's custom `linux-image` deb [src: file: workflows/bootc-debs-builder/packages.yml:204]. |
 | Kernel module packages | `linux-modules-generic`, `linux-modules-arm`, `linux-modules-arm-device`, `linux-modules-x86_64` built from `kernel/modules/*` overlays on top of `kernel/config` [src: file: workflows/bootc-debs-builder/packages.yml:230] [src: file: workflows/bootc-debs-builder/kernel/modules/rk3588:5]. |
-| `BOOT_PKG` | Build arg for the boot package: `grub-efi-amd64-signed` on amd64, `u-boot-tools grub-efi-arm64-signed` on arm64 [src: file: Containerfile.minimal:89]. |
-| `PRODUCT_NAME` | Build arg written to `/usr/lib/bootc/product-name`, consumed by boot finalization tooling [src: file: Containerfile:82]. |
-| `BOOTC_GPG_SHA256` | SHA-256 of the APT signing key, derived by the CI from `APT_GPG_KEY` and checked during the build [src: file: Containerfile:43] [src: file: Containerfile:79]. |
+| `BOOT_PKG` | Build arg for the boot package: `grub-efi-amd64-signed` on amd64, `grub-efi-arm64-signed` on arm64 generic, `u-boot-tools` on arm64 embedded [src: file: Containerfile.minimal:90]. |
+| `PRODUCT_NAME` | Build arg written to `/usr/lib/bootc/product-name`, consumed by boot finalization tooling [src: file: Containerfile:89]. |
+| `BOOTC_GPG_SHA256` | SHA-256 of the APT signing key, derived by the CI from `APT_GPG_KEY` and checked during the build [src: file: Containerfile:50] [src: file: Containerfile:86]. |
 | Package manifest | `workflows/bootc-debs-builder/packages.yml`: one entry per `.deb` with `name`, `upstream`, `deps`, `sources`, `deb-glob`, `env`, `secret-env`, `build` [src: file: workflows/bootc-debs-builder/packages.yml:2]. |
 | Repack | Package built from an existing Debian package (`upstream` field) plus a bootc overlay, e.g. ifupdown2, systemd-timesyncd [src: file: workflows/bootc-debs-builder/packages.yml:5] [src: file: workflows/bootc-debs-builder/packages.yml:878]. |
 | Wave | Group of packages with no pending `deps`, built in parallel; `deps` create later waves [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/packages.yml:6]. |
@@ -63,7 +63,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | Term | Definition |
 |------|------------|
 | amd64 | Current installation target; ISO is amd64-only [src: file: README.md:20] [src: file: docs/architecture.md:109]. |
-| arm64 | Supported in CI/manifests but still being validated; uses U-Boot instead of GRUB [src: file: README.md:20] [src: file: Containerfile.minimal:89]. |
+| arm64 | Supported in CI/manifests but still being validated; uses U-Boot instead of GRUB [src: file: README.md:20] [src: file: Containerfile.minimal:90]. |
 | SBC targets | Kernel module overlays for Raspberry Pi 3/4/5 and Rockchip RK3588 boards [src: file: workflows/bootc-debs-builder/kernel/modules/rk3588:3]. See [minimal § Architecture boundary](minimal.md#architecture-boundary). |
 | Raspberry Pi `.img` | Optional arm64 disk-image stage (`run_img_rpi`, default off) [src: file: .github/workflows/pipeline.yml:44]. |
 | QEMU/KVM test VM | Virtual disk the image is installed to and booted (UEFI) for runtime tests [src: file: workflows/tests.yml:2]. |
@@ -76,13 +76,14 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | DaemonCores-CI | Shared repo holding the reusable `full-pipeline.yml@main` job graph [src: file: .github/workflows/pipeline.yml:71]. |
 | DaemonCores-VE | Downstream project consuming the published `latest` image as its base [src: file: docs/architecture.md:12]; the reason the full image uses ifupdown2 [src: file: docs/justifications.md:31]. It is the maintainer's renamed fork of Proxmox VE: "Proxmox VE", "Proxmox bootc", "Proxmox-Atomic" and "DaemonCores VE" in code, comments or docs all mean this one project [src: user:pikatsuto:2026-10-18: disc-dc54c008] [src: file: workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize:6]. |
 | GHCR | GitHub Container Registry; publishes images and the buildenv [src: file: README.md:80] [src: file: workflows/env.yml:5]. |
-| GitHub Pages APT repo | Signed APT repository served from `https://daemoncores.github.io/debian-bootc` [src: file: Containerfile:78] [src: file: README.md:85]. |
+| GitHub Pages APT repo | Signed APT repository served from `https://daemoncores.github.io/debian-bootc` [src: file: Containerfile:85] [src: file: README.md:85]. |
 | GitHub wiki | Mirror of `docs/**` synced on push to `main` [src: file: .github/workflows/docs-wiki-sync.yml:5]. |
 | cosign / Sigstore | Image signing with a per-repository key kept in repository secrets, keyless OIDC only as a fallback [src: file: docs/justifications.md:53]. |
 | bootc-image-builder | Tool converting the installer image to an ISO via dracut live squashfs [src: file: Containerfile.iso:5]. |
 | cage | Single-app Wayland compositor hosting the installer [src: file: Containerfile.iso:8]. |
 | shim / Secure Boot | Signed EFI chain staged by `bootc-finalize`; GRUB EFI package signed with `SB_SIGNING_KEY`/`SB_SIGNING_CERT` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:5] [src: file: README.md:82]. |
-| U-Boot | arm64 bootloader tooling (`u-boot-tools`) used instead of GRUB [src: file: Containerfile.minimal:13]. |
+| U-Boot | arm64 bootloader tooling (`u-boot-tools`) used instead of GRUB by the `embedded` boot profile [src: file: Containerfile.minimal:13]. |
+| Boot profile | `generic` (UEFI, Fedora GRUB: amd64, arm64 PCs, servers, VMs) or `embedded` (arm64 boards and phones loading U-Boot); declared by `LABEL org.daemoncores.boot-profile`, generic when absent [src: file: Containerfile.minimal:95]. |
 | Dependabot | Automated update PRs for actions [src: file: .github/dependabot.yml:1]. |
 
 ## Abbreviations
@@ -94,8 +95,8 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | SB | Secure Boot (`SB_SIGNING_KEY`, `SB_SIGNING_CERT`) [src: file: README.md:82] |
 | PAT | Personal Access Token (`PAT_PKG`, GHCR pull/publish) [src: file: README.md:80] |
 | OIDC | OpenID Connect — GitHub Actions identity, used by cosign only for the keyless fallback [src: file: docs/justifications.md:57] |
-| SBC | Single-board computer (arm64 targets) [src: file: Containerfile.minimal:89] |
-| DTB | Device Tree Blob, board-specific on arm64 [src: file: docs/minimal.md:100] |
+| SBC | Single-board computer (arm64 targets) [src: file: Containerfile.minimal:90] |
+| DTB | Device Tree Blob, board-specific on arm64 [src: file: docs/minimal.md:101] |
 | GHCR | GitHub Container Registry [src: file: README.md:80] |
 | ISO | Installer image file produced by `Containerfile.iso` [src: file: Containerfile.iso:5] |
 | TUI | Text user interface (first-boot wizard) [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:3] |

@@ -84,7 +84,8 @@ arm64 example on a native arm64 host:
 ```bash
 podman build --format docker \
   --build-arg ARCH=arm64 \
-  --build-arg "BOOT_PKG=u-boot-tools grub-efi-arm64-signed" \
+  --build-arg "BOOT_PKG=grub-efi-arm64-signed" \
+  --build-arg BOOT_PROFILE=generic \
   --build-arg FIRMWARE_PKGS="firmware-linux-free firmware-misc-nonfree" \
   --build-arg KERNEL_CMDLINE_SERIAL="console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200" \
   --build-arg KERNEL_VARIANT=stock \

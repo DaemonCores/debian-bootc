@@ -25,12 +25,19 @@ ARG ARCH=amd64
 # kernel (linux-image-amd64/arm64) which would create a second /usr/lib/modules/<deb-kver>/
 # directory and fail bootc lint. See packages.yml linux-image BUILD section.
 ARG KERNEL_VARIANT=stock
-# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools + grub-efi-arm64-signed (arm64). Kept as a
-# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
+# Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
+# absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
+# servers, VMs); `embedded` is arm64 boards and phones whose firmware loads U-Boot.
+ARG BOOT_PROFILE=generic
+# Boot stack chosen by the CI from the architecture and the boot profile:
+# grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
+# u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
+# grub-efi-${ARCH} pattern in the embedded profile.
 ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
 ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
-# Package(s) to hold from auto-upgrade: grub-efi-amd64-signed (x86_64); empty on arm64.
+# Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
+# the arm64 embedded profile (no GRUB).
 ARG APT_HOLD_PKG=grub-efi-amd64-signed
 # Per-arch kernel modules. The image installs ALL modules matching the
 # target arch in a separate conditional RUN block below (after the main apt

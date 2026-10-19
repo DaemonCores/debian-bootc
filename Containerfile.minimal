@@ -10,8 +10,8 @@
 #     runner (no QEMU cross-build), so apt pulls arch-matching .deb packages.
 #   - ARG ARCH (default amd64; CI overrides to arm64 via --build-arg ARCH=arm64)
 #     selects the kernel and firmware packages via the linux-image-${ARCH}
-#     naming pattern. BOOT_PKG is a separate ARG because arm64 uses u-boot-tools
-#     instead of grub-efi-arm64.
+#     naming pattern. BOOT_PKG is a separate ARG because the arm64 embedded
+#     profile uses u-boot-tools instead of grub-efi-arm64 (see BOOT_PROFILE).
 #
 # Architecture-specific package selection:
 #   x86_64 (amd64):  linux-image-${KERNEL_VARIANT}-amd64, grub-efi-amd64-signed (+ signed hold)
@@ -86,10 +86,17 @@ LABEL org.daemoncores.autoupdate-variants="lock,autoupdate"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
-# grub-efi-${ARCH} on x86_64, u-boot-tools on arm64 SBCs (via BOOT_PKG override).
+# grub-efi-${ARCH} on x86_64 and arm64 generic, u-boot-tools on arm64 embedded boards
+# (via BOOT_PKG override).
 ARG ARCH=amd64
-# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools + grub-efi-arm64-signed (arm64). Kept as a
-# separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
+# Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
+# absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
+# servers, VMs); `embedded` is arm64 boards and phones whose firmware loads U-Boot.
+ARG BOOT_PROFILE=generic
+# Boot stack chosen by the CI from the architecture and the boot profile:
+# grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
+# u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
+# grub-efi-${ARCH} pattern in the embedded profile.
 ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: empty on x86_64 (downstream adds microcode); arm64 ships
 # firmware-linux-free firmware-misc-nonfree for SBC peripherals.

@@ -25,18 +25,18 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 
 ### Conventions
 
-- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:51] [src: file: Containerfile.minimal:123].
-- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:53] [src: file: Containerfile:70] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:141].
-- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:57] [src: file: Containerfile.minimal:127] [src: file: Containerfile.iso:65].
-- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:58] [src: file: Containerfile.minimal:128] [src: file: Containerfile.iso:66].
-- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:21] [src: file: Containerfile:28].
-- Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:74] [src: file: Containerfile.minimal:149].
+- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:58] [src: file: Containerfile.minimal:130].
+- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:60] [src: file: Containerfile:77] [src: file: Containerfile.minimal:133] [src: file: Containerfile.minimal:148].
+- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:64] [src: file: Containerfile.minimal:134] [src: file: Containerfile.iso:65].
+- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:65] [src: file: Containerfile.minimal:135] [src: file: Containerfile.iso:66].
+- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:21] [src: file: Containerfile:34].
+- Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:81] [src: file: Containerfile.minimal:156].
 
 ### Common mistakes to avoid
 
 - In an `if/else/fi` inside `RUN`, ending the last package line with `\` and no `;` joins `else`/`fi` onto the `apt install` arguments. Terminate the command with `;` before `else`/`fi` [src: commit: c88288c].
 - Never start a `RUN` with `&&`. This mistake was hidden by layer caching until a no-cache build exposed it [src: commit: e4b073f].
-- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:97].
+- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:104].
 - Use the package names actually published in the APT repo. Debian names use hyphens (`linux-modules-x86-64`, not `linux-modules-x86_64`) [src: commit: f35af91]. Do not install packages that have no `packages.yml` entry, e.g. `linux-headers` [src: commit: 7046317].
 
 ## Shell (bash / POSIX sh)
