@@ -55,3 +55,13 @@ def test_standard_image_uses_the_debian_kernel() -> None:
         ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
     ]
     assert not any('linux-modules-' in ln for ln in install)
+
+
+def test_standard_image_keeps_the_login_stack() -> None:
+    """The login and console packages are installed explicitly."""
+    text = (MANIFEST.parents[2] / 'Containerfile').read_text()
+    for pkg in (
+        'systemd-sysv', 'libpam-systemd', 'dbus-user-session', 'kbd',
+        'keyboard-configuration'
+    ):
+        assert f'        {pkg} \\' in text, pkg

@@ -95,7 +95,9 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # fuse-overlayfs), dracut (cryptsetup systemd-cryptsetup kpartx mdadm zstd),
 # hardware firmware (firmware-* pulled by firmware-linux-free/misc-nonfree),
 # console and ssh usability (console-common ncurses-term psmisc
-# linux-sysctl-defaults libpam-wtmpdb). Derived with apt-get -s for both
+# linux-sysctl-defaults libpam-wtmpdb), and the login and console stack the last
+# booting image carried (systemd-sysv libpam-systemd dbus-user-session kbd
+# keyboard-configuration). Derived with apt-get -s for both
 # architectures, see docs/tech-debt/TD-20261018-full-image-install-recommends.md.
 # The architecture specific recommends are installed in the per-arch block at
 # the end of this RUN: x86 GPU firmware on amd64; efibootmgr and the U-Boot
@@ -177,6 +179,11 @@ RUN for _r in 1 2 3 4 5; do \
         psmisc \
         linux-sysctl-defaults \
         libpam-wtmpdb \
+        systemd-sysv \
+        libpam-systemd \
+        dbus-user-session \
+        kbd \
+        keyboard-configuration \
     && { [ -z "${APT_HOLD_PKG}" ] || apt-mark hold "${APT_HOLD_PKG}"; } \
     && apt update \
     && if [ "${ARCH}" = "amd64" ]; then \
