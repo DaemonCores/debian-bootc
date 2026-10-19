@@ -83,3 +83,11 @@ CONFIG_PHYLINK=m
 # RTC_DRV_PL031: built-in. ARM PrimeCell RTC, used by the RK3588.
 #                (CONFIG_RTC_CLASS is in kernel/modules/arm.)
 CONFIG_RTC_DRV_PL031=y
+# =============================================================================
+# NPU — module. The RK3588 has three NPU cores (rockchip,rk3588-rknn-core in
+# rk3588-base.dtsi) driven by the mainline Rocket driver, the compute path for
+# neural-network inference. It needs CONFIG_DRM_ACCEL (kernel/config) and
+# CONFIG_ROCKCHIP_IOMMU (set by the arm64 defconfig).
+# =============================================================================
+
+CONFIG_DRM_ACCEL_ROCKET=m

@@ -35,6 +35,7 @@ buildable as a module.
 | Patch | Source | Stage | Class | Why |
 |-------|--------|-------|-------|-----|
 | `bore` | CachyOS `sched/0001-bore.patch` | common | kernel | Scheduler core, cannot be a module. The only scheduler patch: BORE variants for other schedulers (`prjc`, `muqss`) compete with it and are not applied. |
+| `rocknix-btrtl-rtl8733bu` | ROCKNIX `mainline/0005-Bluetooth-btrtl-Add-the-support-for-RTL8733BU.patch` | arm64 | module | Adds the USB ID `0bda:b733` to `btusb` and the chip to `btrtl`, both tristate. |
 
 XanMod is not applied: it is one monolithic patch that rewrites the same
 scheduler, memory and I/O files as BORE, so it would collide with it. Its
@@ -42,38 +43,66 @@ individual optimisations are taken only when they exist as separate patches.
 `bore-cachy` is not used on the current series: it is written against the
 CachyOS tree and does not apply to a plain kernel.org tree.
 
-## ROCKNIX device patches (KT-18)
+## Patch triage against the project targets (KT-18)
 
-The mainline device patches of ROCKNIX are applied, as `module` class on
-`arm64`. Each one was downloaded and tried against the pristine 7.2.11 tree
-(`patch --dry-run`, then in order):
+The targets are the Raspberry Pi 3/4/5, the Rockchip RK3588, x86_64 and generic
+ARM (`docs/glossary.md`, SBC targets). Every patch of the ROCKNIX mainline
+directories (`mainline`, `mainline-rockchip`, `7.2`) and of the CachyOS `7.2/misc`
+directory was downloaded and tried on the pristine 7.2.11 tree, then judged
+against those targets. A patch that applies is not kept for that reason alone.
 
-| Source directory | Patches | Result on 7.2.11 |
-|------------------|---------|------------------|
-| `mainline` | `0003` pwm_set_period, `0004` adc-keys, `0005` btrtl RTL8733BU | apply |
-| `mainline-rockchip` | `001`, `002`, `005`-`008` (RK817 charger and bindings) | apply in order (`005` and `008` need the earlier ones) |
-| `7.2` | `0010`-`0018` (Qualcomm MSM display, dispcc) | apply |
-| `7.2` | `0011-thermal-adc-tm5-drop-iio-val-int-check` | already in the mainline tree, not listed |
-| `7.2` | `9998` silence initramfs unpack warning | applies, `kernel` class (it edits `init/initramfs.c`, always built in) |
-| `7.2` | `9999` fix Rust build error | does not apply to 7.2.11; it only renames the `tools/perf` Rust cross targets to ROCKNIX's own `*-rocknix-linux-*` triples, which a standard toolchain does not provide, so it would not help us anyway |
+### Kept
 
-Every touched file is a `tristate` driver (`CHARGER_RK817`, `KEYBOARD_ADC`,
-`BT_RTL`, `BT_HCIBTUSB`, `DRM_MSM`, `COMMON_CLK_QCOM`, `SM_DISPCC_*`) or a
-header, hence the `module` class. The module build applies the `kernel` then the
-`module` patches (`lib/kernel-prepare.sh`); the image build applies only the
-`kernel` ones.
+- `rocknix-btrtl-rtl8733bu`: a generic USB Bluetooth adapter ID, useful on every
+  target (see the table above).
 
-Not applied, with the reason:
+### Removed after the check
 
-- `devices/RK3588/patches/linux/*` (16 files): ROCKNIX applies them to the
-  `armbian/linux-rockchip` `rk-6.1-rkr3` vendor tree, not to a kernel.org tree.
-  They were not tried against 7.2.11.
-- `raspberrypi/linux`: the project publishes a full kernel branch, not a patch
-  series, so there is no patch file to list.
+| Patch | Why it is not useful here |
+|-------|---------------------------|
+| ROCKNIX `mainline/0003-pwm-add-pwm_set_period` | Adds a helper that nothing in the 7.2.11 tree calls. |
+| ROCKNIX `mainline/0004-input-adc-keys-redirect-keycode-316-to-rocknix-joypa` | Exports a global `joypad_input_g` for ROCKNIX's out-of-tree joypad driver; no code of ours uses it. |
+| ROCKNIX `mainline-rockchip/001`, `002`, `005`-`008` (RK817) | No RK3588 board of the tree uses the RK817 PMIC; the boards that do are RK3326, RK3566 and RK3568 handhelds. |
+| ROCKNIX `7.2/0010`-`0018` (Qualcomm MSM, dispcc) | They fix SM8250/SM8550 display code; no Qualcomm board is a target. |
+| ROCKNIX `7.2/9998-silence-initramfs-unpack-warn` | Lowers the "Initramfs unpacking failed" message from `KERN_EMERG` to `KERN_DEBUG`, which hides a boot failure we want to see. |
 
-The `.config` side is separate: `kernel/modules/rpi5` enables `PCIE_BRCMSTB`,
-`MISC_RP1`, `PINCTRL_RP1`, `COMMON_CLK_RP1` and `MACB` (the Cadence GEM inside
-RP1); the former `BCMGENET` entry was wrong for the Pi 5. `kernel/modules/arm`
-has `ROCKCHIP_DW_HDMI_QP` and `DRM_PANTHOR`. Symbols were checked against the
-7.2.11 Kconfig files with `check_kconfig.py`. Not verified: that any board boots,
-since no build on the runner or hardware test was run.
+### Not applied
+
+- ROCKNIX `7.2/0011-thermal-adc-tm5-drop-iio-val-int-check`: already in 7.2.11.
+- ROCKNIX `7.2/9999-fix-rust-build-error`: does not apply, and only renames the
+  `tools/perf` Rust cross targets to ROCKNIX's own triples.
+- ROCKNIX `devices/RK3588/patches/linux/*` (16 files): written for
+  `armbian/linux-rockchip` `rk-6.1-rkr3`, a 6.1 vendor tree, not for kernel.org.
+- `raspberrypi/linux`: a full kernel branch, not a patch series.
+- CachyOS `misc/0001-handheld.patch`: applies after BORE and does not overlap
+  with the Bluetooth patch, but it enables x86 handheld consoles (Steam Deck and
+  similar) and none is a target. It edits ACPI, power management and `amdgpu`
+  core code, so it would be a kernel patch. Re-add it if such a device becomes a
+  target.
+- CachyOS `misc/0001-hardened.patch`: does not apply on 7.2.11 after BORE.
+- CachyOS `misc/0001-rt-i915.patch` (PREEMPT_RT i915), `0001-acpi-call.patch`
+  (an x86 debug module) and `0001-aufs-*.patch` (a new filesystem; the image uses
+  ostree): no target needs them.
+- CachyOS `misc/nvidia` and `dkms-clang.patch`: not read.
+
+### NPU for inference (KT-19)
+
+The RK3588 declares three NPU cores (`rockchip,rk3588-rknn-core` in
+`rk3588-base.dtsi`) that the mainline Rocket driver
+(`CONFIG_DRM_ACCEL_ROCKET`, `drivers/accel/rocket`) drives, so no patch is
+needed. `kernel/modules/rk3588` enables it as a module and `kernel/config`
+enables its bool framework `CONFIG_DRM_ACCEL`. `CONFIG_ROCKCHIP_IOMMU=y` comes
+from the arm64 defconfig.
+
+### Hardware config (RP1, RK3588)
+
+`kernel/modules/rpi5` enables `PCIE_BRCMSTB`, `MISC_RP1`, `PINCTRL_RP1`,
+`COMMON_CLK_RP1` and `MACB` (the Cadence GEM inside RP1); the former `BCMGENET`
+entry was wrong for the Pi 5. `kernel/modules/arm` has `ROCKCHIP_DW_HDMI_QP` and
+`DRM_PANTHOR`. All symbols were checked against the 7.2.11 Kconfig files with
+`check_kconfig.py`.
+
+Not verified: that any board boots, that `make olddefconfig` keeps
+`DRM_ACCEL_ROCKET` (it could not run in the local environment; the Kconfig
+source promotes a bool under a modular dependency to `y`, `scripts/kconfig/symbol.c`),
+and that the Rocket driver works with the Mesa userspace on a real board.
