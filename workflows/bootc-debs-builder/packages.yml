@@ -76,7 +76,31 @@ packages:
   # linux-image-common_<ver>_<arch>.deb. sources: lists ONLY kernel/config
   # so changing a per-device overlay does NOT invalidate this package's
   # cache (the common image is independent of the overlays).
+  #
+  # Two kernels on arm64 (docs/decisions.md, "Two arm64 kernels"): the page size
+  # is a compile-time choice, so the 4 KB kernel (older devices: Raspberry Pi 3
+  # and 4) and the 16 KB kernel (recent hardware: Raspberry Pi 5, RK3588) are two
+  # builds of this same script. The variant key is a name suffix: "" keeps the
+  # plain `linux-image` (4 KB; also the only amd64 kernel), "-16k" produces
+  # `linux-image-16k` (arm64 only). KERNEL_SUFFIX carries the key, KERNEL_PAGES
+  # selects the overlay under kernel/pages/.
   - name: linux-image
+    variant-name-prefix: linux-image
+    variant-env: KERNEL_SUFFIX
+    variants:
+      "":
+        sources:
+          - kernel/pages/4k
+      "-16k":
+        when:
+          arch: arm64
+        deb-glob: "linux-image-common-16k_*"
+        env:
+          KERNEL_PAGES: "16k"
+        sources:
+          - kernel/pages/16k
+    env:
+      KERNEL_PAGES: "4k"
     deb-glob: "linux-image-common_*"
     sources:
       # Only the base config and the source download feed this package's
@@ -135,19 +159,30 @@ packages:
       # below layers the project choices on top.
       make defconfig
 
+      # arm64 only: the page-size overlay of this kernel (4 KB or 16 KB,
+      # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
+      # modules built later inherit it from the .config shipped in the deb.
+      CONFIG_FILES=("${BASE_CONFIG}")
+      if [ "${DEB_ARCH}" = "arm64" ]; then
+        PAGES_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/pages/${KERNEL_PAGES}"
+        test -f "${PAGES_OVERLAY}" \
+          || { echo "ERROR: kernel/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
+        CONFIG_FILES+=("${PAGES_OVERLAY}")
+      fi
+
       # Merge the base config (filesystems, virtio, serial, disables — the
       # base for every device). merge_config.sh -m merges in place.
-      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}"
+      scripts/kconfig/merge_config.sh -m .config "${CONFIG_FILES[@]}"
       make olddefconfig
 
       # olddefconfig silently ignores a symbol this kernel does not know, so
       # fail on an unknown symbol; an option dropped by an unmet dependency is
       # only reported, because the base config also names options that exist on
       # one architecture only.
-      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . "${BASE_CONFIG}"
+      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . "${CONFIG_FILES[@]}"
       python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . --config .config \
-        "${BASE_CONFIG}" \
-        || echo "::warning::kernel/config options not present in the final .config"
+        "${CONFIG_FILES[@]}" \
+        || echo "::warning::kernel config options not present in the final .config"
 
       # Ship the finalized .config and Module.symvers inside the common image
       # deb (see the repack below). They must live in the deb, not beside it in
@@ -174,8 +209,8 @@ packages:
 
       BUILT_VER=$(dpkg-deb -f "${COMMON_IMAGE_DEB}" Version)
 
-      cp "${COMMON_IMAGE_DEB}" "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
+      cp "${COMMON_IMAGE_DEB}" "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-image-common deb empty" >&2; exit 1; }
 
       # Find and copy the linux-headers deb (built alongside the image deb
@@ -184,8 +219,8 @@ packages:
         ! -name '*-dbg*' | head -1)
       if test -n "${HEADERS_DEB}"; then
         HEADERS_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
-        cp "${HEADERS_DEB}" "/debs/linux-headers_${HEADERS_VER}_${DEB_ARCH}.deb"
-        test -s "/debs/linux-headers_${HEADERS_VER}_${DEB_ARCH}.deb" \
+        cp "${HEADERS_DEB}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb"
+        test -s "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb" \
           || { echo "ERROR: output linux-headers deb empty" >&2; exit 1; }
       fi
 
@@ -194,8 +229,9 @@ packages:
       # the Debian package it overlaps, instead of masquerading as it. bindeb-pkg
       # names the deb linux-image-<KVER>, the same name as Debian's kernel when
       # the versions match, so the repack renames it daemoncores-kernel-<KVER>.
-      # It Provides the virtual name linux-image-minimal-<arch>, which the
-      # minimal image installs through linux-image-${KERNEL_VARIANT}-${ARCH}.
+      # It Provides the virtual name linux-image-minimal-<arch> (linux-image-
+      # minimal-16k-<arch> for the 16 KB kernel), which the images install
+      # through linux-image-${KERNEL_VARIANT}-${ARCH}.
       # It must NOT Provide linux-image-<arch> or linux-image-stock-<arch>: those
       # are Debian's names, and both images select this kernel by the variant
       # name instead.
@@ -206,7 +242,7 @@ packages:
       # conflict).
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
-      dpkg-deb -R "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
+      dpkg-deb -R "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
 
       # Ship the build inputs the module packages need INSIDE the deb. A cache
       # hit restores only the .deb from the published APT repo, so a file
@@ -227,12 +263,12 @@ packages:
       sed -i -e "s/^Package: .*/Package: daemoncores-kernel-${ORIG_PKG#linux-image-}/" \
         -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
         "${REPACK_DIR}/DEBIAN/control"
-      printf 'Provides: linux-image-minimal-%s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
-        "${DEB_ARCH}" "${ORIG_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
+      printf 'Provides: linux-image-minimal%s-%s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
+        "${KERNEL_SUFFIX:-}" "${DEB_ARCH}" "${ORIG_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
         >> "${REPACK_DIR}/DEBIAN/control"
       dpkg-deb -b "${REPACK_DIR}" \
-        "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
+        "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: repacked linux-image-common deb empty" >&2; exit 1; }
 
       # Free the ~10 GB kernel source tree now that all debs are copied to
@@ -249,11 +285,20 @@ packages:
   # OPTIONAL — the base image works without them. This entry carries the
   # ARM64 core, the kernel command line, the PL011 UART, and the MMC/USB/RTC
   # subsystem cores shared by every ARM device.
+  # It is built once per arm64 kernel (the "" key for the 4 KB kernel, "-16k" for
+  # the 16 KB one) because a module only loads into the kernel it was built for.
   - name: linux-modules-arm
     when:
       arch: arm64
-    deps:
-      - linux-image
+    variant-name-prefix: linux-modules-arm
+    variant-env: KERNEL_SUFFIX
+    variants:
+      "":
+        deps:
+          - linux-image
+      "-16k":
+        deps:
+          - linux-image-16k
     sources:
       - kernel/config
       - kernel/modules/arm
@@ -320,7 +365,7 @@ packages:
       # Debian package from that tree. The modules dir name matches the
       # common image's /lib/modules/<KVER> so modprobe on the target
       # resolves them under the running kernel.
-      DESTDIR="/output/linux-modules-${DEVICE}"
+      DESTDIR="/output/linux-modules-${DEVICE}${KERNEL_SUFFIX:-}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
       # modules.builtin and modules.builtin.modinfo are generated during a full
@@ -345,6 +390,7 @@ packages:
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
         -e "s|{{ KVER }}|${KVER}|g" \
+        -e "s|{{ SUFFIX }}|${KERNEL_SUFFIX:-}|g" \
         "${DESTDIR}/DEBIAN/control"
 
       # Regenerate md5sums for the installed module files.
@@ -354,11 +400,11 @@ packages:
 
       # Build the modules deb.
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
+        "/debs/linux-modules-${DEVICE}${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
 
       # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
+      test -s "/debs/linux-modules-${DEVICE}${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-${DEVICE}${KERNEL_SUFFIX:-} deb empty" >&2; exit 1; }
 
   # linux-modules-generic: the DEFAULT device class — an empty meta-package.
   # Depends on linux-image (the common kernel image built in wave 0). Produces
@@ -443,13 +489,27 @@ packages:
   - name: linux-modules-arm-device
     when:
       arch: arm64
-    deps:
-      - linux-modules-arm
+    # The kernel a device runs follows its hardware generation (docs/decisions.md,
+    # "Two arm64 kernels"): the older devices need the 4 KB kernel, the recent ones
+    # run the 16 KB kernel. KERNEL_SUFFIX names the kernel (and its ARM-generic
+    # modules package) this device's modules are built against.
     variants:
-      rpi3: {}
-      rpi4: {}
-      rpi5: {}
-      rk3588: {}
+      rpi3:
+        deps:
+          - linux-modules-arm
+      rpi4:
+        deps:
+          - linux-modules-arm
+      rpi5:
+        deps:
+          - linux-modules-arm-16k
+        env:
+          KERNEL_SUFFIX: "-16k"
+      rk3588:
+        deps:
+          - linux-modules-arm-16k
+        env:
+          KERNEL_SUFFIX: "-16k"
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
     variant-source: "kernel/modules/{variant}"
@@ -537,7 +597,7 @@ packages:
       # to install two packages that own the same path. This includes .ko files
       # AND kernel metadata files (modules.builtin, modules.alias, modules.dep,
       # etc.) that make modules_install generates identically for every package.
-      ARM_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-modules-arm_*_${DEB_ARCH}.deb" | head -1)
+      ARM_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-modules-arm${KERNEL_SUFFIX:-}_*_${DEB_ARCH}.deb" | head -1)
       if [ -n "${ARM_DEB}" ]; then
         dpkg-deb --fsys-tarfile "${ARM_DEB}" | tar t | sed 's|^\./||' \
           | while IFS= read -r f; do
@@ -575,6 +635,7 @@ packages:
         "${DESTDIR}/DEBIAN/control"
       sed -i \
         -e "s|{{ DEVICE }}|${DEVICE}|g" \
+        -e "s|{{ SUFFIX }}|${KERNEL_SUFFIX:-}|g" \
         -e "s|Version: {{ VER }}|Version: ${BUILT_VER}+r1|g" \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \

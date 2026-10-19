@@ -1,0 +1,17 @@
+# kernel/pages/16k
+#
+# arm64 page-size overlay for the 16 KB kernel. Merged on top of kernel/config by
+# the linux-image-16k entry. 16 KB pages cut page-table and TLB pressure and
+# speed up large mappings (the multi-GB weights of a local LLM), which is why
+# recent hardware (Raspberry Pi 5, Rockchip RK3588 and other Cortex-A76 class
+# cores) runs this kernel while the older devices keep kernel/pages/4k.
+#
+# CONFIG_LOCALVERSION gives the kernel its own release string, so its modules
+# live in /lib/modules/<kver>-16k and never collide with the 4 KB kernel's.
+# Every module package built for this kernel inherits the page size and the
+# LOCALVERSION from the .config shipped inside the kernel deb.
+
+CONFIG_ARM64_16K_PAGES=y
+# CONFIG_ARM64_4K_PAGES is not set
+# CONFIG_ARM64_64K_PAGES is not set
+CONFIG_LOCALVERSION="-16k"

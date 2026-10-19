@@ -41,7 +41,7 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     lines = _packages()['linux-image']['build'].splitlines()
     build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
     assert 'Package: daemoncores-kernel-' in build
-    assert 'Provides: linux-image-minimal-%s' in build
+    assert 'Provides: linux-image-minimal%s-%s' in build
     assert 'linux-image-stock' not in build
     assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
 
@@ -49,7 +49,7 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
 def test_both_images_install_the_same_project_kernel() -> None:
     """Containerfile and Containerfile.minimal install the single kernel."""
     root = MANIFEST.parents[2]
-    kernel = 'linux-image-${KERNEL_VARIANT}-${ARCH} \\'
+    kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \\'
     for name in ('Containerfile', 'Containerfile.minimal'):
         text = (root / name).read_text()
         install = [
@@ -84,3 +84,44 @@ def test_standard_image_keeps_the_login_stack() -> None:
         'keyboard-configuration'
     ):
         assert f'        {pkg} \\' in text, pkg
+
+
+def _variants(name: str) -> dict[str, Any]:
+    """Return the ``variants`` mapping of a manifest template.
+
+    Args:
+        name: Name of a package entry that declares ``variants``.
+
+    Returns:
+        The variant overrides keyed by variant key.
+    """
+    return cast(dict[str, Any], _packages()[name]['variants'])
+
+
+def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
+    """The kernel entry builds a 4 KB kernel and an arm64-only 16 KB one."""
+    entry = _packages()['linux-image']
+    variants = _variants('linux-image')
+    assert set(variants) == {'', '-16k'}
+    assert entry['env']['KERNEL_PAGES'] == '4k'
+    assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
+    assert variants['-16k']['when'] == {'arch': 'arm64'}
+    assert 'when' not in entry
+    root = MANIFEST.parent / 'kernel' / 'pages'
+    assert 'CONFIG_ARM64_4K_PAGES=y' in (root / '4k').read_text()
+    assert 'CONFIG_ARM64_16K_PAGES=y' in (root / '16k').read_text()
+    assert 'CONFIG_LOCALVERSION="-16k"' in (root / '16k').read_text()
+
+
+def test_each_arm_module_follows_its_kernel() -> None:
+    """Older devices build against the 4 KB kernel, recent ones the 16 KB."""
+    arm = _variants('linux-modules-arm')
+    assert arm[''] == {'deps': ['linux-image']}
+    assert arm['-16k'] == {'deps': ['linux-image-16k']}
+    devices = _variants('linux-modules-arm-device')
+    for old in ('rpi3', 'rpi4'):
+        assert devices[old]['deps'] == ['linux-modules-arm'], old
+        assert 'env' not in devices[old], old
+    for recent in ('rpi5', 'rk3588'):
+        assert devices[recent]['deps'] == ['linux-modules-arm-16k'], recent
+        assert devices[recent]['env'] == {'KERNEL_SUFFIX': '-16k'}, recent

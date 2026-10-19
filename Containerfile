@@ -25,6 +25,14 @@ ARG BOOT_PROFILE=generic
 # Kernel variant: `minimal` (default) is the project kernel built from kernel.org
 # (daemoncores-kernel-<kver>), the same kernel as Containerfile.minimal.
 ARG KERNEL_VARIANT=minimal
+# arm64 only. The arm64 distribution ships two kernels because the page size is a
+# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
+# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
+# `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name and
+# ARM_DEVICES lists the device module packages that kernel serves. The CI passes the
+# 16 KB values for the `-16k` image; the defaults build the 4 KB one.
+ARG KERNEL_SUFFIX=""
+ARG ARM_DEVICES="rpi3 rpi4"
 # Boot stack chosen by the CI from the architecture and the boot profile:
 # grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
 # u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
@@ -112,7 +120,7 @@ RUN for _r in 1 2 3 4 5; do \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}-${ARCH} \
+        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
@@ -198,15 +206,14 @@ RUN for _r in 1 2 3 4 5; do \
             firmware-nvidia-graphics \
             linux-modules-x86-64; \
     else \
+        arm_modules=(); \
+        for _d in ${ARM_DEVICES}; do arm_modules+=("linux-modules-${_d}"); done; \
         apt install -y --no-install-recommends \
             efibootmgr \
             libubootenv-tool \
             device-tree-compiler \
-            linux-modules-arm \
-            linux-modules-rpi3 \
-            linux-modules-rpi4 \
-            linux-modules-rpi5 \
-            linux-modules-rk3588; \
+            linux-modules-arm${KERNEL_SUFFIX} \
+            "${arm_modules[@]}"; \
     fi
 
 # -----------------------------------------------------------------------------

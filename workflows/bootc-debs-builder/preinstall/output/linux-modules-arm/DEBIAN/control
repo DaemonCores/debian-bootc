@@ -1,4 +1,4 @@
-Package: linux-modules-arm
+Package: linux-modules-arm{{ SUFFIX }}
 Version: {{ VER }}
 Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
