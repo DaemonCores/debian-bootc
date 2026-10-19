@@ -13,8 +13,12 @@ VBIN = $(VENV)/bin
 
 # Shared checks and tooling (docstring gate, tests manifest, build context,
 # documentation sync, reference generation, local boot test) live in
-# DaemonCores-CI; CI exports CI_REPO, local runs use the sibling checkout.
-CI_REPO ?= ../DaemonCores-CI
+# DaemonCores-CI. The `ci-repo` target fetches it into the untracked `.ci/`
+# directory on first use and fast-forwards it afterwards (best effort, so an
+# offline run keeps the last copy). CI exports CI_REPO itself; set CI_REPO to
+# a local checkout (e.g. ../DaemonCores-CI) to test uncommitted changes.
+CI_REPO ?= .ci
+CI_REPO_URL ?= https://github.com/DaemonCores/DaemonCores-CI.git
 
 # ---- file sets ------------------------------------------------------------ #
 
@@ -116,9 +120,20 @@ check-yaml:
 	@command -v yamllint >/dev/null 2>&1 || { echo "yamllint not found — pip install yamllint" >&2; exit 1; }
 	yamllint $(YAML_SRCS)
 
+# Fetch or refresh the shared DaemonCores-CI checkout (untracked, see .gitignore).
+.PHONY: ci-repo
+
+ci-repo:
+	@if [ ! -d "$(CI_REPO)/scripts" ]; then \
+	  git clone --depth 1 --quiet "$(CI_REPO_URL)" "$(CI_REPO)" \
+	    || { echo "cannot fetch DaemonCores-CI: set CI_REPO" >&2; exit 1; }; \
+	elif [ -z "$${CI:-}" ] && [ -d "$(CI_REPO)/.git" ]; then \
+	  git -C "$(CI_REPO)" pull --ff-only --quiet 2>/dev/null \
+	    || echo "warning: DaemonCores-CI not refreshed (offline?)" >&2; \
+	fi
+
 # Shared gates from DaemonCores-CI (the same ones every repository runs).
-check-shared: py-ready
-	@test -d $(CI_REPO)/scripts || { echo "DaemonCores-CI not found: set CI_REPO" >&2; exit 1; }
+check-shared: py-ready ci-repo
 	$(VBIN)/python $(CI_REPO)/scripts/check_docstrings.py --root .
 	$(VBIN)/python $(CI_REPO)/scripts/check_tests_manifest.py --root .
 	$(VBIN)/python $(CI_REPO)/scripts/check_build_context.py --root .
@@ -188,10 +203,10 @@ test: py-ready test-unit
 
 .PHONY: docs docs-check
 
-docs: py-ready
+docs: py-ready ci-repo
 	$(VBIN)/python $(CI_REPO)/scripts/gen_docs.py --root .
 
-docs-check: py-ready
+docs-check: py-ready ci-repo
 	$(VBIN)/python $(CI_REPO)/scripts/gen_docs.py --root . --check
 	$(VBIN)/python $(CI_REPO)/scripts/check_docs.py --root .
 
@@ -209,7 +224,7 @@ build:
 .PHONY: e2e
 
 # Usage: make e2e IMAGE=debian-bootc:local [ARCH=amd64]
-e2e:
+e2e: ci-repo
 	CI_REPO="$(abspath $(CI_REPO))" ROOT="$(CURDIR)" $(CI_REPO)/scripts/e2e-local.sh "$(IMAGE)" "$(or $(ARCH),amd64)"
 
 # ---- help ----------------------------------------------------------------- #
