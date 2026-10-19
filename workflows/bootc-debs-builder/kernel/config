@@ -176,10 +176,23 @@ CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
 # SND: disable the entire sound subsystem. No audio hardware used.
 # CONFIG_SOUND is not set
 
-# DRM: disable the Direct Rendering Manager subsystem. No display on a
-# headless image. Removes the i915, amdgpu, nouveau, V3D, VOP, etc. drivers
-# as well (they depend on DRM).
-# CONFIG_DRM is not set
+# DRM: modules, not disabled. This image cannot know in advance what it runs
+# on (server, desktop, VM, SBC), and the live installer needs KMS to draw its
+# GTK UI. As modules they cost nothing on hardware without a display: udev loads
+# a driver only when its device shows up. Only the drivers that are generic or
+# virtual live here; physical GPUs are in the per-device overlays.
+CONFIG_DRM=m
+
+# simpledrm: scanout through the firmware (EFI/UEFI GOP) framebuffer, the
+# fallback every x86 machine and VM has before a native driver loads.
+CONFIG_SYSFB_SIMPLEFB=y
+CONFIG_DRM_SIMPLEDRM=m
+
+# virtio-gpu: the paravirtual GPU of QEMU/KVM guests.
+CONFIG_DRM_VIRTIO_GPU=m
+
+# bochs: the QEMU standard VGA adapter (-vga std, the default on q35).
+CONFIG_DRM_BOCHS=m
 
 # BT: disable Bluetooth. No BT hardware on the minimal target.
 # CONFIG_BT is not set
