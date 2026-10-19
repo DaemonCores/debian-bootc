@@ -26,7 +26,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | Image tag | `<variant>_<arch>_<autoupdate\|lock>` per architecture, plus manifest-list aliases such as `latest`, `minimal` [src: file: docs/architecture.md:73]. `Containerfile.iso` references the hyphenated form `latest-${ARCH}-autoupdate` [src: file: Containerfile.iso:28]. <!-- TODO: ask user --> which separator is canonical. |
 | Kernel variant (`KERNEL_VARIANT`) | Build arg selecting the kernel package `linux-image-${KERNEL_VARIANT}-${ARCH}`; default `stock` [src: file: Containerfile:21] [src: file: Containerfile:27]. |
 | `linux-image-stock-<arch>` | Virtual package name provided by the project's custom `linux-image` deb [src: file: workflows/bootc-debs-builder/packages.yml:204]. |
-| Kernel module packages | `linux-modules-generic`, `linux-modules-arm`, `linux-modules-arm-device`, `linux-modules-x86_64` built from `modules-kernel/*` overlays on top of `kernel/config` [src: file: workflows/bootc-debs-builder/packages.yml:230] [src: file: modules-kernel/rk3588:5]. |
+| Kernel module packages | `linux-modules-generic`, `linux-modules-arm`, `linux-modules-arm-device`, `linux-modules-x86_64` built from `kernel/modules/*` overlays on top of `kernel/config` [src: file: workflows/bootc-debs-builder/packages.yml:230] [src: file: workflows/bootc-debs-builder/kernel/modules/rk3588:5]. |
 | `BOOT_PKG` | Build arg for the boot package: `grub-efi-amd64-signed` on amd64, `u-boot-tools` on arm64 [src: file: Containerfile.minimal:89]. |
 | `PRODUCT_NAME` | Build arg written to `/usr/lib/bootc/product-name`, consumed by boot finalization tooling [src: file: Containerfile:82]. |
 | `BOOTC_GPG_SHA256` | SHA-256 of the APT signing key, derived by the CI from `APT_GPG_KEY` and checked during the build [src: file: Containerfile:43] [src: file: Containerfile:79]. |
@@ -64,7 +64,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 |------|------------|
 | amd64 | Current installation target; ISO is amd64-only [src: file: README.md:20] [src: file: docs/architecture.md:109]. |
 | arm64 | Supported in CI/manifests but still being validated; uses U-Boot instead of GRUB [src: file: README.md:20] [src: file: Containerfile.minimal:89]. |
-| SBC targets | Kernel module overlays for Raspberry Pi 3/4/5 and Rockchip RK3588 boards [src: file: modules-kernel/rk3588:3]. See [minimal § Architecture boundary](minimal.md#architecture-boundary). |
+| SBC targets | Kernel module overlays for Raspberry Pi 3/4/5 and Rockchip RK3588 boards [src: file: workflows/bootc-debs-builder/kernel/modules/rk3588:3]. See [minimal § Architecture boundary](minimal.md#architecture-boundary). |
 | Raspberry Pi `.img` | Optional arm64 disk-image stage (`run_img_rpi`, default off) [src: file: .github/workflows/pipeline.yml:44]. |
 | QEMU/KVM test VM | Virtual disk the image is installed to and booted (UEFI) for runtime tests [src: file: workflows/tests.yml:2]. |
 | Build container | Podman build with `--format docker`; no init, so services are blocked by `policy-rc.d` [src: file: README.md:60] [src: file: src/debianpreinstall/usr/sbin/policy-rc.d:3]. |
