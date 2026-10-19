@@ -79,15 +79,19 @@ packages:
   - name: linux-image
     deb-glob: "linux-image-common_*"
     sources:
-      # Only the base config feeds this package's content hash. A per-device
-      # overlay change must NOT trigger a full kernel rebuild — it only
-      # rebuilds that device's modules entry.
+      # Only the base config and the source download feed this package's
+      # content hash. A per-device overlay change must NOT trigger a full
+      # kernel rebuild — it only rebuilds that device's modules entry.
       - kernel/config
-    env:
-      # KCONFIG_VER is a rolling tag; the builder pins the exact Debian kernel
-      # source via `apt-get source linux-image-$(dpkg --print-architecture)`,
-      # so this is only the OUTPUT version label for the produced .deb.
-      KCONFIG_VER: "1.0"
+      - lib/kernel-source.sh
+    # Rolling: the kernel is the latest stable release of kernel.org (version
+    # and tarball sha256 resolved before each build, nothing pinned). If that
+    # release does not build, the last-good published deb is kept.
+    track:
+      KERNEL_VER:
+        kernel-org: stable
+        digests:
+          KERNEL_SHA256: "linux-{version}.tar.xz"
     build: |
       set -euo pipefail
 
@@ -104,24 +108,20 @@ packages:
       apt-get install -y --no-install-recommends \
         build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
         rsync libudev-dev elfutils dpkg-dev \
-        debhelper kmod libdw-dev
+        debhelper kmod libdw-dev curl xz-utils
 
-      # Download the Debian kernel source matching the installed kernel.
-      cd /tmp
-      apt-get source linux
-      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
-      test -n "${SRCDIR}" \
-        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
+      # Download the kernel.org tarball resolved by `track:` and verify its
+      # sha256. The kernel is never a distribution source package.
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
+      kernel_fetch_source "${KERNEL_VER}" "${KERNEL_SHA256}"
 
       cd "${SRCDIR}"
       make mrproper
 
-      # Start from the Debian config for this arch. This entry IS the kernel
-      # build, so there is nothing to inherit from: take the distro .config
-      # shipped in the build container's kernel headers package.
-      cp /boot/config-$(uname -r 2>/dev/null || echo config) .config 2>/dev/null \
-        || cp debian/config/config .config 2>/dev/null \
-        || make defconfig
+      # Start from the upstream defconfig of this arch. This entry IS the
+      # kernel build, so there is nothing to inherit from; the base config
+      # below layers the project choices on top.
+      make defconfig
 
       # Merge the base config (filesystems, virtio, serial, disables — the
       # base for every device). merge_config.sh -m merges in place.
@@ -141,7 +141,9 @@ packages:
       # above the source dir).
       # ARCH is set above from DEB_ARCH (x86 for amd64) so the kernel
       # Makefile reads it from the environment; no make argument needed.
-      make -j"$(nproc)" bindeb-pkg
+      # KDEB_PKGVERSION pins the deb version to <kernel>-1 so that the module
+      # entries recover the kernel.org version from it (BUILT_VER%%-*).
+      KDEB_PKGVERSION="${KERNEL_VER}-1" make -j"$(nproc)" bindeb-pkg
 
       # Find the produced image deb (exclude debug debs).
       COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
@@ -236,6 +238,7 @@ packages:
       - kernel/modules/arm
       - preinstall/output/linux-modules-arm
       - lib/kernel-prepare.sh
+      - lib/kernel-source.sh
     build: |
       set -euo pipefail
       DEVICE=arm
@@ -431,6 +434,7 @@ packages:
       - kernel/modules/arm
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
+      - lib/kernel-source.sh
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
@@ -580,6 +584,7 @@ packages:
       - kernel/modules/x86_64
       - preinstall/output/linux-modules-x86-64
       - lib/kernel-prepare.sh
+      - lib/kernel-source.sh
     build: |
       set -euo pipefail
       DEVICE=x86-64
