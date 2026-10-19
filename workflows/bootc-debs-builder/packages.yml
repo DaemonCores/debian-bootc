@@ -87,12 +87,14 @@ packages:
       - kernel/patches.lock.json
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
-    # Rolling: the kernel is the latest stable release of kernel.org (version
-    # and tarball sha256 resolved before each build, nothing pinned). If that
-    # release does not build, the last-good published deb is kept.
+    # Rolling: the kernel is the newest stable or longterm release of kernel.org
+    # whose series every patch source (CachyOS, ROCKNIX) already provides
+    # (version and tarball sha256 resolved before each build, nothing pinned).
+    # If that release does not build, the last-good published deb is kept.
     track:
       KERNEL_VER:
         kernel-org: stable
+        require-patches: kernel/patches.yml
         digests:
           KERNEL_SHA256: "linux-{version}.tar.xz"
     build: |
