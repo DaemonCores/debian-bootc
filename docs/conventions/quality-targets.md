@@ -40,7 +40,7 @@ The maintainer's `cunegonde-ai/agentic-backend` repository is the reference for 
 | `pyproject.toml` — ruff, yapf, docformatter, pydoclint, mypy, basedpyright sections | ✓ copied as-is into this repo; only `target-version` (py311), `mypy_path`, `basedpyright.extraPaths` and `basedpyright.pythonVersion` adapted for the single-file scripts/ surface | |
 | `setup.cfg` admission extras (ruff, yapf, docformatter, mypy, basedpyright, pydoclint, bandit versions) | ✓ pinned in `Makefile` `admission` target; not a Python package so no setup.cfg | |
 | `scripts/style.py` — custom readability gate | ✗ not portable: imports from `tests.enforcement.*` (a cunegonde-ai internal package); equivalent rules for debian-bootc not adopted: a project-specific gate is out of scope for KT-2 | |
-| `scripts/gen_docs.py` — API/docstring reference generation | ✗ not portable: tightly coupled to the cunegonde-ai Python package structure; replaced by `scripts/gen_docs.py` (see [code-style](code-style.md)) | |
+| `gen_docs.py` — API/docstring reference generation | ✗ not portable: tightly coupled to the cunegonde-ai Python package structure; replaced by the shared `DaemonCores-CI/scripts/gen_docs.py` (see [code-style](code-style.md)) | |
 | `hooks/pre-commit` | ✗ not applicable: tied to cunegonde-ai's doc-submodule, facet architecture and frontend; debian-bootc pre-commit (optional) not added | |
 
 ## Languages without a Google style guide
