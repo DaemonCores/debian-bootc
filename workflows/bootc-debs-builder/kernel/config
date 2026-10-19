@@ -10,8 +10,8 @@
 #     scripts/kconfig/merge_config.sh -m .config kernel/config
 #     make olddefconfig
 #
-# Per-device fragments (modules-kernel/rpi3, modules-kernel/rpi4,
-# modules-kernel/rpi5, modules-kernel/rk3588, modules-kernel/x86_64) are
+# Per-device fragments (kernel/modules/rpi3, kernel/modules/rpi4,
+# kernel/modules/rpi5, kernel/modules/rk3588, kernel/modules/x86_64) are
 # applied as OVERLAYS on top of kernel/config. They keep ONLY device-specific
 # options (SoC, Ethernet PHY, MMC, USB, RTC) and are merged AFTER kernel/config,
 # so a same-symbol option in the overlay wins (kernel kconfig last-wins on
