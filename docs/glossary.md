@@ -6,7 +6,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 
 | Term | Definition |
 |------|------------|
-| bootc | Bootable OCI container tooling: the OS is shipped as a container image and deployed/updated by `bootc`; built from source here as a `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:1136]. See [architecture](architecture.md). |
+| bootc | Bootable OCI container tooling: the OS is shipped as a container image and deployed/updated by `bootc`; built from source here as a `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:1262]. See [architecture](architecture.md). |
 | OSTree | Content-addressed object store for bootable OS trees; provides the atomic `/usr` deployment [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/control:13]. |
 | composefs / libcomposefs | Integrity-protected filesystem image library used by OSTree; enabled for the root via `[composefs] enabled=yes` [src: file: workflows/bootc-debs-builder/ostreepostinstall/usr/lib/ostree/prepare-root.conf:5]. |
 | `prepare-root.conf` | OSTree config shipped in the `ostree` deb: read-only sysroot plus composefs root [src: file: workflows/bootc-debs-builder/ostreepostinstall/usr/lib/ostree/prepare-root.conf:1]. |
@@ -27,7 +27,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | Kernel variant (`KERNEL_VARIANT`) | Build arg selecting the kernel package `linux-image-${KERNEL_VARIANT}-${ARCH}`; default `stock` [src: file: Containerfile:21] [src: file: Containerfile:27]. |
 | `linux-image-stock-<arch>` | Virtual package name provided by the project's custom `linux-image` deb [src: file: workflows/bootc-debs-builder/packages.yml:204]. |
 | Kernel module packages | `linux-modules-generic`, `linux-modules-arm`, `linux-modules-arm-device`, `linux-modules-x86_64` built from `kernel/modules/*` overlays on top of `kernel/config` [src: file: workflows/bootc-debs-builder/packages.yml:230] [src: file: workflows/bootc-debs-builder/kernel/modules/rk3588:5]. |
-| `BOOT_PKG` | Build arg for the boot package: `grub-efi-amd64-signed` on amd64, `u-boot-tools` on arm64 [src: file: Containerfile.minimal:89]. |
+| `BOOT_PKG` | Build arg for the boot package: `grub-efi-amd64-signed` on amd64, `u-boot-tools grub-efi-arm64-signed` on arm64 [src: file: Containerfile.minimal:89]. |
 | `PRODUCT_NAME` | Build arg written to `/usr/lib/bootc/product-name`, consumed by boot finalization tooling [src: file: Containerfile:82]. |
 | `BOOTC_GPG_SHA256` | SHA-256 of the APT signing key, derived by the CI from `APT_GPG_KEY` and checked during the build [src: file: Containerfile:43] [src: file: Containerfile:79]. |
 | Package manifest | `workflows/bootc-debs-builder/packages.yml`: one entry per `.deb` with `name`, `upstream`, `deps`, `sources`, `deb-glob`, `env`, `secret-env`, `build` [src: file: workflows/bootc-debs-builder/packages.yml:2]. |

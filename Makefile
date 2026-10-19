@@ -41,7 +41,8 @@ POSTINST_SRCS := \
 	workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst \
 	src/ostreelayout/usr/libexec/debian-bootc/ostree-layout \
 	src/signaturepolicy/usr/libexec/debian-bootc/install-signature-policy \
-	workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst
+	workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst \
+	workflows/bootc-debs-builder/preinstall/output/grub-efi-arm64-signed/DEBIAN/postinst
 
 CONTAINERFILES := Containerfile Containerfile.minimal Containerfile.iso
 

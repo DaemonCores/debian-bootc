@@ -30,7 +30,7 @@ metadata:
 If nothing consumes it, a full GRUB compile and signing run on every cache miss is dead build code, and its pins must still be kept in sync (see [TD-20261018-grub-efi-entries-duplicated-pins](TD-20261018-grub-efi-entries-duplicated-pins.md)).
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/packages.yml:1143` — entry
+- `workflows/bootc-debs-builder/packages.yml:1269` — entry
 - `Containerfile:28-30` — arm64 uses u-boot-tools via BOOT_PKG
 - `Containerfile.minimal:13-14` — 'arm64 uses u-boot-tools instead of grub-efi-arm64'
 - `workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:50` — only grub-efi-amd64-signed queried
@@ -43,4 +43,4 @@ If the package has no consumer, remove the entry. If one exists, document it in 
 `ask user`
 
 ## Resolution
-Removed by user decision (2026-10-18): the `grub-efi-arm64-signed` entry in `workflows/bootc-debs-builder/packages.yml`, its `preinstall/output/grub-efi-arm64-signed/` control files and its Makefile postinst entry are deleted. arm64 images keep using `u-boot-tools` (`BOOT_PKG`). Nothing else referenced the package in this repo or in DaemonCores-CI.
+Superseded (2026-10-19): bootupd 0.3 refuses to install without a `grub2` component, and the project requires every GRUB to come from the signed Fedora build. The `grub-efi-arm64-signed` package is restored and now consumed: arm64 images install it through `BOOT_PKG` next to `u-boot-tools` and hold it through `APT_HOLD_PKG`.

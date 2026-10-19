@@ -88,7 +88,7 @@ LABEL org.daemoncores.autoupdate-variants="lock,autoupdate"
 # Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
 # grub-efi-${ARCH} on x86_64, u-boot-tools on arm64 SBCs (via BOOT_PKG override).
 ARG ARCH=amd64
-# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
+# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools + grub-efi-arm64-signed (arm64). Kept as a
 # separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
 ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: empty on x86_64 (downstream adds microcode); arm64 ships
