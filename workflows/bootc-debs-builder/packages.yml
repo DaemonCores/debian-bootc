@@ -1273,6 +1273,7 @@ packages:
       - fisherman
     sources:
       - preinstall/output/bootc-installer
+      - patches/bootc-installer-mok.patch
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
       BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc7"
@@ -1298,6 +1299,13 @@ packages:
       # Clone at the pinned commit (shallow not possible with a bare commit SHA).
       git clone https://github.com/frostyard/bootc-installer.git /build/bootc-installer-src
       git -C /build/bootc-installer-src checkout "${BOOTC_INSTALLER_COMMIT}"
+
+      # Secure Boot: after a successful install, queue the DaemonCores signing
+      # certificate for MOK enrollment through the live image helper
+      # (/usr/libexec/debian-bootc/mok-stage) and show the one-time password
+      # on the existing MOK acknowledgement page.
+      git -C /build/bootc-installer-src apply \
+        "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootc-installer-mok.patch"
 
       # The fisherman submodule contains data/images/ (distribution logos) that
       # bootc-installer.gresource.xml references at build time. Initialize it so
@@ -1352,6 +1360,9 @@ packages:
       _res=$(find /output/bootc-installer/usr -name "*.gresource" | head -1)
       test -n "${_res}" && test -s "${_res}" \
         || { echo "ERROR: bootc-installer GResource bundle missing" >&2; exit 1; }
+      _mok=$(find /output/bootc-installer/usr -name mok_stage.py | head -1)
+      test -n "${_mok}" \
+        || { echo "ERROR: bootc-installer MOK module missing" >&2; exit 1; }
 
       sed -i \
         -e "s|{{ VER }}|${BOOTC_INSTALLER_VER}|g" \

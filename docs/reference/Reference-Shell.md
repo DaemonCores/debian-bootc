@@ -12,6 +12,14 @@ returning 101 tells the invoke-rc.d helper "forbidden", so no daemon runs
 inside the build container (there is no init there and services must start
 only on the real first boot).
 
+## `src/buildisopreinstall/usr/libexec/debian-bootc/mok-stage`
+
+Queue the DaemonCores Secure Boot certificate for MOK enrollment.
+
+Runs as root (through pkexec) from the live installer session once the
+install succeeded. The one-time MokManager password is read from stdin so it
+never appears in a process list or a log.
+
 ## `src/debianpreinstall/usr/sbin/policy-rc.d`
 
 policy-rc.d - deny all daemon start/restart actions during the image build.

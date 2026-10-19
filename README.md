@@ -88,6 +88,18 @@ The installer is destructive to the selected disk. Review the prompt carefully a
 
 Without `PAT_SECRETS` nothing is generated: images are signed keyless and modules stay unsigned. The workflow needs `actions: write` so `prepare` can restart the pipeline.
 
+### Secure Boot enrollment during install
+
+The installer enrolls the signing certificate for you. After a successful
+install on a UEFI machine, the patched `bootc-installer`
+(`workflows/bootc-debs-builder/patches/bootc-installer-mok.patch`) runs the
+live-image helper `/usr/libexec/debian-bootc/mok-stage` through `pkexec`. The
+helper queues `/usr/share/debian-bootc/sb_signing.crt` with `mokutil --import`
+and a random one-time password, which the installer shows on its
+acknowledgement page. At the first reboot, the blue MokManager screen asks for
+that password: *Enroll MOK, Continue, Yes, enter the password, Reboot*. Nothing
+is queued on BIOS machines or when the certificate is already enrolled.
+
 GitHub Pages must be configured for Actions deployment so the APT repository can be published.
 
 ## Documentation

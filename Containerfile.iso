@@ -68,7 +68,9 @@ RUN apt update \
         libgweather-4-0t64 \
         gir1.2-gweather-4.0 \
         xdg-utils \
-        adwaita-icon-theme
+        adwaita-icon-theme \
+        mokutil \
+        openssl
 
 # Placed after the apt layer: editing a Containerfile* or the generator must not
 # invalidate the cached installer-stack install.
