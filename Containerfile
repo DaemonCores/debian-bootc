@@ -208,8 +208,7 @@ RUN for _r in 1 2 3 4 5; do \
         apt install -y --no-install-recommends \
             firmware-intel-graphics \
             firmware-intel-misc \
-            firmware-nvidia-graphics \
-            linux-modules-x86-64; \
+            firmware-nvidia-graphics; \
     else \
         arm_modules=(); \
         for _d in ${ARM_DEVICES}; do arm_modules+=("linux-modules-${_d}"); done; \
@@ -217,7 +216,6 @@ RUN for _r in 1 2 3 4 5; do \
             efibootmgr \
             libubootenv-tool \
             device-tree-compiler \
-            linux-modules-arm${KERNEL_SUFFIX} \
             "${arm_modules[@]}"; \
     fi
 

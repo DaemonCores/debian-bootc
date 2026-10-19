@@ -1,7 +1,7 @@
 # kernel/modules/arm
 #
-# Per-arch MODULE overlay for generic ARM (arm64). Applied on top of the base
-# kernel/config:
+# Per-arch overlay for generic ARM (arm64), merged into the kernel build
+# (linux-image, linux-image-16k) on top of the base kernel/config:
 #     scripts/kconfig/merge_config.sh -m .config kernel/config kernel/modules/arm
 #     make olddefconfig
 #
@@ -9,17 +9,17 @@
 # ALL ARM devices — everything shared across all devices (filesystems, virtio,
 # the shared hardware support) lives in kernel/config and is NOT repeated here.
 # Device-specific overlays (kernel/modules/rpi3, rpi4, rpi5, rk3588) are merged
-# AFTER this file and keep ONLY device-specific options (SoC platform, Ethernet
-# PHY, device-specific MMC controller, device-specific RTC driver). The modules
-# built from this overlay are OPTIONAL; the base image (linux-image-common)
-# works without them.
+# AFTER this file, by the device modules packages, and keep ONLY device-specific
+# options (SoC platform, Ethernet PHY, device-specific MMC controller,
+# device-specific RTC driver). The built-in options of this file are part of
+# the kernel itself; they could not be added by a modules-only build.
 #
 # Device class: ARM64 SoCs (Cortex-A53/A72/A76, Broadcom BCM27xx, Rockchip
 # RK3588). This overlay carries the ARM-generic subsystem cores + drivers that
 # every ARM device in the set needs before its device-specific overlay. The
-# device-specific overlays (rpi3/rpi4/rpi5/rk3588) depend on linux-modules-arm
-# (this package) rather than on linux-image directly, so the ARM-generic
-# options are built ONCE here and shared by every ARM device.
+# device-specific overlays (rpi3/rpi4/rpi5/rk3588) start from the .config the
+# kernel was built with, so the ARM-generic options are built ONCE in the kernel
+# and shared by every ARM device.
 #
 # Conventions:
 #   # reason in English

@@ -142,12 +142,12 @@ Package layout (the manifest expands one template into both sets):
 | 4 KB | 16 KB |
 |------|-------|
 | `linux-image` (deb `daemoncores-kernel-<kver>`, Provides `linux-image-minimal-arm64`) | `linux-image-16k` (deb `daemoncores-kernel-<kver>-16k`, Provides `linux-image-minimal-16k-arm64`) |
-| `linux-modules-arm` | `linux-modules-arm-16k` |
 | `linux-modules-rpi3`, `linux-modules-rpi4` | `linux-modules-rpi5`, `linux-modules-rk3588` |
 
 A module only loads into the kernel it was built for, so each device package
-depends on the ARM-generic package of its kernel. amd64 keeps its single
-kernel.
+depends on the kernel it was built against. The architecture overlay
+(`kernel/modules/arm`) is merged into the kernel build itself, not into a
+separate modules package. amd64 keeps its single kernel.
 
 Images: arm64 defaults to the 16 KB kernel. `Containerfile` and
 `Containerfile.minimal` carry `LABEL org.daemoncores.arm64-4k-image`, which makes
