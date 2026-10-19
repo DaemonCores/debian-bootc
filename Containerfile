@@ -13,6 +13,9 @@ LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-boo
 LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
+# Also asks the CI for the 16 KB arm64 kernel image (tag `<tag>-16k`, arm64 only)
+# next to the 4 KB one, see docs/decisions.md ("Two arm64 kernels").
+LABEL org.daemoncores.arm64-16k="true"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name linux-image-${KERNEL_VARIANT}-${ARCH} and the

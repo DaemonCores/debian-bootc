@@ -36,6 +36,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 │   │   ├── timesyncpostinstall/   # bootc-aware systemd-timesyncd repack
 │   │   └── kernel/                # inputs of the linux-* packages
 │   │       ├── config             # base kernel config fragment shared by all devices (linux-image-common)
+│   │       ├── pages/             # arm64 page-size fragments: 4k (Pi 3/4) and 16k (Pi 5, RK3588)
 │   │       └── modules/           # per-target overlays merged on top of kernel/config (generic, x86_64, arm, rpi3, rpi4, rpi5, rk3588)
 │   ├── env.yml                    # buildah recipe for the <repo>-buildenv image
 │   └── tests.yml                  # runtime boot tests (name, diag, arch/variant gating)

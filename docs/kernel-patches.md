@@ -121,18 +121,46 @@ checked.
 | `ZRAM` | module | inert until configured |
 | `ZSWAP` | built in, off by default | `ZSWAP_DEFAULT_ON` stays unset |
 
-### Rejected: 16 KB pages on arm64
+### Two arm64 kernels: 4 KB and 16 KB pages
 
-`ARM64_16K_PAGES` is **not** enabled. The kernel is a single image for
-Raspberry Pi 3/4/5, RK3588 and generic ARM. Raspberry Pi 3 (Cortex-A53) and
-Pi 4 (Cortex-A72) are, to my knowledge, ARMv8.0 cores without the optional
-16 KB translation granule, so such a kernel would not boot there. This is
-from memory of the core manuals and was not checked against them or on
-hardware. Even where the CPU supports it, `arch/arm64/Kconfig` notes that
-AArch32 applications must be built with 16 KB-aligned segments, and a 16 KB
-kernel would change the page size seen by every userspace on the shared
-image. A page-size split would need a second kernel, which the single-kernel
-decision (KT-13) rules out.
+arm64 ships two kernels because the page size is a compile-time choice
+(`ARM64_4K_PAGES`, `ARM64_16K_PAGES` and `ARM64_64K_PAGES` are one Kconfig
+`choice`), so it cannot be a module and one image cannot serve both.
+
+| Kernel | Overlay | Devices | Why |
+|--------|---------|---------|-----|
+| 4 KB | `kernel/pages/4k` | Raspberry Pi 3, Raspberry Pi 4 | The Cortex-A53 reports `ID_AA64MMFR0_EL1.TGran16 = 0x0`, "the 16KB granule is not supported" (Cortex-A53 TRM, DDI 0500J, which also lists a granule of 4 KB or 64 KB only). The Cortex-A72 manual and a secondary source list 4 KB and 64 KB too; the Pi 4 has no 16 KB kernel upstream |
+| 16 KB | `kernel/pages/16k` | Raspberry Pi 5, RK3588 | Recent cores: fewer page-table levels and TLB misses, which helps when a runtime maps the multi-GB weights of a local model. Raspberry Pi OS already boots the Pi 5 on a 16 KB kernel (`kernel_2712.img`) |
+
+The 16 KB kernel sets `CONFIG_LOCALVERSION="-16k"`, so its release string and
+its `/usr/lib/modules/<kver>` never collide with the 4 KB kernel's. Every patch
+of `kernel/patches.yml` applies to both kernels (same source tree, same
+script).
+
+Package layout (the manifest expands one template into both sets):
+
+| 4 KB | 16 KB |
+|------|-------|
+| `linux-image` (deb `daemoncores-kernel-<kver>`, Provides `linux-image-minimal-arm64`) | `linux-image-16k` (deb `daemoncores-kernel-<kver>-16k`, Provides `linux-image-minimal-16k-arm64`) |
+| `linux-modules-arm` | `linux-modules-arm-16k` |
+| `linux-modules-rpi3`, `linux-modules-rpi4` | `linux-modules-rpi5`, `linux-modules-rk3588` |
+
+A module only loads into the kernel it was built for, so each device package
+depends on the ARM-generic package of its kernel. amd64 keeps its single
+kernel.
+
+Images: `Containerfile` and `Containerfile.minimal` carry
+`LABEL org.daemoncores.arm64-16k`, which makes the CI emit a second arm64 image
+tagged `<tag>-16k` (for example `latest-16k`, `minimal-16k`) next to the 4 KB
+one. It passes `KERNEL_SUFFIX=-16k` and `ARM_DEVICES="rpi5 rk3588"`; the plain
+image uses the defaults (empty suffix, `rpi3 rpi4`). The `-16k` manifest lists
+cover arm64 only.
+
+Caveats: AArch32 applications need 16 KB-aligned segments on the 16 KB kernel
+(`arch/arm64/Kconfig`), and some software assumes 4 KB pages; the 4 KB image
+stays the compatible default. Generic UEFI arm64 hardware is not assigned to a
+kernel: it can run either, and the 4 KB image is the safe choice for cores whose
+granule support is unknown (for example Cortex-A57 servers).
 
 Not verified: the kernel was not built or booted with these options;
 `make olddefconfig` cannot run on the current host, so symbol resolution is
