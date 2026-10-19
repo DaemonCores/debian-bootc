@@ -21,12 +21,12 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 - Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:26].
 - Formatter: Not configured.
 - Type checker: N/A — not used in this project.
-- Build / check command: `make build` or directly `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:60].
+- Build / check command: `make build` or directly `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62].
 
 ### Conventions
 
-- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:51] [src: file: Containerfile.minimal:121].
-- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:53] [src: file: Containerfile:70] [src: file: Containerfile.minimal:124] [src: file: Containerfile.minimal:141].
+- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:51] [src: file: Containerfile.minimal:123].
+- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:53] [src: file: Containerfile:70] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:141].
 - Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:57] [src: file: Containerfile.minimal:127] [src: file: Containerfile.iso:65].
 - Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:58] [src: file: Containerfile.minimal:128] [src: file: Containerfile.iso:66].
 - Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:21] [src: file: Containerfile:28].
@@ -55,7 +55,7 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 - Bash scripts start with `set -euo pipefail` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:7] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:5] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:6] [src: file: workflows/bootc-debs-builder/packages.yml:20]. `DEBIAN/postinst` files use `set -e` [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst:2].
 - Each standalone script opens with a header comment that names it and says what it does [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:3].
 - In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:99] [src: file: workflows/bootc-debs-builder/packages.yml:114].
-- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:412] [src: file: workflows/bootc-debs-builder/packages.yml:910].
+- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:412] [src: file: workflows/bootc-debs-builder/packages.yml:898].
 - Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:98].
 - A `# shellcheck disable=` directive comes with a comment saying why [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:9] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:133].
 

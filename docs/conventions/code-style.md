@@ -17,6 +17,6 @@ Adopted for KT-2 [src: user:pikatsuto:2026-10-18: disc-dc54c008]. Rule: follow t
 
 ## Deviations from the reference (cunegonde-ai `agentic-backend`)
 
-- Generation uses `ast` + a header-comment scan (`scripts/gen_docs.py`) instead of `pydoc-markdown`: the script file names contain hyphens, which `pydoc-markdown` cannot import as modules. Hypothesis, not tested against `pydoc-markdown`.
+- Generation uses `ast` + a header-comment scan (`DaemonCores-CI/scripts/gen_docs.py`, run with `--root .`) instead of `pydoc-markdown`: the script file names contain hyphens, which `pydoc-markdown` cannot import as modules. Hypothesis, not tested against `pydoc-markdown`.
 - The Google `pylintrc` named in KT-1 is not used: the reference config (ruff + mypy + basedpyright) wins, as recorded in [quality-targets](quality-targets.md).
 - `style.py` and the reference pre-commit hook stay out: they depend on cunegonde-ai internals.

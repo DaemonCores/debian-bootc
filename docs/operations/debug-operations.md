@@ -7,9 +7,9 @@ Operational commands and troubleshooting for debian-bootc. The repo has no Makef
 
 | Action | Command |
 |--------|---------|
-| Build full image (amd64 host) | `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:60] |
-| Build minimal image (amd64) | `podman build --format docker --build-arg ARCH=amd64 --build-arg BOOT_PKG=grub-efi-amd64-signed --build-arg KERNEL_VARIANT=stock --build-arg AUTOUPDATE=1 -f Containerfile.minimal -t debian-bootc:minimal-amd64 .` [src: file: docs/minimal.md:71] |
-| Lint a built image (local equivalent of CI bootc validation) | `podman run --rm debian-bootc:local bootc container lint` [src: file: docs/testing-quality.md:87] |
+| Build full image (amd64 host) | `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62] |
+| Build minimal image (amd64) | `podman build --format docker --build-arg ARCH=amd64 --build-arg BOOT_PKG=grub-efi-amd64-signed --build-arg KERNEL_VARIANT=stock --build-arg AUTOUPDATE=1 -f Containerfile.minimal -t debian-bootc:minimal-amd64 .` [src: file: docs/minimal.md:73] |
+| Lint a built image (local equivalent of CI bootc validation) | `podman run --rm debian-bootc:local bootc container lint` [src: file: docs/testing-quality.md:92] |
 | Inspect a built image (shell, no boot) | `podman run --rm -it debian-bootc:local bash` [src: inferred: standard podman usage; the image is Debian-based, `Containerfile:5`] |
 | Start / stop | N/A — no long-running service in this repo. The image is booted only by the CI harness (`bootc install` to a virtual disk, QEMU/KVM + UEFI, SSH) [src: file: workflows/tests.yml:1] |
 | Test (runtime) | Runs in CI on every image build from `workflows/tests.yml`; no local runner script in the repo [src: file: workflows/tests.yml:3] |
