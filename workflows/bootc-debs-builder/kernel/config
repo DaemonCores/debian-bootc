@@ -201,6 +201,9 @@ CONFIG_INPUT_TABLET=y
 # DRM/KMS: modules. The live installer needs KMS to draw its GTK UI. Generic
 # and virtual drivers live here; physical GPUs are in the per-device overlays.
 CONFIG_DRM=m
+# Compute acceleration framework: a bool, so it must be in the image for the
+# NPU drivers (CONFIG_DRM_ACCEL_ROCKET in modules/rk3588) to build as modules.
+CONFIG_DRM_ACCEL=y
 CONFIG_DRM_KMS_HELPER=m
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_FB=y
