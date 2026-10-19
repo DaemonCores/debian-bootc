@@ -46,15 +46,34 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
 
 
-def test_standard_image_uses_the_debian_kernel() -> None:
-    """The standard Containerfile installs linux-image-${ARCH}, no modules."""
-    text = (MANIFEST.parents[2] / 'Containerfile').read_text()
-    assert 'linux-image-${ARCH} \\' in text
-    assert 'KERNEL_VARIANT' not in text
-    install = [
-        ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
-    ]
-    assert not any('linux-modules-' in ln for ln in install)
+def test_both_images_install_the_same_project_kernel() -> None:
+    """Containerfile and Containerfile.minimal install the single kernel."""
+    root = MANIFEST.parents[2]
+    kernel = 'linux-image-${KERNEL_VARIANT}-${ARCH} \\'
+    for name in ('Containerfile', 'Containerfile.minimal'):
+        text = (root / name).read_text()
+        install = [
+            ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
+        ]
+        assert any(kernel in ln for ln in install), name
+        assert 'ARG KERNEL_VARIANT=minimal' in text, name
+        assert not any('linux-image-${ARCH}' in ln for ln in install), name
+
+
+def test_both_images_install_the_same_modules() -> None:
+    """The standard image keeps the hardware support of the minimal one."""
+    root = MANIFEST.parents[2]
+    modules = {}
+    for name in ('Containerfile', 'Containerfile.minimal'):
+        text = (root / name).read_text()
+        modules[name] = {
+            tok
+            for ln in text.splitlines() if not ln.lstrip().startswith('#')
+            for tok in ln.replace(';', ' ').replace('\\', ' ').split()
+            if tok.startswith('linux-modules-')
+        }
+    assert modules['Containerfile'] == modules['Containerfile.minimal']
+    assert 'linux-modules-x86-64' in modules['Containerfile']
 
 
 def test_standard_image_keeps_the_login_stack() -> None:

@@ -15,13 +15,16 @@ LABEL containers.bootc=1
 LABEL ostree.bootable=1
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
-# Drives the kernel package name linux-image-${ARCH} and the
+# Drives the kernel package name linux-image-${KERNEL_VARIANT}-${ARCH} and the
 # boot stack (${BOOT_PKG} is separate because arm64 does NOT follow grub-efi-${ARCH}).
 ARG ARCH=amd64
 # Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
 # absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
 # servers, VMs); `embedded` is arm64 boards whose firmware loads U-Boot.
 ARG BOOT_PROFILE=generic
+# Kernel variant: `minimal` (default) is the project kernel built from kernel.org
+# (daemoncores-kernel-<kver>), the same kernel as Containerfile.minimal.
+ARG KERNEL_VARIANT=minimal
 # Boot stack chosen by the CI from the architecture and the boot profile:
 # grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
 # u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
@@ -82,9 +85,11 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # -----------------------------------------------------------------------------
 # Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
 # -----------------------------------------------------------------------------
-# The standard image runs Debian's own kernel (linux-image-${ARCH}, tracked and patched
-# by Debian) with the full hardware support it ships. The project kernel
-# (daemoncores-kernel-<kver>) belongs to the minimal image only and Conflicts with this one.
+# Both images run the single project kernel (daemoncores-kernel-<kver>, built from
+# kernel.org), installed through the virtual name linux-image-${KERNEL_VARIANT}-${ARCH}.
+# The standard image adds the same per-arch driver modules (linux-modules-*, see the
+# block after this RUN) so its hardware support does not shrink. Debian's own
+# linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/ fails bootc lint.
 # linux-headers is NOT installed: it was never published to the custom apt repo
 # and Debian's linux-headers-${ARCH} would create a spurious /usr/lib/modules/<kver>/build.
 # Recommends are NOT installed (--no-install-recommends): they pulled a mail
@@ -107,7 +112,7 @@ RUN for _r in 1 2 3 4 5; do \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
     && apt install -y --no-install-recommends \
-        linux-image-${ARCH} \
+        linux-image-${KERNEL_VARIANT}-${ARCH} \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
@@ -190,12 +195,18 @@ RUN for _r in 1 2 3 4 5; do \
         apt install -y --no-install-recommends \
             firmware-intel-graphics \
             firmware-intel-misc \
-            firmware-nvidia-graphics; \
+            firmware-nvidia-graphics \
+            linux-modules-x86-64; \
     else \
         apt install -y --no-install-recommends \
             efibootmgr \
             libubootenv-tool \
-            device-tree-compiler; \
+            device-tree-compiler \
+            linux-modules-arm \
+            linux-modules-rpi3 \
+            linux-modules-rpi4 \
+            linux-modules-rpi5 \
+            linux-modules-rk3588; \
     fi
 
 # -----------------------------------------------------------------------------

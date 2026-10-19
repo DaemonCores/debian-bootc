@@ -194,9 +194,9 @@ packages:
       # the versions match, so the repack renames it daemoncores-kernel-<KVER>.
       # It Provides the virtual name linux-image-minimal-<arch>, which the
       # minimal image installs through linux-image-${KERNEL_VARIANT}-${ARCH}.
-      # It must NOT Provide linux-image-<arch> or linux-image-stock-<arch>: the
-      # standard image installs Debian's own kernel and must never resolve to
-      # this one.
+      # It must NOT Provide linux-image-<arch> or linux-image-stock-<arch>: those
+      # are Debian's names, and both images select this kernel by the variant
+      # name instead.
       # Only the CURRENT arch is Provided/Conflicted: a deb built on arm64
       # must not Conflict with linux-image-amd64, otherwise apt refuses to
       # install it on an arm64 runner that also has the amd64 deb available in
