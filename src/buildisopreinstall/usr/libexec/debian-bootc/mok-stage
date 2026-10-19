@@ -66,6 +66,8 @@ main() {
   # the clear text password off the command line and out of any prompt.
   local hash_file
   hash_file="$(mktemp)"
+  # Expand now on purpose: hash_file is local and out of scope when EXIT fires.
+  # shellcheck disable=SC2064
   trap "rm -f '${hash_file}'" EXIT
   chmod 600 "${hash_file}"
   printf '%s' "${password}" | openssl passwd -6 -stdin >"${hash_file}" \
