@@ -18,7 +18,7 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 
 ### Tools
 
-- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:20].
+- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:21].
 - Formatter: Not configured.
 - Type checker: N/A — not used in this project.
 - Build / check command: `make build` or directly `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62].
@@ -29,7 +29,7 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 - Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:51] [src: file: Containerfile:68] [src: file: Containerfile.minimal:127] [src: file: Containerfile.minimal:142].
 - Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:55] [src: file: Containerfile.minimal:128] [src: file: Containerfile.iso:65].
 - Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:56] [src: file: Containerfile.minimal:129] [src: file: Containerfile.iso:66].
-- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:20] [src: file: Containerfile:30].
+- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:21] [src: file: Containerfile:30].
 - Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:72] [src: file: Containerfile.minimal:150].
 
 ### Common mistakes to avoid

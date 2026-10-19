@@ -76,7 +76,7 @@ If T0–T2 are insufficient, state which additional file you need and why. Never
 ## 2. DO NOT (critical)
 
 - **Add a package build input without declaring it** in that package's `sources`/`env` in `packages.yml` — only declared paths and env are hashed, so the content cache would reuse a stale `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:7] [src: file: CONTRIBUTING.md:47].
-- **Install Debian's stock kernel** (`linux-image-amd64`/`linux-image-arm64`) in an image — use `linux-image-${KERNEL_VARIANT}-${ARCH}` from the custom deb; a second `/usr/lib/modules/<kver>/` fails bootc lint [src: file: Containerfile:20].
+- **Install Debian's stock kernel** (`linux-image-amd64`/`linux-image-arm64`) in an image — use `linux-image-${KERNEL_VARIANT}-${ARCH}` from the custom deb; a second `/usr/lib/modules/<kver>/` fails bootc lint [src: file: Containerfile:21].
 - **Add a test to `workflows/tests.yml` without a `diag` command** — the harness fails the build if any test lacks one [src: file: workflows/tests.yml:9].
 - **Change the APT signing key URL or default digest in only one of `Containerfile` and `Containerfile.minimal`** — both verify the digest (the CI passes `BOOTC_GPG_SHA256` and `BOOTC_APT_URL` as build arguments) [src: file: Containerfile:41] [src: file: Containerfile.minimal:117].
 - **Pin `debian:trixie` to a digest** — left unpinned on purpose for automatic security updates [src: file: Containerfile:3].

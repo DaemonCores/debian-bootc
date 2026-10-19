@@ -129,8 +129,8 @@ arm64 ships two kernels because the page size is a compile-time choice
 
 | Kernel | Overlay | Devices | Why |
 |--------|---------|---------|-----|
-| 4 KB | `kernel/pages/4k` | Raspberry Pi 3, Raspberry Pi 4 | The Cortex-A53 reports `ID_AA64MMFR0_EL1.TGran16 = 0x0`, "the 16KB granule is not supported" (Cortex-A53 TRM, DDI 0500J, which also lists a granule of 4 KB or 64 KB only). The Cortex-A72 manual and a secondary source list 4 KB and 64 KB too; the Pi 4 has no 16 KB kernel upstream |
-| 16 KB | `kernel/pages/16k` | Raspberry Pi 5, RK3588 | Recent cores: fewer page-table levels and TLB misses, which helps when a runtime maps the multi-GB weights of a local model. Raspberry Pi OS already boots the Pi 5 on a 16 KB kernel (`kernel_2712.img`) |
+| 4 KB | `kernel/pages/4k` | Raspberry Pi 3, Raspberry Pi 4 | Neither core has the 16 KB granule. Cortex-A53 (Pi 3): `ID_AA64MMFR0_EL1.TGran16 = 0x0`, "the 16KB granule is not supported" (Cortex-A53 TRM, DDI 0500J). Cortex-A72 (Pi 4): table 4-35 of the Cortex-A72 TRM r0p3 (ARM 100095_0003_06_en) says the `[23:20]` field "Returns 0x0 to indicate that the 16KB granule is not supported" (reset value `0x00001124`) |
+| 16 KB | `kernel/pages/16k` | Raspberry Pi 5, RK3588 | Cortex-A76 cores, whose TRM defines `TGran16` `0x1` as "the 16KB granule is supported" ([Cortex-A76 TRM](https://support.arm.com/documentation/100798/0401/AArch64-System-registers/ID-AA64MMFR0-EL1--AArch64-Memory-Model-Feature-Register-0--EL1)). Fewer page-table levels and TLB misses, which helps when a runtime maps the multi-GB weights of a local model. Raspberry Pi OS already boots the Pi 5 on a 16 KB kernel (`kernel_2712.img`) |
 
 The 16 KB kernel sets `CONFIG_LOCALVERSION="-16k"`, so its release string and
 its `/usr/lib/modules/<kver>` never collide with the 4 KB kernel's. Every patch
@@ -149,18 +149,20 @@ A module only loads into the kernel it was built for, so each device package
 depends on the ARM-generic package of its kernel. amd64 keeps its single
 kernel.
 
-Images: `Containerfile` and `Containerfile.minimal` carry
-`LABEL org.daemoncores.arm64-16k`, which makes the CI emit a second arm64 image
-tagged `<tag>-16k` (for example `latest-16k`, `minimal-16k`) next to the 4 KB
-one. It passes `KERNEL_SUFFIX=-16k` and `ARM_DEVICES="rpi5 rk3588"`; the plain
-image uses the defaults (empty suffix, `rpi3 rpi4`). The `-16k` manifest lists
-cover arm64 only.
+Images: arm64 defaults to the 16 KB kernel. `Containerfile` and
+`Containerfile.minimal` carry `LABEL org.daemoncores.arm64-4k-image`, which makes
+the CI build the plain arm64 tag on the 16 KB kernel (`KERNEL_SUFFIX=-16k`,
+`ARM_DEVICES="rpi5 rk3588"`) and emit a second arm64-only image tagged `<tag>-4k`
+(for example `latest-4k`, `minimal-4k`) on the 4 KB kernel (empty suffix,
+`ARM_DEVICES="rpi3 rpi4"`). The `-4k` manifest lists cover arm64 only. Raspberry
+Pi 3 and Pi 4 must use the `-4k` image: their cores cannot run the 16 KB kernel.
 
 Caveats: AArch32 applications need 16 KB-aligned segments on the 16 KB kernel
 (`arch/arm64/Kconfig`), and some software assumes 4 KB pages; the 4 KB image
-stays the compatible default. Generic UEFI arm64 hardware is not assigned to a
-kernel: it can run either, and the 4 KB image is the safe choice for cores whose
-granule support is unknown (for example Cortex-A57 servers).
+stays the compatible default. Generic UEFI arm64 hardware follows the plain
+tag, so it gets the 16 KB kernel: a core without the 16 KB granule (as the
+Cortex-A53 and Cortex-A72 above) must use the `-4k` image. The granule support of
+other cores was not checked.
 
 Not verified: the kernel was not built or booted with these options;
 `make olddefconfig` cannot run on the current host, so symbol resolution is
