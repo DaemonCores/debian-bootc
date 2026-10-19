@@ -125,3 +125,19 @@ def test_dockerignore_excludes_local_state() -> None:
     patterns = set(_ignore_patterns())
     for required in ('.env*', '.kronn/', '.claude/', '.mcp.json*', 'docs/'):
         assert required in patterns, f'{required} missing from .dockerignore'
+
+
+def test_kernel_prepare_users_hash_the_library() -> None:
+    """Every entry sourcing kernel-prepare.sh lists it in its sources."""
+    library = 'lib/kernel-prepare.sh'
+    assert (PACKAGES / library).is_file()
+    users = [
+        entry for entry in _packages()
+        if 'kernel_prepare' in str(entry.get('build', ''))
+    ]
+    assert {e['name'] for e in users} == {
+        'linux-modules-arm', 'linux-modules-arm-device', 'linux-modules-x86_64'
+    }
+    for entry in users:
+        assert library in entry['sources'], entry['name']
+        assert 'lib/kernel-prepare.sh' in entry['build']
