@@ -55,11 +55,11 @@ kernel_prepare() {
   # Download the kernel.org tarball of the version the common deb was built
   # from (the upstream part of BUILT_VER, before the package revision), so the
   # modules always match the kernel image whatever kernel.org released since.
-  # shellcheck source=kernel-source.sh
+  # shellcheck source=/dev/null  # sourced at build time from the checkout
   . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
   kernel_fetch_source "${BUILT_VER%%-*}"
   # The modules build against the same patched tree as the image.
-  # shellcheck source=kernel-patches.sh
+  # shellcheck source=/dev/null  # sourced at build time from the checkout
   . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-patches.sh"
   # Kernel-class patches are already in the image; module-class patches only
   # exist in the tree the modules are built from.

@@ -109,6 +109,32 @@ On amd64 the boot package is the project's signed GRUB package. On arm64 the cur
 
 A generic arm64 image does not make every board directly bootable. Board firmware, U-Boot configuration, DTB selection, storage layout, and console configuration remain platform responsibilities.
 
+## Embedded profile and adding a board or chip
+
+The `embedded` boot profile (`LABEL org.daemoncores.boot-profile`) is for arm64
+boards whose firmware loads U-Boot; Android phones are out of scope (separate
+repository). It changes only the boot stack: the kernel is the same single
+kernel and the per-board hardware support is a module package.
+
+To add a board or chip:
+
+1. Create `workflows/bootc-debs-builder/kernel/modules/<chip>` with only the
+   options specific to that chip (SoC platform, controllers, drivers). Options
+   shared by all ARM devices belong in `kernel/modules/arm`, and options shared by
+   every device in `kernel/config`.
+2. Add `<chip>: {}` to the `variants` of `linux-modules-arm-device` in
+   `workflows/bootc-debs-builder/packages.yml`. The CI expands one build job per
+   variant and passes the name as `DEVICE`; the build script is shared.
+3. Add `linux-modules-<chip>` to the arm64 module install list in
+   `Containerfile.minimal`.
+4. Check the symbols against the current kernel with
+   `check_kconfig.py --tree <kernel source> kernel/config kernel/modules/arm kernel/modules/<chip>`.
+5. A device patch is only added if mainline lacks the driver; it follows the
+   module-or-kernel rule in [kernel-patches.md](kernel-patches.md).
+
+Firmware, U-Boot configuration, DTB selection and storage layout stay the
+responsibility of the platform, as stated above.
+
 ## Validation checklist
 
 Before publishing a minimal variant, verify at least:

@@ -83,7 +83,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | cage | Single-app Wayland compositor hosting the installer [src: file: Containerfile.iso:8]. |
 | shim / Secure Boot | Signed EFI chain staged by `bootc-finalize`; GRUB EFI package signed with `SB_SIGNING_KEY`/`SB_SIGNING_CERT` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:5] [src: file: README.md:82]. |
 | U-Boot | arm64 bootloader tooling (`u-boot-tools`) used instead of GRUB by the `embedded` boot profile [src: file: Containerfile.minimal:13]. |
-| Boot profile | `generic` (UEFI, Fedora GRUB: amd64, arm64 PCs, servers, VMs) or `embedded` (arm64 boards and phones loading U-Boot); declared by `LABEL org.daemoncores.boot-profile`, generic when absent [src: file: Containerfile.minimal:93]. |
+| Boot profile | `generic` (UEFI, Fedora GRUB: amd64, arm64 PCs, servers, VMs) or `embedded` (arm64 boards loading U-Boot); declared by `LABEL org.daemoncores.boot-profile`, generic when absent [src: file: Containerfile.minimal:93]. |
 | Dependabot | Automated update PRs for actions [src: file: .github/dependabot.yml:1]. |
 
 ## Abbreviations
