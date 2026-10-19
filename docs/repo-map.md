@@ -33,14 +33,12 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 │   │   ├── ostreepostinstall/     # ostree prepare-root.conf
 │   │   ├── firstbootpostinstall/  # firstboot-user-setup script + getty@tty1 drop-in
 │   │   ├── ifupdown2postinstall/  # bootc-aware ifupdown2 repack (interfaces, autoconf, domain-set)
-│   │   └── timesyncpostinstall/   # bootc-aware systemd-timesyncd repack
+│   │   ├── timesyncpostinstall/   # bootc-aware systemd-timesyncd repack
+│   │   └── kernel/                # inputs of the linux-* packages
+│   │       ├── config             # base kernel config fragment shared by all devices (linux-image-common)
+│   │       └── modules/           # per-target overlays merged on top of kernel/config (generic, x86_64, arm, rpi3, rpi4, rpi5, rk3588)
 │   ├── env.yml                    # buildah recipe for the <repo>-buildenv image
 │   └── tests.yml                  # runtime boot tests (name, diag, arch/variant gating)
-├── kernel/
-│   └── config                     # base kernel config fragment shared by all devices (linux-image-common)
-├── modules-kernel/                # per-target module overlays merged on top of kernel/config
-│   ├── generic, x86_64            # x86/generic module sets
-│   └── arm, rpi3, rpi4, rpi5, rk3588  # ARM-generic overlay + per-device overlays
 ├── scripts/
 │   └── gen-recipe.py              # regenerates bootc-installer recipe.json from Containerfile* at ISO build
 ├── assets/installer/              # installer SVG artwork
@@ -48,7 +46,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 └── todo/                          # working registries for in-progress efforts (kernel, package split, pipeline)
 ```
 
-Sources: [src: file: Containerfile:56] [src: file: Containerfile:73] [src: file: Containerfile:171] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:227] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: kernel/config:3] [src: file: modules-kernel/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
+Sources: [src: file: Containerfile:56] [src: file: Containerfile:73] [src: file: Containerfile:171] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:227] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
 
 Local, untracked tool state (not part of the project): `lancedb/` (empty index directories) and `.kronn/` (ignored via the user's global gitignore).
 
@@ -62,7 +60,7 @@ Local, untracked tool state (not part of the project): `lancedb/` (empty index d
 | `workflows/bootc-debs-builder/packages.yml` | Every custom `.deb`: deps, hashed sources/env, verbatim build script [src: file: workflows/bootc-debs-builder/packages.yml:1] |
 | `workflows/tests.yml` | Runtime tests run over SSH on the QEMU-booted image; every test needs a `diag` [src: file: workflows/tests.yml:9] |
 | `.github/workflows/pipeline.yml` | CI triggers, dispatch inputs and concurrency; delegates to DaemonCores-CI [src: file: .github/workflows/pipeline.yml:17] |
-| `kernel/config` | Base kernel configuration for the common kernel image [src: file: kernel/config:1] |
+| `workflows/bootc-debs-builder/kernel/config` | Base kernel configuration for the common kernel image [src: file: workflows/bootc-debs-builder/kernel/config:1] |
 
 ## Auto-generated files
 

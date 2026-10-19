@@ -1,8 +1,8 @@
-# modules-kernel/generic
+# kernel/modules/generic
 #
 # Empty MODULE overlay — the DEFAULT device class. Applied on top of the base
 # kernel/config:
-#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/generic
+#     scripts/kconfig/merge_config.sh -m .config kernel/config kernel/modules/generic
 #     make olddefconfig
 #
 # This file is NOT a full .config. It lists ONLY options that are specific to

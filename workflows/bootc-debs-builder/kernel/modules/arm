@@ -1,14 +1,14 @@
-# modules-kernel/arm
+# kernel/modules/arm
 #
 # Per-arch MODULE overlay for generic ARM (arm64). Applied on top of the base
 # kernel/config:
-#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/arm
+#     scripts/kconfig/merge_config.sh -m .config kernel/config kernel/modules/arm
 #     make olddefconfig
 #
 # This file is NOT a full .config. It lists ONLY options that are common to
 # ALL ARM devices — everything shared across all devices (filesystems, virtio,
 # the disabled subsystems) lives in kernel/config and is NOT repeated here.
-# Device-specific overlays (modules-kernel/rpi3, rpi4, rpi5, rk3588) are merged
+# Device-specific overlays (kernel/modules/rpi3, rpi4, rpi5, rk3588) are merged
 # AFTER this file and keep ONLY device-specific options (SoC platform, Ethernet
 # PHY, device-specific MMC controller, device-specific RTC driver). The modules
 # built from this overlay are OPTIONAL; the base image (linux-image-common)

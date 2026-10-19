@@ -1,8 +1,8 @@
-# modules-kernel/x86_64
+# kernel/modules/x86_64
 #
 # Per-device MODULE overlay for x86_64. Applied on top of the base
 # kernel/config:
-#     scripts/kconfig/merge_config.sh -m .config kernel/config modules-kernel/x86_64
+#     scripts/kconfig/merge_config.sh -m .config kernel/config kernel/modules/x86_64
 #     make olddefconfig
 #
 # This file is NOT a full .config. It lists ONLY options that are specific
