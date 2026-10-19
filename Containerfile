@@ -103,8 +103,11 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # fuse-overlayfs), dracut (cryptsetup systemd-cryptsetup kpartx mdadm zstd),
 # hardware firmware (firmware-* pulled by firmware-linux-free/misc-nonfree),
 # console and ssh usability (console-common ncurses-term psmisc
-# linux-sysctl-defaults libpam-wtmpdb). Derived with apt-get -s, see
-# docs/tech-debt/TD-20261018-full-image-install-recommends.md.
+# linux-sysctl-defaults libpam-wtmpdb). Derived with apt-get -s for both
+# architectures, see docs/tech-debt/TD-20261018-full-image-install-recommends.md.
+# The architecture specific recommends are installed in the per-arch block at
+# the end of this RUN: x86 GPU firmware on amd64; efibootmgr and the U-Boot
+# tooling (libubootenv-tool, device-tree-compiler) on arm64.
 RUN for _r in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/* && apt update && break; \
         [ "$_r" -lt 5 ] && sleep 30; \
@@ -176,10 +179,7 @@ RUN for _r in 1 2 3 4 5; do \
         zstd \
         firmware-ath9k-htc \
         firmware-carl9170 \
-        firmware-intel-graphics \
-        firmware-intel-misc \
         firmware-mediatek \
-        firmware-nvidia-graphics \
         console-common \
         ncurses-term \
         psmisc \
@@ -189,9 +189,15 @@ RUN for _r in 1 2 3 4 5; do \
     && apt update \
     && if [ "${ARCH}" = "amd64" ]; then \
         apt install -y --no-install-recommends \
-            linux-modules-x86-64; \
+            linux-modules-x86-64 \
+            firmware-intel-graphics \
+            firmware-intel-misc \
+            firmware-nvidia-graphics; \
     else \
         apt install -y --no-install-recommends \
+            efibootmgr \
+            libubootenv-tool \
+            device-tree-compiler \
             linux-modules-arm \
             linux-modules-rpi3 \
             linux-modules-rpi4 \
