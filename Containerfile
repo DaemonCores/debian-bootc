@@ -15,16 +15,9 @@ LABEL containers.bootc=1
 LABEL ostree.bootable=1
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
-# Drives the kernel package name via linux-image-${KERNEL_VARIANT}-${ARCH} and the
+# Drives the kernel package name linux-image-${ARCH} and the
 # boot stack (${BOOT_PKG} is separate because arm64 does NOT follow grub-efi-${ARCH}).
 ARG ARCH=amd64
-# Kernel variant: `stock` (default) installs linux-image-stock-${ARCH}, which is provided
-# by the custom linux-image-common deb published by bootc-debs-builder via Provides:.
-# The Debian archive has no linux-image-stock-<arch> package, so this name only resolves
-# once the custom deb is published. Using the virtual name avoids installing Debian's
-# kernel (linux-image-amd64/arm64) which would create a second /usr/lib/modules/<deb-kver>/
-# directory and fail bootc lint. See packages.yml linux-image BUILD section.
-ARG KERNEL_VARIANT=stock
 # Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
 # absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
 # servers, VMs); `embedded` is arm64 boards and phones whose firmware loads U-Boot.
@@ -39,11 +32,6 @@ ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-
 # Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
 # the arm64 embedded profile (no GRUB).
 ARG APT_HOLD_PKG=grub-efi-amd64-signed
-# Per-arch kernel modules. The image installs ALL modules matching the
-# target arch in a separate conditional RUN block below (after the main apt
-# install): x86_64 -> linux-modules-x86_64; arm64 -> linux-modules-arm plus the
-# SBC overlays (rpi3/rpi4/rpi5/rk3588). The modules are OPTIONAL — the base image
-# works without them.
 # SHA-256 checksum of the bootc APT repository signing key fetched below and
 # the repository URL. The CI derives both at build time from the repository's
 # APT_GPG_KEY secret; the defaults only serve local builds of the upstream
@@ -94,16 +82,11 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # -----------------------------------------------------------------------------
 # Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
 # -----------------------------------------------------------------------------
-# Kernel package resolves via the virtual name linux-image-${KERNEL_VARIANT}-${ARCH}
-# (default: linux-image-stock-amd64 / linux-image-stock-arm64) which is Provided by
-# the custom linux-image-common deb from bootc-debs-builder. This prevents Debian's
-# kernel (linux-image-amd64/arm64) from being co-installed, which would create a
-# second /usr/lib/modules/<deb-kver>/ directory and fail bootc lint.
+# The standard image runs Debian's own kernel (linux-image-${ARCH}, tracked and patched
+# by Debian) with the full hardware support it ships. The project kernel
+# (daemoncores-kernel-<kver>) belongs to the minimal image only and Conflicts with this one.
 # linux-headers is NOT installed: it was never published to the custom apt repo
 # and Debian's linux-headers-${ARCH} would create a spurious /usr/lib/modules/<kver>/build.
-# Per-arch kernel modules are installed in a separate conditional RUN block
-# below (Phase 3.1): amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm +
-# rpi3/rpi4/rpi5/rk3588 overlays.
 # Recommends are NOT installed (--no-install-recommends): they pulled a mail
 # server (exim4), cron, buildah, criu and ~100 other packages into the image.
 # The trailing block of the list below keeps, on purpose, the recommends the OS
@@ -122,7 +105,7 @@ RUN for _r in 1 2 3 4 5; do \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}-${ARCH} \
+        linux-image-${ARCH} \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
@@ -198,7 +181,6 @@ RUN for _r in 1 2 3 4 5; do \
     && apt update \
     && if [ "${ARCH}" = "amd64" ]; then \
         apt install -y --no-install-recommends \
-            linux-modules-x86-64 \
             firmware-intel-graphics \
             firmware-intel-misc \
             firmware-nvidia-graphics; \
@@ -206,12 +188,7 @@ RUN for _r in 1 2 3 4 5; do \
         apt install -y --no-install-recommends \
             efibootmgr \
             libubootenv-tool \
-            device-tree-compiler \
-            linux-modules-arm \
-            linux-modules-rpi3 \
-            linux-modules-rpi4 \
-            linux-modules-rpi5 \
-            linux-modules-rk3588; \
+            device-tree-compiler; \
     fi
 
 # -----------------------------------------------------------------------------

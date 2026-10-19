@@ -31,7 +31,7 @@ kernel_prepare() {
   # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
   # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
   # foreign-arch deb too and apt then fails with a Conflicts/Provides
-  # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+  # collision (the common deb Conflicts with linux-image-amd64 AND
   # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
   # matching-arch deb is selected.
   COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
@@ -46,7 +46,7 @@ kernel_prepare() {
   # linux-image-<arch>, so apt picks the meta-source). Download the kernel
   # source BEFORE installing the custom deb.
   BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
-  KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+  KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^daemoncores-kernel-//')
 
   # Install kernel build deps (build-essential + the kernel's own
   # build-deps). libncurses-dev/bc are required by the kconfig merge.

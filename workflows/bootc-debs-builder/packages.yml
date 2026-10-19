@@ -166,21 +166,21 @@ packages:
           || { echo "ERROR: output linux-headers deb empty" >&2; exit 1; }
       fi
 
-      # Repack the linux-image-common deb with Provides + Conflicts on the
-      # stock Debian linux-image metapackages so our custom common image
-      # satisfies apt dependencies on linux-image-<arch> without coinstall
-      # conflicts. Also Provides the KERNEL_VARIANT virtual names
-      # (linux-image-stock-<arch>, linux-image-minimal-<arch>) so the
-      # Containerfile.minimal `linux-image-${KERNEL_VARIANT}-${ARCH}` apt
-      # install resolves to this custom kernel via the virtual package
-      # mechanism (the stock Debian archive has no
-      # linux-image-stock-<arch> package; only this Provides makes the name
-      # resolvable).
+      # Repack the custom kernel under its own package name, following the
+      # ostree package model: a distinct name that Conflicts with and Replaces
+      # the Debian package it overlaps, instead of masquerading as it. bindeb-pkg
+      # names the deb linux-image-<KVER>, the same name as Debian's kernel when
+      # the versions match, so the repack renames it daemoncores-kernel-<KVER>.
+      # It Provides the virtual name linux-image-minimal-<arch>, which the
+      # minimal image installs through linux-image-${KERNEL_VARIANT}-${ARCH}.
+      # It must NOT Provide linux-image-<arch> or linux-image-stock-<arch>: the
+      # standard image installs Debian's own kernel and must never resolve to
+      # this one.
       # Only the CURRENT arch is Provided/Conflicted: a deb built on arm64
-      # must not Provide linux-image-amd64, otherwise apt refuses to install
-      # it on an arm64 runner that also has the amd64 deb available in
-      # /tmp/prior (the cross-arch Provides + Conflicts creates an unsolvable
-      # solver conflict).
+      # must not Conflict with linux-image-amd64, otherwise apt refuses to
+      # install it on an arm64 runner that also has the amd64 deb available in
+      # /tmp/prior (the cross-arch Conflicts creates an unsolvable solver
+      # conflict).
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
       dpkg-deb -R "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
@@ -200,14 +200,13 @@ packages:
       cp /tmp/linux-kernel.config "${REPACK_DIR}/usr/lib/linux-kernel-build/config"
       cp Module.symvers "${REPACK_DIR}/usr/lib/linux-kernel-build/Module.symvers"
 
-      if grep -q '^Provides:' "${REPACK_DIR}/DEBIAN/control"; then
-        sed -i "/^Provides:/s/\$/, linux-image-${DEB_ARCH}, linux-image-stock-${DEB_ARCH}, linux-image-minimal-${DEB_ARCH}/" \
-          "${REPACK_DIR}/DEBIAN/control"
-      else
-        printf 'Provides: linux-image-%s, linux-image-stock-%s, linux-image-minimal-%s\n' \
-          "${DEB_ARCH}" "${DEB_ARCH}" "${DEB_ARCH}" \
-          >> "${REPACK_DIR}/DEBIAN/control"
-      fi
+      ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
+      sed -i -e "s/^Package: .*/Package: daemoncores-kernel-${ORIG_PKG#linux-image-}/" \
+        -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
+        "${REPACK_DIR}/DEBIAN/control"
+      printf 'Provides: linux-image-minimal-%s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
+        "${DEB_ARCH}" "${ORIG_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
+        >> "${REPACK_DIR}/DEBIAN/control"
       dpkg-deb -b "${REPACK_DIR}" \
         "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb"
       test -s "/debs/linux-image-common_${BUILT_VER}_${DEB_ARCH}.deb" \
@@ -370,7 +369,7 @@ packages:
       # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
       # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
       # foreign-arch deb too and apt then fails with a Conflicts/Provides
-      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
+      # collision (the common deb Conflicts with linux-image-amd64 AND
       # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
       # matching-arch deb is selected.
       COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
@@ -385,7 +384,7 @@ packages:
       # Depends: linux-image-common. The empty /lib/modules/<KVER> dir is kept
       # so the package layout matches the other modules packages (dpkg-deb
       # accepts an empty payload dir).
-      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
+      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^daemoncores-kernel-//')
       DESTDIR="/output/linux-modules-${DEVICE}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"

@@ -4,7 +4,7 @@ Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
 Section: kernel
 Priority: optional
-Depends: linux-image-{{ KVER }} (= {{ VER }})
+Depends: daemoncores-kernel-{{ KVER }} (= {{ VER }})
 Description: Empty kernel modules meta-package (generic device class)
  This package contains NO kernel modules. It exists so the
  linux-modules-generic apt install line in Containerfile.minimal

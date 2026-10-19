@@ -4,8 +4,8 @@ Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
 Section: kernel
 Priority: optional
-Depends: linux-image-{{ KVER }} (= {{ VER }})
-Replaces: linux-image-{{ KVER }}
+Depends: daemoncores-kernel-{{ KVER }} (= {{ VER }})
+Replaces: daemoncores-kernel-{{ KVER }}
 Description: Device-specific kernel modules for x86-64
  This package contains the kernel modules specific to the x86-64
  device overlay (NVMe, AHCI, physical NIC drivers, USB host

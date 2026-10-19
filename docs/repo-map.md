@@ -2,7 +2,7 @@
 
 ## Stack overview
 
-debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Containerfiles with Podman: `Containerfile` (full image) and `Containerfile.minimal` (reduced image) both start `FROM debian:trixie` [src: file: Containerfile:5] [src: file: Containerfile.minimal:69], and `Containerfile.iso` builds an installer ISO on top of the published `debian-bootc` image [src: file: Containerfile.iso:28]. The images install custom `.deb` packages (bootc, ostree, libcomposefs, bootupd, signed GRUB, kernel image and module packages, ifupdown2/systemd-timesyncd repacks, first-boot setup) declared in `workflows/bootc-debs-builder/packages.yml` [src: file: workflows/bootc-debs-builder/packages.yml:1] and built inside a build-environment image described by `workflows/env.yml` [src: file: workflows/env.yml:1]. CI is a thin caller (`.github/workflows/pipeline.yml`) of the shared `DaemonCores/DaemonCores-CI` `full-pipeline.yml`, which owns the job graph (plan, env, debs, image, iso) [src: file: .github/workflows/pipeline.yml:3] [src: file: .github/workflows/pipeline.yml:71]; each built image is installed to a virtual disk, booted under QEMU/KVM and tested over SSH from `workflows/tests.yml` before it is pushed [src: file: workflows/tests.yml:2]. There is no application code; the repository is Containerfiles, YAML manifests, shell overlays, kernel config fragments and one Python helper (`scripts/gen-recipe.py`) [src: file: scripts/gen-recipe.py:1].
+debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Containerfiles with Podman: `Containerfile` (full image) and `Containerfile.minimal` (reduced image) both start `FROM debian:trixie` [src: file: Containerfile:5] [src: file: Containerfile.minimal:67], and `Containerfile.iso` builds an installer ISO on top of the published `debian-bootc` image [src: file: Containerfile.iso:28]. The images install custom `.deb` packages (bootc, ostree, libcomposefs, bootupd, signed GRUB, kernel image and module packages, ifupdown2/systemd-timesyncd repacks, first-boot setup) declared in `workflows/bootc-debs-builder/packages.yml` [src: file: workflows/bootc-debs-builder/packages.yml:1] and built inside a build-environment image described by `workflows/env.yml` [src: file: workflows/env.yml:1]. CI is a thin caller (`.github/workflows/pipeline.yml`) of the shared `DaemonCores/DaemonCores-CI` `full-pipeline.yml`, which owns the job graph (plan, env, debs, image, iso) [src: file: .github/workflows/pipeline.yml:3] [src: file: .github/workflows/pipeline.yml:71]; each built image is installed to a virtual disk, booted under QEMU/KVM and tested over SSH from `workflows/tests.yml` before it is pushed [src: file: workflows/tests.yml:2]. There is no application code; the repository is Containerfiles, YAML manifests, shell overlays, kernel config fragments and one Python helper (`scripts/gen-recipe.py`) [src: file: scripts/gen-recipe.py:1].
 
 ## Key folders
 
@@ -45,7 +45,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 └── docs/                          # agent/human docs, routed from docs/AGENTS.md (see docs/Home.md)
 ```
 
-Sources: [src: file: Containerfile:63] [src: file: Containerfile:80] [src: file: Containerfile:178] [src: file: Containerfile.minimal:133] [src: file: Containerfile.minimal:234] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
+Sources: [src: file: Containerfile:51] [src: file: Containerfile:68] [src: file: Containerfile:161] [src: file: Containerfile.minimal:127] [src: file: Containerfile.minimal:228] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
 
 Local, untracked tool state (not part of the project): `lancedb/` (empty index directories) and `.kronn/` (ignored via the user's global gitignore).
 
@@ -54,7 +54,7 @@ Local, untracked tool state (not part of the project): `lancedb/` (empty index d
 | File | Role |
 | --- | --- |
 | `Containerfile` | Full image build: base, APT repo + GPG digest check, package install, OSTree layout [src: file: Containerfile:5] |
-| `Containerfile.minimal` | Minimal image build contract [src: file: Containerfile.minimal:69] |
+| `Containerfile.minimal` | Minimal image build contract [src: file: Containerfile.minimal:67] |
 | `Containerfile.iso` | Installer ISO image; runs `gen-recipe.py` [src: file: Containerfile.iso:58] |
 | `workflows/bootc-debs-builder/packages.yml` | Every custom `.deb`: deps, hashed sources/env, verbatim build script [src: file: workflows/bootc-debs-builder/packages.yml:1] |
 | `workflows/tests.yml` | Runtime tests run over SSH on the QEMU-booted image; every test needs a `diag` [src: file: workflows/tests.yml:9] |

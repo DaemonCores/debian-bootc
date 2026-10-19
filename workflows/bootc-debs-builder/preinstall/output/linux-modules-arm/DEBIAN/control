@@ -4,8 +4,8 @@ Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
 Section: kernel
 Priority: optional
-Depends: linux-image-{{ KVER }} (= {{ VER }})
-Replaces: linux-image-{{ KVER }}
+Depends: daemoncores-kernel-{{ KVER }} (= {{ VER }})
+Replaces: daemoncores-kernel-{{ KVER }}
 Description: ARM-generic kernel modules
  This package contains the kernel modules common to all ARM devices
  (ARM64 core, kernel command line, PL011 UART, MMC/USB/RTC subsystem
