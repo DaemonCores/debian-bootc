@@ -1,21 +1,23 @@
 # kernel/config
 #
 # The BASE kernel config, shared by ALL devices. This is the foundation for
-# the `linux-image-common` Debian package: a single kernel image built ONCE
-# from this fragment, on top of which per-device `linux-modules-<device>`
-# packages are produced (modules only, no kernel rebuild per device).
+# the `linux-image-common` Debian package: a kernel image built from this
+# fragment plus the architecture overlay (kernel/modules/arm or x86_64), on top
+# of which per-device `linux-modules-<device>` packages are produced (modules
+# only, no kernel rebuild per device).
 #
 # This file is NOT a full .config. It is meant to be merged into a defconfig
 # with:
 #     scripts/kconfig/merge_config.sh -m .config kernel/config
 #     make olddefconfig
 #
-# Per-device fragments (kernel/modules/rpi3, kernel/modules/rpi4,
-# kernel/modules/rpi5, kernel/modules/rk3588, kernel/modules/x86_64) are
-# applied as OVERLAYS on top of kernel/config. They keep ONLY device-specific
-# options (SoC, Ethernet PHY, MMC, USB, RTC) and are merged AFTER kernel/config,
-# so a same-symbol option in the overlay wins (kernel kconfig last-wins on
-# merge). The modules are OPTIONAL — the base image works without them.
+# The architecture fragments (kernel/modules/arm, kernel/modules/x86_64) are
+# merged into the kernel build after kernel/config. The per-device fragments
+# (kernel/modules/rpi3, rpi4, rpi5, rk3588) are OVERLAYS merged afterwards by the
+# device modules packages. They keep ONLY device-specific options (SoC, Ethernet
+# PHY, MMC, USB, RTC). A same-symbol option in a later fragment wins (kernel
+# kconfig last-wins on merge). The device modules are OPTIONAL — the kernel
+# works without them.
 #
 # Only options that change behaviour relative to defconfig are listed. Every
 # option has a one-line English comment explaining why it is set (or unset)

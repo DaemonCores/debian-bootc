@@ -100,7 +100,7 @@ Use `AUTOUPDATE=0` for a lock variant.
 
 - The kernel is not built by the Containerfile: `linux-image-${KERNEL_VARIANT}-${ARCH}` is installed from the project APT repository and resolves to the custom `daemoncores-kernel-<kver>` package (published as `linux-image-common_*.deb`) through its `Provides: linux-image-minimal-<arch>`. On arm64 a second kernel with 16 KB pages is published as `linux-image-common-16k_*.deb` and provides `linux-image-minimal-16k-arm64`; the plain arm64 image installs it through `KERNEL_SUFFIX=-16k`, and the `<tag>-4k` image installs the 4 KB kernel (see [kernel-patches.md](kernel-patches.md)). The package Conflicts with and Replaces the Debian `linux-image-<kver>` it overlaps, following the ostree package model. Until the kernel build has published its first `.deb`, the install fails because the package exists in no repository (expected).
 - The kernel config fragments and per-device module lists live in `workflows/bootc-debs-builder/kernel/`; `KERNEL_VARIANT=minimal` is the default and installs the kernel built from them. The standard image installs the same kernel and the same module packages.
-- Memory: the minimal kernel keeps every driver (as modules, loaded by udev only when the device exists) and drops kernel machinery instead: BTF, the function tracer, profiling hooks, scheduler statistics, kexec and crash dump, the embedded config, and on x86_64 `NR_CPUS` 8192 → 512 [src: file: workflows/bootc-debs-builder/kernel/config:331-359] [src: file: workflows/bootc-debs-builder/kernel/modules/x86_64:123-127]. The 10-15 MB idle target is a direction, not a measured result: the options are applied but no boot has been measured, and the distribution userspace (systemd, dbus, sshd) already uses more than that on its own.
+- Memory: the minimal kernel keeps every driver (as modules, loaded by udev only when the device exists) and drops kernel machinery instead: BTF, the function tracer, profiling hooks, scheduler statistics, kexec and crash dump, the embedded config, and on x86_64 `NR_CPUS` 8192 → 512 [src: file: workflows/bootc-debs-builder/kernel/config:333-361] [src: file: workflows/bootc-debs-builder/kernel/modules/x86_64:123-127]. The 10-15 MB idle target is a direction, not a measured result: the options are applied but no boot has been measured, and the distribution userspace (systemd, dbus, sshd) already uses more than that on its own.
 - `AUTOUPDATE=1` writes `1` to `/usr/lib/bootc/autoupdate`; `AUTOUPDATE=0` writes `0`, which bootc reads as disabled (the file's presence alone is not enough). The lock variant uses it to avoid background upgrades on minimal RAM.
 
 ## Architecture boundary
@@ -120,12 +120,12 @@ To add a board or chip:
 
 1. Create `workflows/bootc-debs-builder/kernel/modules/<chip>` with only the
    options specific to that chip (SoC platform, controllers, drivers). Options
-   shared by all ARM devices belong in `kernel/modules/arm`, and options shared by
+   shared by all ARM devices belong in `kernel/modules/arm` (merged into the kernel), and options shared by
    every device in `kernel/config`.
 2. Add `<chip>` to the `variants` of `linux-modules-arm-device` in
    `workflows/bootc-debs-builder/packages.yml`, with a `deps` on
-   `linux-modules-arm` (4 KB kernel) or, plus `env: {KERNEL_SUFFIX: "-16k"}`,
-   on `linux-modules-arm-16k` (16 KB kernel), as the existing chips do. The CI expands one build job per
+   `linux-image` (4 KB kernel) or, plus `env: {KERNEL_SUFFIX: "-16k"}`,
+   on `linux-image-16k` (16 KB kernel), as the existing chips do. The CI expands one build job per
    variant and passes the name as `DEVICE`; the build script is shared.
 3. Add the chip to the `ARM_DEVICES` default of `Containerfile.minimal` and
    `Containerfile` (4 KB kernel) or to the 16 KB list in

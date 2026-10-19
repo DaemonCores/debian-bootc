@@ -30,11 +30,7 @@ The `build:` scripts of `linux-modules-arm`, `linux-modules-arm-device` and `lin
 Fixes to this bootstrap are delicate and well documented (the linux-upstream pseudo-source and the modpost `__fentry__` failure), and each one must be applied 3–4 times by hand. If one copy is missed, a single device's module job breaks.
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/packages.yml:261-336` — linux-modules-arm copy
-- `workflows/bootc-debs-builder/packages.yml:539-614` — linux-modules-arm-device copy
-- `workflows/bootc-debs-builder/packages.yml:762-828` — linux-modules-x86_64 copy
-- `workflows/bootc-debs-builder/packages.yml:455-457` — linux-modules-generic COMMON_DEB lookup
-- `workflows/bootc-debs-builder/packages.yml:294`, `:572`, `:791` — `|| true` purge chain
+- `workflows/bootc-debs-builder/packages.yml:290` — linux-modules-arm-device, the only entry left that sources `kernel_prepare`
 
 ## Suggested direction
 Extract the bootstrap into one script, for example `workflows/bootc-debs-builder/preinstall/build/kernel-prepare.sh`, add it to each entry's `sources:` so it is hashed, and source it from each `build:` block.
@@ -44,3 +40,5 @@ Extract the bootstrap into one script, for example `workflows/bootc-debs-builder
 
 ## Resolution
 The three identical bootstrap copies (linux-modules-arm, linux-modules-arm-device, linux-modules-x86_64) now source `workflows/bootc-debs-builder/lib/kernel-prepare.sh` and call `kernel_prepare`. Verified before the change that the 28 command lines of the three copies were identical. The script is listed in each entry's `sources:` and in the shell gate, and a test checks that. The `linux-modules-generic` COMMON_DEB lookup and the `|| true` purge chain are unchanged; the purge still hides a failed purge. Not built: the CI module jobs are the real check.
+
+Later change: the `linux-modules-arm`, `linux-modules-x86_64` and `linux-modules-generic` entries no longer exist (their overlays moved into the kernel build), so only `linux-modules-arm-device` still sources `kernel_prepare`.

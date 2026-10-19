@@ -73,7 +73,9 @@ def test_both_images_install_the_same_modules() -> None:
             if tok.startswith('linux-modules-')
         }
     assert modules['Containerfile'] == modules['Containerfile.minimal']
-    assert 'linux-modules-x86-64' in modules['Containerfile']
+    assert not any(
+        'x86' in tok or 'modules-arm' in tok for tok in modules['Containerfile']
+    ), modules
 
 
 def test_standard_image_keeps_the_login_stack() -> None:
@@ -115,13 +117,10 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
 
 def test_each_arm_module_follows_its_kernel() -> None:
     """Older devices build against the 4 KB kernel, recent ones the 16 KB."""
-    arm = _variants('linux-modules-arm')
-    assert arm[''] == {'deps': ['linux-image']}
-    assert arm['-16k'] == {'deps': ['linux-image-16k']}
     devices = _variants('linux-modules-arm-device')
     for old in ('rpi3', 'rpi4'):
-        assert devices[old]['deps'] == ['linux-modules-arm'], old
+        assert devices[old]['deps'] == ['linux-image'], old
         assert 'env' not in devices[old], old
     for recent in ('rpi5', 'rk3588'):
-        assert devices[recent]['deps'] == ['linux-modules-arm-16k'], recent
+        assert devices[recent]['deps'] == ['linux-image-16k'], recent
         assert devices[recent]['env'] == {'KERNEL_SUFFIX': '-16k'}, recent
