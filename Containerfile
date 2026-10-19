@@ -25,7 +25,7 @@ ARG ARCH=amd64
 # kernel (linux-image-amd64/arm64) which would create a second /usr/lib/modules/<deb-kver>/
 # directory and fail bootc lint. See packages.yml linux-image BUILD section.
 ARG KERNEL_VARIANT=stock
-# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools (arm64 SBCs). Kept as a
+# Boot stack: grub-efi-amd64-signed (x86_64) or u-boot-tools + grub-efi-arm64-signed (arm64). Kept as a
 # separate ARG because arm64 does NOT follow the grub-efi-${ARCH} pattern).
 ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
