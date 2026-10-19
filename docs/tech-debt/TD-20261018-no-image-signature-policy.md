@@ -44,7 +44,7 @@ Ship a `policy.json` with a `sigstoreSigned` rule (Fulcio issuer + workflow subj
 ## Resolution
 Option 1 was taken. Keyless signatures cannot be required by a host (containers-image `sigstoreSigned` matches a Fulcio certificate only by e-mail, https://raw.githubusercontent.com/containers/image/main/docs/containers-policy.json.5.md), so each repository now owns a cosign key pair stored as repository secrets (`COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY`) while the pipeline stays in DaemonCores-CI:
 
-- `ensure-cosign-key` (DaemonCores-CI) generates the pair on the first run when `PAT_SECRETS` is set; secrets created mid-run are visible from the next run, so key-signed images start one run later. Without `PAT_SECRETS` the images stay keyless and no policy is shipped.
+- The `prepare` stage (DaemonCores-CI, `ensure-secrets.sh`) generates the pair on the first run when `PAT_SECRETS` is set, then restarts the pipeline because secrets created mid-run are only visible to the next run. Without `PAT_SECRETS` the images stay keyless and no policy is shipped.
 - `sign-image` signs per-arch images and manifest lists with the key (cosign 2.x, `.sig` attachments). The list step used to sign the first per-arch manifest; it now signs the digest of the list itself.
 - `src/signaturepolicy` writes the public key, a `policy.json` requiring `sigstoreSigned` for the image repository (default stays accept-anything) and a `registries.d` entry with `use-sigstore-attachments: true`; it ships nothing when the public key is empty.
 
