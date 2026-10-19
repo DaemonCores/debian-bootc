@@ -23,6 +23,15 @@ FQDN=$(cat /run/ifupdown2-dhcp-domain 2>/dev/null | tr -d '[:space:]' || echo ""
 # Reject FQDN values that could break the sed substitution (| & \ characters).
 [[ "${FQDN}" =~ ^[A-Za-z0-9.-]{1,253}$ ]] || FQDN="local"
 
+#######################################
+# Render /etc/hosts from its template.
+# Globals:
+#   IP
+#   HOST
+#   FQDN
+# Outputs:
+#   Writes /etc/hosts.
+#######################################
 setdomaine() {
   cp /etc/hosts.tpl /etc/hosts
   sed -i \
