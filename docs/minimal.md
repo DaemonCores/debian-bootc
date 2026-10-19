@@ -95,6 +95,12 @@ podman build --format docker \
 
 Use `AUTOUPDATE=0` for a lock variant.
 
+## Kernel and auto-update
+
+- The kernel is not built by the Containerfile: `linux-image-${KERNEL_VARIANT}-${ARCH}` is installed from the project APT repository and resolves to the custom `linux-image-common` `.deb` through its `Provides:` virtual package. Until the kernel build has published its first `.deb`, the install fails because the package exists in no repository (expected).
+- The kernel config fragments and per-device module lists live in `workflows/bootc-debs-builder/kernel/`; `KERNEL_VARIANT=stock` is the default and does not consume them.
+- `AUTOUPDATE=1` writes `1` to `/usr/lib/bootc/autoupdate`; `AUTOUPDATE=0` writes `0`, which bootc reads as disabled (the file's presence alone is not enough). The lock variant uses it to avoid background upgrades on minimal RAM.
+
 ## Architecture boundary
 
 On amd64 the boot package is the project's signed GRUB package. On arm64 the current minimal definition expects U-Boot tooling and installs the generic ARM module set plus Raspberry Pi 3/4/5 and RK3588 module overlays.
