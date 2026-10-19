@@ -37,9 +37,11 @@ ARG APT_HOLD_PKG=grub-efi-amd64-signed
 # install): x86_64 -> linux-modules-x86_64; arm64 -> linux-modules-arm plus the
 # SBC overlays (rpi3/rpi4/rpi5/rk3588). The modules are OPTIONAL — the base image
 # works without them.
-# SHA-256 checksum of the bootc APT repository signing key fetched below.
-# Update this value whenever the key at
-# https://daemoncores.github.io/debian-bootc/gpg.key is rotated.
+# SHA-256 checksum of the bootc APT repository signing key fetched below and
+# the repository URL. The CI derives both at build time from the repository's
+# APT_GPG_KEY secret; the defaults only serve local builds of the upstream
+# repository and must be overridden for any other APT repository.
+ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
 # Product display name, injected by the CI from the repo name (dashes -> spaces).
 # bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
@@ -71,12 +73,12 @@ RUN apt update \
 # Phase 2: Trust the bootc APT repository
 # -----------------------------------------------------------------------------
 COPY ./src/bootcpreinstall /
-RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
+RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
         /etc/apt/sources.list.d/debian-bootc.sources \
     && wget \
         --progress=dot:giga \
         -O /usr/share/keyrings/debian-bootc-keyring.gpg \
-        https://daemoncores.github.io/debian-bootc/gpg.key \
+        "${BOOTC_APT_URL%/}/gpg.key" \
     && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
         | sha256sum -c - \
     && mkdir -p /usr/lib/bootc \

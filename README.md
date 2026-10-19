@@ -79,13 +79,14 @@ The installer is destructive to the selected disk. Review the prompt carefully a
 
 | Secret | Purpose |
 | --- | --- |
-| `PAT_PKG` | Pull and publish images in GHCR. |
-| `APT_GPG_KEY` | Sign the generated APT repository. |
-| `SB_SIGNING_KEY` | Sign the custom EFI bootloader package. |
-| `SB_SIGNING_CERT` | Certificate paired with the Secure Boot key. |
-| `PAT_SECRETS` | Token with `secrets:write`. Lets the pipeline create the keys below by itself on the first run. |
-| `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY` | Image signing key of this repository. Created automatically when `PAT_SECRETS` is set; a fork gets its own key and its own signed images. |
-| `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Created automatically like the image key when module signing is enabled. |
+| `PAT_SECRETS` | Token with `secrets:write`. The only secret a fork has to provide: the `prepare` stage uses it to generate all the others on the first run, then restarts the pipeline so they are visible. |
+| `PAT_PKG` | Optional. Pull and publish images in GHCR; defaults to the workflow token. |
+| `APT_GPG_KEY` | Signs the generated APT repository. Generated automatically. The image build derives the key pin from it, nothing is committed. |
+| `SB_SIGNING_KEY`, `SB_SIGNING_CERT` | Self-signed Secure Boot key and certificate for the custom EFI bootloader package. Generated automatically; firmware only trusts the certificate once it is enrolled (MOK or db). |
+| `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY` | Image signing key of this repository. Generated automatically; a fork gets its own key and its own signed images. |
+| `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Generated automatically when module signing is enabled. |
+
+Without `PAT_SECRETS` nothing is generated: images are signed keyless and modules stay unsigned. The workflow needs `actions: write` so `prepare` can restart the pipeline.
 
 GitHub Pages must be configured for Actions deployment so the APT repository can be published.
 
