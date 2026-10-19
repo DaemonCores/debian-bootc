@@ -41,3 +41,22 @@ scheduler, memory and I/O files as BORE, so it would collide with it. Its
 individual optimisations are taken only when they exist as separate patches.
 `bore-cachy` is not used on the current series: it is written against the
 CachyOS tree and does not apply to a plain kernel.org tree.
+
+## Rockchip and Raspberry Pi hardware (KT-18)
+
+The device support that ROCKNIX and `raspberrypi/linux` carry for the boards we
+target is already in the mainline 7.x tree, so no device patch is listed in
+`kernel/patches.yml` for it. Everything is enabled as modules in the per-board
+overlays, which keeps a single kernel:
+
+- Raspberry Pi 5: the Ethernet, USB, I2C, SPI and UART are behind the RP1 chip
+  on a PCIe link. `kernel/modules/rpi5` enables `PCIE_BRCMSTB`, `MISC_RP1`,
+  `PINCTRL_RP1`, `COMMON_CLK_RP1` and `MACB` (the Cadence GEM inside RP1). The
+  former `BCMGENET` entry was wrong for the Pi 5; GENET is the Pi 4 controller.
+- RK3588: `ROCKCHIP_DW_HDMI_QP` and `DRM_PANTHOR` are already in
+  `kernel/modules/arm`, and both symbols exist in 7.2.11.
+
+All symbols were checked against the 7.2.11 Kconfig files with
+`check_kconfig.py`. Not verified: that these boards boot, since no build or
+hardware test was run. A device patch is only added here if a board still lacks
+a driver once tested, and it follows the same module-or-kernel rule as above.
