@@ -236,6 +236,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/arm
       - preinstall/output/linux-modules-arm
+      - lib/kernel-prepare.sh
     build: |
       set -euo pipefail
       DEVICE=arm
@@ -248,91 +249,11 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
 
-      # The linux-image wave installed linux-image-common_<ver>_<arch>.deb
-      # into the build container (via the deps install step). Derive the
-      # exact version + kernel version string from it so the module source
-      # download matches.
-      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
-      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
-      # foreign-arch deb too and apt then fails with a Conflicts/Provides
-      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
-      # matching-arch deb is selected.
-      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
-      test -n "${COMMON_DEB}" \
-        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      # Extract version + kernel version from the deb WITHOUT installing it:
-      # installing the custom deb first makes `apt-get source linux` resolve to
-      # the non-existent `linux-upstream` pseudo-source (the deb Provides
-      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
-      # source BEFORE installing the custom deb.
-      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
-      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
-
-      # Install kernel build deps (build-essential + the kernel's own
-      # build-deps). libncurses-dev/bc are required by the kconfig merge.
-      apt-get update
-      apt-get install -y --no-install-recommends \
-        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-        rsync libudev-dev elfutils dpkg-dev
-
-      # Download the Debian kernel source matching the installed common
-      # kernel (KVER pins the exact source version).
-      cd /tmp
-      # The Debian source package is always named `linux` regardless of the
-      # binary package name (linux-image-<kver> resolves to the linux-upstream
-      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
-      # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source. This MUST run
-      # BEFORE the custom linux-image-common deb is installed (see above).
-      # Purge the pre-installed custom linux-image-common deb so apt-get source
-      # does not resolve 'linux' to the linux-upstream pseudo-source. The
-      # "Install dependency debs" step already installed it (transitively for
-      # the device entries via linux-modules-arm -> linux-image-common), so we
-      # must remove it before the source download resolves 'linux' to the real
-      # Debian source package.
-      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
-      apt-get autoremove -y || true
-      apt-get source linux
-      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
-      test -n "${SRCDIR}" \
-        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
-
-      # Install the custom common deb AFTER the source download so apt-get
-      # source does not resolve to linux-upstream.
-      apt-get install -y "${COMMON_DEB}"
-
-      cd "${SRCDIR}"
-      # Translate the Debian-style DEB_ARCH (amd64) to the kernel's arch dir
-      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
-      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
-      # with "arch/amd64/Makefile: No such file or directory".
-      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
-      # modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make olddefconfig` look for
-      # arch/amd64/Makefile and fail on the first command. For ARM the
-      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
-      KERNEL_ARCH="${DEB_ARCH}"
-      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
-      unset ARCH
-      export ARCH="${KERNEL_ARCH}"
-
-      # Start from the Debian config for this arch, then merge the base
-      # config THEN the arm overlay (overlay wins on conflicts — last
-      # merge wins).
-      # Seed .config from the linux-image-common deb, which carries the .config
-      # the kernel was built with at /usr/lib/linux-kernel-build/config. It has
-      # to travel inside the deb: a cache hit restores only the .deb from the
-      # published APT repo, so a file written beside it in /debs never reaches
-      # this job. Starting from the same .config as the kernel build keeps
-      # CONFIG_FUNCTION_TRACER and the other core settings identical, which is
-      # what lets modpost resolve __fentry__.
-      SEED_DIR=/tmp/linux-kernel-build-seed
-      rm -rf "${SEED_DIR}"
-      dpkg-deb -x "${COMMON_DEB}" "${SEED_DIR}"
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/config" \
-        || { echo "ERROR: ${COMMON_DEB} carries no kernel config" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build/config" .config
+      # Bootstrap shared by the kernel module entries: locate the common deb,
+      # download the kernel source, seed .config (see lib/kernel-prepare.sh).
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
+      kernel_prepare
+      # Merge the base config THEN the overlay (last merge wins).
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
@@ -510,6 +431,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/arm
       - preinstall/output/linux-modules-arm-device
+      - lib/kernel-prepare.sh
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
@@ -525,92 +447,11 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
 
-      # The linux-modules-arm wave installed linux-image-common_<ver>_<arch>.deb
-      # + linux-modules-arm_<ver>_<arch>.deb into the build container (via the
-      # transitive deps install step). Derive the exact version + kernel
-      # version string from the common image deb so the module source
-      # download matches.
-      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
-      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
-      # foreign-arch deb too and apt then fails with a Conflicts/Provides
-      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
-      # matching-arch deb is selected.
-      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
-      test -n "${COMMON_DEB}" \
-        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      # Extract version + kernel version from the deb WITHOUT installing it:
-      # installing the custom deb first makes `apt-get source linux` resolve to
-      # the non-existent `linux-upstream` pseudo-source (the deb Provides
-      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
-      # source BEFORE installing the custom deb.
-      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
-      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
-
-      # Install kernel build deps (build-essential + the kernel's own
-      # build-deps). libncurses-dev/bc are required by the kconfig merge.
-      apt-get update
-      apt-get install -y --no-install-recommends \
-        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-        rsync libudev-dev elfutils dpkg-dev
-
-      # Download the Debian kernel source matching the installed common
-      # kernel (KVER pins the exact source version).
-      cd /tmp
-      # The Debian source package is always named `linux` regardless of the
-      # binary package name (linux-image-<kver> resolves to the linux-upstream
-      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
-      # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source. This MUST run
-      # BEFORE the custom linux-image-common deb is installed (see above).
-      # Purge the pre-installed custom linux-image-common deb so apt-get source
-      # does not resolve 'linux' to the linux-upstream pseudo-source. The
-      # "Install dependency debs" step already installed it (transitively for
-      # the device entries via linux-modules-arm -> linux-image-common), so we
-      # must remove it before the source download resolves 'linux' to the real
-      # Debian source package.
-      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
-      apt-get autoremove -y || true
-      apt-get source linux
-      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
-      test -n "${SRCDIR}" \
-        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
-
-      # Install the custom common deb AFTER the source download so apt-get
-      # source does not resolve to linux-upstream.
-      apt-get install -y "${COMMON_DEB}"
-
-      cd "${SRCDIR}"
-      # Translate the Debian-style DEB_ARCH (amd64) to the kernel's arch dir
-      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
-      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
-      # with "arch/amd64/Makefile: No such file or directory".
-      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
-      # modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make olddefconfig` look for
-      # arch/amd64/Makefile and fail on the first command. For ARM the
-      # kernel arch dir is arm64, matching DEB_ARCH (no translation needed).
-      KERNEL_ARCH="${DEB_ARCH}"
-      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
-      unset ARCH
-      export ARCH="${KERNEL_ARCH}"
-
-      # Start from the Debian config for this arch, then merge the base
-      # config THEN the arm overlay THEN the device overlay (last merge wins
-      # on conflicts — device overlay wins over arm, arm wins over base).
-      # Seed .config from the linux-image-common deb, which carries the .config
-      # the kernel was built with at /usr/lib/linux-kernel-build/config. It has
-      # to travel inside the deb: a cache hit restores only the .deb from the
-      # published APT repo, so a file written beside it in /debs never reaches
-      # this job. Starting from the same .config as the kernel build keeps
-      # CONFIG_FUNCTION_TRACER and the other core settings identical, which is
-      # what lets modpost resolve __fentry__.
-      SEED_DIR=/tmp/linux-kernel-build-seed
-      rm -rf "${SEED_DIR}"
-      dpkg-deb -x "${COMMON_DEB}" "${SEED_DIR}"
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/config" \
-        || { echo "ERROR: ${COMMON_DEB} carries no kernel config" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build/config" .config
+      # Bootstrap shared by the kernel module entries: locate the common deb,
+      # download the kernel source, seed .config (see lib/kernel-prepare.sh).
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
+      kernel_prepare
+      # Merge the base config THEN the arm overlay THEN the device overlay (last merge wins).
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
       make olddefconfig
 
@@ -739,6 +580,7 @@ packages:
       - ../../kernel/config
       - ../../modules-kernel/x86_64
       - preinstall/output/linux-modules-x86-64
+      - lib/kernel-prepare.sh
     build: |
       set -euo pipefail
       DEVICE=x86-64
@@ -753,78 +595,11 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: modules-kernel/x86_64 overlay missing" >&2; exit 1; }
 
-      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
-      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
-      # foreign-arch deb too and apt then fails with a Conflicts/Provides
-      # collision (the common deb Provides+Conflicts linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
-      # matching-arch deb is selected.
-      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
-      test -n "${COMMON_DEB}" \
-        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      # Extract version + kernel version from the deb WITHOUT installing it:
-      # installing the custom deb first makes `apt-get source linux` resolve to
-      # the non-existent `linux-upstream` pseudo-source (the deb Provides
-      # linux-image-<arch>, so apt picks the meta-source). Download the kernel
-      # source BEFORE installing the custom deb.
-      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
-      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^linux-image-//')
-
-      apt-get update
-      apt-get install -y --no-install-recommends \
-        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-        rsync libudev-dev elfutils dpkg-dev
-
-      cd /tmp
-      # The Debian source package is always named `linux` regardless of the
-      # binary package name (linux-image-<kver> resolves to the linux-upstream
-      # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
-      # uses the same `apt-get source linux` form; we match it here so the
-      # module builds download the real Debian kernel source. This MUST run
-      # BEFORE the custom linux-image-common deb is installed (see above).
-      # Purge the pre-installed custom linux-image-common deb so apt-get source
-      # does not resolve 'linux' to the linux-upstream pseudo-source. The
-      # "Install dependency debs" step already installed it (transitively for
-      # the device entries via linux-modules-arm -> linux-image-common), so we
-      # must remove it before the source download resolves 'linux' to the real
-      # Debian source package.
-      apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
-      apt-get autoremove -y || true
-      apt-get source linux
-      SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
-      test -n "${SRCDIR}" \
-        || { echo "ERROR: kernel source not downloaded" >&2; exit 1; }
-
-      # Install the custom common deb AFTER the source download so apt-get
-      # source does not resolve to linux-upstream.
-      apt-get install -y "${COMMON_DEB}"
-
-      cd "${SRCDIR}"
-      # Translate the Debian-style DEB_ARCH (amd64) to the kernel's arch dir
-      # name (x86_64): the kernel Makefile includes arch/$(ARCH)/Makefile,
-      # and arch/amd64/ does not exist, so an unmodified ARCH=amd64 fails
-      # with "arch/amd64/Makefile: No such file or directory".
-      # Export KERNEL_ARCH BEFORE any make invocation (olddefconfig,
-      # modules, modules_install) — the runner's inherited
-      # ARCH=amd64 would otherwise make `make olddefconfig` look for
-      # arch/amd64/Makefile and fail on the first command.
-      KERNEL_ARCH="${DEB_ARCH}"
-      [ "${KERNEL_ARCH}" = "amd64" ] && KERNEL_ARCH="x86_64"
-      unset ARCH
-      export ARCH="${KERNEL_ARCH}"
-      # Seed .config from the linux-image-common deb, which carries the .config
-      # the kernel was built with at /usr/lib/linux-kernel-build/config. It has
-      # to travel inside the deb: a cache hit restores only the .deb from the
-      # published APT repo, so a file written beside it in /debs never reaches
-      # this job. Starting from the same .config as the kernel build keeps
-      # CONFIG_FUNCTION_TRACER and the other core settings identical, which is
-      # what lets modpost resolve __fentry__.
-      SEED_DIR=/tmp/linux-kernel-build-seed
-      rm -rf "${SEED_DIR}"
-      dpkg-deb -x "${COMMON_DEB}" "${SEED_DIR}"
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/config" \
-        || { echo "ERROR: ${COMMON_DEB} carries no kernel config" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build/config" .config
+      # Bootstrap shared by the kernel module entries: locate the common deb,
+      # download the kernel source, seed .config (see lib/kernel-prepare.sh).
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
+      kernel_prepare
+      # Merge the base config THEN the overlay (last merge wins).
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
       make olddefconfig
 
