@@ -23,7 +23,7 @@ metadata:
 - **Area**: Infra
 - **Category**: docker
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Fixed (not built; resolution checked with apt-get -s)
 - **Effort**: S
 - **Blast radius**: local (1-2 files)
 
@@ -44,3 +44,6 @@ Add `--no-install-recommends` and list any genuinely wanted recommends explicitl
 
 ## Next step
 `create ticket`
+
+## Resolution
+Phase 3 of `Containerfile` now passes `--no-install-recommends` and lists the recommends the OS needs. Simulated with `apt-get -s` against trixie plus the debian-bootc repo (amd64): 425 packages before, 353 after, and the list resolves without error. Dropped: exim4, cron, buildah, criu, logrotate and other unreviewed packages. Kept explicitly: parted/dosfstools/fdisk (bootc install), uidmap/passt/aardvark-dns/nftables/catatonit/containers-storage/fuse-overlayfs (rootless podman), cryptsetup/systemd-cryptsetup/kpartx/mdadm/zstd (dracut), the firmware-* recommends, and console/ssh helpers. No image was built or booted; the CI boot test is the check.
