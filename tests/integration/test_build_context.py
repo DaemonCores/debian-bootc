@@ -1,43 +1,22 @@
-"""Static integration checks of the image build context.
+"""Repository-specific checks of the image build context.
 
-``podman build`` is not available everywhere, so these tests verify the inputs
-the build consumes: every local ``COPY`` source exists, ``packages.yml`` is
-coherent (unique names, resolvable deps and sources) and ``gen-recipe.py``
-runs end to end against the real Containerfiles.
+The generic checks (COPY sources, ``.dockerignore`` exclusions, package
+manifest coherence) are shared by every repository and live in
+``DaemonCores-CI/scripts/check_build_context.py``, run by ``make check``.
+What stays here concerns this repository only: ``gen-recipe.py`` against the
+real Containerfiles, the local-state exclusions and the kernel helper users.
 """
 
-import fnmatch
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
 
-import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ROOT / 'workflows' / 'bootc-debs-builder'
-CONTAINERFILES = sorted(ROOT.glob('Containerfile*'))
-COPY_RE = re.compile(
-    r'^(?:COPY|ADD)\s+(?!--from)(?:--\S+\s+)*(\S+)\s+\S+', re.MULTILINE
-)
-
-
-def _local_sources(containerfile: Path) -> list[str]:
-    """List the local (non-URL) sources of the COPY/ADD instructions.
-
-    Args:
-        containerfile: Image definition to scan.
-
-    Returns:
-        The source argument of each local COPY or ADD instruction.
-    """
-    return [
-        m for m in COPY_RE.findall(containerfile.read_text())
-        if not m.startswith(('http://', 'https://'))
-    ]
 
 
 def _packages() -> list[dict[str, Any]]:
@@ -48,56 +27,6 @@ def _packages() -> list[dict[str, Any]]:
     """
     data = yaml.safe_load((PACKAGES / 'packages.yml').read_text())
     return cast(list[dict[str, Any]], data['packages'])
-
-
-def test_containerfiles_found() -> None:
-    """The glob finds the three image definitions."""
-    assert len(CONTAINERFILES) >= 3
-
-
-@pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
-def test_copy_sources_exist(containerfile: Path) -> None:
-    """Every local COPY/ADD source resolves in the build context.
-
-    Args:
-        containerfile: Image definition under test.
-    """
-    for source in _local_sources(containerfile):
-        pattern = source.removeprefix('./')
-        assert list(
-            ROOT.glob(pattern)
-        ), f'{containerfile.name}: {source} missing'
-
-
-def test_package_names_unique() -> None:
-    """Package names are unique and non-empty."""
-    names = [p['name'] for p in _packages()]
-    assert all(names)
-    assert len(names) == len(set(names))
-
-
-def test_package_deps_resolve() -> None:
-    """Every dependency names another package of the manifest."""
-    packages = _packages()
-    names = {p['name'] for p in packages}
-    for pkg in packages:
-        for dep in pkg.get('deps') or []:
-            assert dep in names, f"{pkg['name']} depends on unknown {dep}"
-
-
-def test_package_sources_exist() -> None:
-    """Every hashed source path exists under the builder directory."""
-    for pkg in _packages():
-        for source in pkg.get('sources') or []:
-            assert (PACKAGES /
-                    source).exists(), f"{pkg['name']}: {source} missing"
-
-
-def test_package_has_build_or_upstream() -> None:
-    """Each package either repacks an upstream deb or carries a build script."""
-    for pkg in _packages():
-        assert pkg.get('upstream') or str(pkg.get('build', '')
-                                          ).strip(), pkg['name']
 
 
 def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
@@ -124,36 +53,10 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
     assert result['images']
 
 
-def _ignore_patterns() -> list[str]:
-    """Read the active patterns of ``.dockerignore``.
-
-    Returns:
-        The non-empty, non-comment lines of the file.
-    """
-    lines = (ROOT / '.dockerignore').read_text().splitlines()
-    return [ln.strip() for ln in lines if ln.strip() and not ln.startswith('#')]
-
-
-@pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
-def test_dockerignore_keeps_copy_sources(containerfile: Path) -> None:
-    """No COPY source is excluded from the build context by .dockerignore.
-
-    Args:
-        containerfile: Image definition under test.
-    """
-    patterns = [p.rstrip('/') for p in _ignore_patterns()]
-    for source in _local_sources(containerfile):
-        top = source.removeprefix('./').split('/')[0]
-        for pattern in patterns:
-            assert not fnmatch.fnmatch(top, pattern), (
-                f'{containerfile.name}: {source} excluded by '
-                f'.dockerignore {pattern}'
-            )
-
-
 def test_dockerignore_excludes_local_state() -> None:
     """Agent state, MCP config and env files stay out of the build context."""
-    patterns = set(_ignore_patterns())
+    lines = (ROOT / '.dockerignore').read_text().splitlines()
+    patterns = {ln.strip() for ln in lines if ln.strip()}
     for required in ('.env*', '.kronn/', '.claude/', '.mcp.json*', 'docs/'):
         assert required in patterns, f'{required} missing from .dockerignore'
 
