@@ -16,7 +16,7 @@ HOST=$(hostname -s)
 # the domain from the dhclient probe lease synchronously and saves it here;
 # we read it now rather than from /etc/resolv.conf, which is written by dhclient
 # running in the background and is not yet populated when ExecStartPost fires.
-FQDN=$(cat /run/ifupdown2-dhcp-domain 2>/dev/null | tr -d '[:space:]' || echo "")
+FQDN=$(tr -d '[:space:]' 2>/dev/null </run/ifupdown2-dhcp-domain || echo "")
 [[ "${FQDN}" == "" ]] \
   && FQDN="local"
 
