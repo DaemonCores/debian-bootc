@@ -50,11 +50,11 @@ The live installer runs the storage and bootc deployment without embedding a def
 
 This avoids a shared fallback credential, but makes the tty1 setup path part of system recovery. Changes to the getty drop-in or wizard must be tested for interruption and restart behaviour so a failed setup cannot leave the host permanently inaccessible.
 
-## Keyless image signing
+## Per-repository image signing key
 
-Published images are signed with cosign using the GitHub Actions OIDC identity. This avoids a long-lived container-signing private key in repository secrets and binds the signature to the workflow identity.
+Published images are signed with a cosign key pair that belongs to the repository running the pipeline: the pipeline lives in DaemonCores-CI, the key lives in the repository secrets (`COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY`) and is generated on first use when `PAT_SECRETS` is available. A fork therefore signs with its own key, never with ours.
 
-Consumers must still verify the expected issuer and workflow identity. A valid Sigstore signature from an unexpected repository or workflow is not sufficient.
+Keyless signing was dropped because a host cannot require it: the containers-image `sigstoreSigned` policy can only match a Fulcio certificate by e-mail, while a GitHub Actions certificate carries a workflow URI. The public key is baked into the images (`/etc/pki/containers/image-signing.pub`) with a `policy.json` and a `registries.d` entry, so every host updates only to images signed by this repository. The cost is a long-lived private key in the repository secrets: whoever can read them can sign images, and regenerating the key locks hosts that pinned the old one out of updates. Without `PAT_SECRETS` the pipeline falls back to keyless signing and ships no policy.
 
 ## GitHub Action references
 

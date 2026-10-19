@@ -99,7 +99,7 @@ The online ISO pulls the registry image during installation. The offline ISO emb
 ## Trust boundaries
 
 - APT repositories use an explicit signing key whose downloaded bytes are checked against a pinned SHA-256 value in the Containerfile.
-- GHCR images are signed with cosign using the GitHub Actions OIDC identity.
+- GHCR images are signed with the repository's own cosign key, and the images carry the public key and a policy so hosts only accept signed updates.
 - The custom EFI package is built with the configured Secure Boot key and certificate.
 - Runtime tests execute before image publication, but they do not replace hardware qualification.
 - The installer runs privileged storage operations and must be tested carefully before physical deployment.

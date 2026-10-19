@@ -217,5 +217,13 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
     && systemctl enable ssh-host-keygen.service \
     && rm -f /etc/ssh/ssh_host_*
 
+# Host-side signature enforcement. The pipeline passes the repository's cosign
+# public key and the image reference; both are empty until the key exists, in
+# which case no policy is shipped (see src/signaturepolicy).
+ARG IMAGE_REF=""
+ARG COSIGN_PUBKEY_B64=""
+COPY ./src/signaturepolicy /
+RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_PUBKEY_B64}"
+
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE

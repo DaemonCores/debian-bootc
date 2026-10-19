@@ -78,7 +78,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | GHCR | GitHub Container Registry; publishes images and the buildenv [src: file: README.md:80] [src: file: workflows/env.yml:5]. |
 | GitHub Pages APT repo | Signed APT repository served from `https://daemoncores.github.io/debian-bootc` [src: file: Containerfile:78] [src: file: README.md:85]. |
 | GitHub wiki | Mirror of `docs/**` synced on push to `main` [src: file: .github/workflows/docs-wiki-sync.yml:5]. |
-| cosign / Sigstore | Keyless image signing with the GitHub Actions OIDC identity [src: file: Containerfile:10] [src: file: docs/justifications.md:55]. |
+| cosign / Sigstore | Image signing with a per-repository key kept in repository secrets, keyless OIDC only as a fallback [src: file: docs/justifications.md:53]. |
 | bootc-image-builder | Tool converting the installer image to an ISO via dracut live squashfs [src: file: Containerfile.iso:5]. |
 | cage | Single-app Wayland compositor hosting the installer [src: file: Containerfile.iso:8]. |
 | shim / Secure Boot | Signed EFI chain staged by `bootc-finalize`; GRUB EFI package signed with `SB_SIGNING_KEY`/`SB_SIGNING_CERT` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:5] [src: file: README.md:82]. |
@@ -93,7 +93,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | OCI | Open Container Initiative (image format) [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/control:12] |
 | SB | Secure Boot (`SB_SIGNING_KEY`, `SB_SIGNING_CERT`) [src: file: README.md:82] |
 | PAT | Personal Access Token (`PAT_PKG`, GHCR pull/publish) [src: file: README.md:80] |
-| OIDC | OpenID Connect — GitHub Actions identity used by cosign [src: file: docs/justifications.md:55] |
+| OIDC | OpenID Connect — GitHub Actions identity, used by cosign only for the keyless fallback [src: file: docs/justifications.md:57] |
 | SBC | Single-board computer (arm64 targets) [src: file: Containerfile.minimal:89] |
 | DTB | Device Tree Blob, board-specific on arm64 [src: file: docs/minimal.md:100] |
 | GHCR | GitHub Container Registry [src: file: README.md:80] |

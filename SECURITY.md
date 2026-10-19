@@ -28,7 +28,7 @@ The project is under active development. Security fixes target the current defau
 ## Important security boundaries
 
 - The image trusts the project APT key only after checking its pinned digest.
-- Published images are signed with the GitHub Actions OIDC identity; consumers should verify both issuer and expected workflow identity.
+- Published images are signed with a cosign key owned by the repository (repository secrets); the images ship its public key and a policy so hosts only accept signed updates. The private key must never appear in artifacts or logs.
 - Secure Boot signing keys are repository secrets and must never appear in artifacts or logs.
 - Installer jobs and bootc installation perform privileged disk operations.
 - The current installer does not embed a shared root password; the tty1 first-boot wizard provisions the initial user and root credentials.

@@ -13,7 +13,7 @@ debian-bootc has no long-running application services. Its "services" are build 
 | Minimal image (`Containerfile.minimal`) | N/A | Podman, `FROM debian:trixie`, bootc/OSTree | Reduced multi-arch image; label `org.daemoncores.autoupdate-variants="lock,autoupdate"` yields `_autoupdate` and `_lock` tag families [src: file: Containerfile.minimal:69] [src: file: Containerfile.minimal:85] |
 | Installer ISO (`Containerfile.iso`) | N/A | `FROM ghcr.io/daemoncores/debian-bootc:latest-${ARCH}-autoupdate`, cage, fisherman, bootc-installer, bootc-image-builder | amd64 live installer; GTK4 wizard drives `bootc install to-filesystem` [src: file: Containerfile.iso:28] [src: file: Containerfile.iso:5] [src: file: docs/architecture.md:90] |
 | Boot test harness | SSH | QEMU/KVM + UEFI, manifest `workflows/tests.yml` | Installs each image to a virtual disk, boots it, runs tests over SSH; a failure blocks the push [src: file: workflows/tests.yml:1] |
-| Container registry GHCR | N/A | OCI registry + cosign (GitHub OIDC) | Hosts signed images and multi-arch manifest lists [src: file: docs/architecture.md:102] |
+| Container registry GHCR | N/A | OCI registry + cosign (repository key) | Hosts signed images and multi-arch manifest lists [src: file: docs/architecture.md:102] |
 | Docs wiki sync | N/A | `DaemonCores-CI/.github/workflows/docs-wiki-sync.yml@main` | Syncs `docs/**` to the GitHub wiki [src: file: .github/workflows/docs-wiki-sync.yml:11] |
 
 ## Architecture diagram
@@ -80,7 +80,7 @@ Only the declared `sources` paths and non-secret `env` of a package are hashed; 
 Each Containerfile `COPY`s a directory under `src/` whose paths mirror `/` (`debianpreinstall`, `bootcpreinstall`, then `debianpostinstall` or `minimalpostinstall`) [src: file: Containerfile:56] [src: file: Containerfile:73] [src: file: Containerfile:171] [src: file: Containerfile.minimal:227]. The final phase relocates `/home`, `/root`, `/mnt`, `/srv`, `/opt` and locale data into `/var` via symlinks and links `/ostree` to `/sysroot/ostree`, so the read-only `/usr` can be swapped atomically [src: file: Containerfile:168]. Kernel relocation and dracut initramfs are done by `bootc-finalize`, also hooked into `/etc/kernel/postinst.d` so downstream images get it automatically [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize:5].
 
 ### Test-gated, signed publication
-Images are pushed and cosign-signed only after the QEMU boot tests pass; every test must declare a `diag` command or the harness refuses to run [src: file: workflows/tests.yml:9] [src: file: docs/architecture.md:64]. Trust is pinned end-to-end: APT key bytes checked against `BOOTC_GPG_SHA256`, images signed via GitHub OIDC [src: file: Containerfile:79] [src: file: docs/architecture.md:101].
+Images are pushed and cosign-signed only after the QEMU boot tests pass; every test must declare a `diag` command or the harness refuses to run [src: file: workflows/tests.yml:9] [src: file: docs/architecture.md:64]. Trust is pinned end-to-end: APT key bytes checked against `BOOTC_GPG_SHA256`, images signed with the repository's cosign key and verified by hosts [src: file: Containerfile:79] [src: file: docs/architecture.md:101].
 
 ## Code organization
 

@@ -1,0 +1,58 @@
+#!/bin/sh
+# Make the host require this repository's image signature.
+#
+# Usage: install-signature-policy IMAGE_REF PUBLIC_KEY_BASE64
+#
+# Writes the repository's cosign public key and a containers-image policy that
+# only accepts signed images for IMAGE_REF, plus the registries.d entry that
+# lets the host fetch the signature attached to the image. Every other
+# transport and registry keeps the default (accept anything) behaviour, so the
+# host can still pull its other images.
+#
+# Does nothing when the public key is empty: a repository that has not
+# generated its signing key yet (first CI run, or no PAT_SECRETS) ships images
+# without a policy rather than a policy no image can satisfy. Shared by
+# Containerfile and Containerfile.minimal.
+set -eu
+
+# Prefix for every path written; empty in the image, set by the unit tests.
+root=${INSTALL_ROOT:-}
+image_ref=${1:-}
+key_b64=${2:-}
+
+if [ -z "${key_b64}" ]; then
+  echo "install-signature-policy: no public key, no signature policy shipped"
+  exit 0
+fi
+[ -n "${image_ref}" ] || {
+  echo "install-signature-policy: image reference missing" >&2
+  exit 1
+}
+
+key=/etc/pki/containers/image-signing.pub
+mkdir -p "${root}/etc/pki/containers" "${root}/etc/containers/registries.d"
+printf '%s' "${key_b64}" | base64 -d >"${root}${key}"
+grep -q '^-----BEGIN PUBLIC KEY-----' "${root}${key}" || {
+  echo "install-signature-policy: not a PEM public key" >&2
+  exit 1
+}
+
+cat >"${root}/etc/containers/policy.json" <<POLICY
+{
+  "default": [{"type": "insecureAcceptAnything"}],
+  "transports": {
+    "docker": {
+      "${image_ref}": [
+        {"type": "sigstoreSigned", "keyPath": "${key}", "signedIdentity": {"type": "matchRepository"}}
+      ]
+    },
+    "docker-daemon": {"": [{"type": "insecureAcceptAnything"}]}
+  }
+}
+POLICY
+
+cat >"${root}/etc/containers/registries.d/image-signature.yaml" <<REGISTRY
+docker:
+  ${image_ref}:
+    use-sigstore-attachments: true
+REGISTRY

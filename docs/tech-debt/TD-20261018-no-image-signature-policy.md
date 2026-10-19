@@ -19,7 +19,7 @@ metadata:
 - **Area**: Security
 - **Category**: security
 - **Severity**: Medium
-- **Status**: Blocked (design change needed, see Resolution)
+- **Status**: Mitigated (per-repository key and host policy implemented; never run on GitHub, no booted host check)
 - **Effort**: M
 - **Blast radius**: module (3-5 files)
 
@@ -42,6 +42,10 @@ Ship a `policy.json` with a `sigstoreSigned` rule (Fulcio issuer + workflow subj
 `create ticket`
 
 ## Resolution
-Not shipped. The containers-image `policy.json` `sigstoreSigned` requirement can only match a Fulcio certificate through `fulcio.subjectEmail` (https://raw.githubusercontent.com/containers/image/main/docs/containers-policy.json.5.md). Keyless signing from GitHub Actions produces a certificate whose identity is a workflow URI, not an email, so the current keyless signatures cannot be required by a host policy. A wrong policy would also block every auto-update on installed hosts, and no image was booted here to prove it works.
+Option 1 was taken. Keyless signatures cannot be required by a host (containers-image `sigstoreSigned` matches a Fulcio certificate only by e-mail, https://raw.githubusercontent.com/containers/image/main/docs/containers-policy.json.5.md), so each repository now owns a cosign key pair stored as repository secrets (`COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY`) while the pipeline stays in DaemonCores-CI:
 
-Options, all needing a decision: (1) sign with a long-lived cosign key held in a repository secret and ship its public key with `keyPath`; (2) keep keyless and verify only in CI; (3) wait for URI-SAN support in containers-image. Option 1 also needs a boot test that `bootc upgrade --check` rejects an unsigned tag before it is enabled.
+- `ensure-cosign-key` (DaemonCores-CI) generates the pair on the first run when `PAT_SECRETS` is set; secrets created mid-run are visible from the next run, so key-signed images start one run later. Without `PAT_SECRETS` the images stay keyless and no policy is shipped.
+- `sign-image` signs per-arch images and manifest lists with the key (cosign 2.x, `.sig` attachments). The list step used to sign the first per-arch manifest; it now signs the digest of the list itself.
+- `src/signaturepolicy` writes the public key, a `policy.json` requiring `sigstoreSigned` for the image repository (default stays accept-anything) and a `registries.d` entry with `use-sigstore-attachments: true`; it ships nothing when the public key is empty.
+
+Still unverified: a pipeline run on GitHub, that `bootc upgrade` on a booted host accepts a signed tag and rejects an unsigned one (the boot test the original direction asked for is not written), and that containers-image reads the cosign 2.x signatures as configured. Rotating the key locks hosts that pinned the old public key out of updates; the README tells existing users about the change.
