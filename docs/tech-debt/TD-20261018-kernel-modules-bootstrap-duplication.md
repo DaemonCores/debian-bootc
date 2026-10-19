@@ -19,7 +19,7 @@ metadata:
 - **Area**: Backend
 - **Category**: code-quality
 - **Severity**: Medium
-- **Status**: Confirmed by user
+- **Status**: Fixed (not built; CI is the check)
 - **Effort**: M
 - **Blast radius**: local (1-2 files)
 
@@ -41,3 +41,6 @@ Extract the bootstrap into one script, for example `workflows/bootc-debs-builder
 
 ## Next step
 `create ticket`
+
+## Resolution
+The three identical bootstrap copies (linux-modules-arm, linux-modules-arm-device, linux-modules-x86_64) now source `workflows/bootc-debs-builder/lib/kernel-prepare.sh` and call `kernel_prepare`. Verified before the change that the 28 command lines of the three copies were identical. The script is listed in each entry's `sources:` and in the shell gate, and a test checks that. The `linux-modules-generic` COMMON_DEB lookup and the `|| true` purge chain are unchanged; the purge still hides a failed purge. Not built: the CI module jobs are the real check.

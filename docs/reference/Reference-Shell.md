@@ -79,6 +79,19 @@ The interactive wizard creates the user account, sets the root
 password, and configures sudo, the SSH root-login policy, the
 hostname, and the locale/keyboard layout.
 
+## `workflows/bootc-debs-builder/lib/kernel-prepare.sh`
+
+Shared kernel-module build bootstrap, sourced by the build: blocks of
+linux-modules-arm, linux-modules-arm-device and linux-modules-x86_64 in
+packages.yml. Listed in each entry's sources: so a change invalidates the
+cached debs.
+
+Inputs (set by the caller): DEB_ARCH.
+Outputs (globals): COMMON_DEB, BUILT_VER, KVER, SRCDIR, ARCH (kernel arch).
+BUILT_VER and KVER are consumed by the sourcing build: blocks.
+Leaves the shell inside the kernel source tree with .config seeded from the
+published linux-image-common deb; the caller merges its overlays and builds.
+
 ## `scripts/e2e-local.sh`
 
 e2e-local.sh - run the CI boot test (workflows/tests.yml) against a local
