@@ -10,6 +10,18 @@
 # Leaves the shell inside the kernel source tree with .config seeded from the
 # published linux-image-common deb; the caller merges its overlays and builds.
 
+#######################################
+# Prepare the kernel source tree and seed its .config.
+# Globals:
+#   DEB_ARCH: read, architecture of the matching linux-image-common deb
+#   COMMON_DEB: set
+#   BUILT_VER: set
+#   KVER: set
+#   SRCDIR: set
+#   ARCH: set, kernel architecture
+# Returns:
+#   Exits 1 when no matching linux-image-common deb is found.
+#######################################
 # shellcheck disable=SC2034  # BUILT_VER and KVER are used by the caller
 kernel_prepare() {
   # The linux-image wave installed linux-image-common_<ver>_<arch>.deb

@@ -18,7 +18,14 @@ SCRIPT = (
 
 
 def _function(name: str) -> str:
-    """Return the source of the top-level shell function ``name``."""
+    """Cut one top-level shell function out of the script.
+
+    Args:
+        name: Name of the shell function to extract.
+
+    Returns:
+        The source of the function, from its name to the closing brace.
+    """
     match = re.search(
         rf'^{name}\(\) \{{\n.*?^\}}\n', SCRIPT.read_text(),
         re.MULTILINE | re.DOTALL
@@ -28,6 +35,14 @@ def _function(name: str) -> str:
 
 
 def _bash(snippet: str) -> subprocess.CompletedProcess[str]:
+    """Run a snippet in a strict bash.
+
+    Args:
+        snippet: Shell source to execute.
+
+    Returns:
+        The completed process, with captured text output.
+    """
     return subprocess.run(['bash', '-euo', 'pipefail', '-c', snippet],
                           check=False,
                           capture_output=True,
@@ -42,7 +57,12 @@ def _bash(snippet: str) -> subprocess.CompletedProcess[str]:
     ('a--b', 'A B'),
 ])
 def test_display_name(hostname: str, expected: str) -> None:
-    """Hostnames become title-case names; - and _ are spaces, domain dropped."""
+    """Hostnames become title-case names; - and _ are spaces, domain dropped.
+
+    Args:
+        hostname: Hostname given to the helper.
+        expected: Display name the helper must produce.
+    """
     result = _bash(f'{_function("_display_name")}\n_display_name {hostname!r}')
     assert result.stdout.strip() == expected
 
