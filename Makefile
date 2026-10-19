@@ -45,7 +45,7 @@ YAML_SRCS := \
 	workflows/env.yml \
 	workflows/tests.yml
 
-PYTHON_SRCS := scripts/gen-recipe.py scripts/gen_docs.py
+PYTHON_SRCS := scripts/check_upstream_pins.py scripts/gen-recipe.py scripts/gen_docs.py
 PYTHON_TESTS := tests
 
 # ---- venv bootstrap ------------------------------------------------------- #
