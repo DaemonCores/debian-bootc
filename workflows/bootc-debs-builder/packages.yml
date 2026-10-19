@@ -108,7 +108,7 @@ packages:
       apt-get install -y --no-install-recommends \
         build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
         rsync libudev-dev elfutils dpkg-dev \
-        debhelper kmod libdw-dev curl xz-utils
+        debhelper kmod libdw-dev curl xz-utils python3
 
       # Download the kernel.org tarball resolved by `track:` and verify its
       # sha256. The kernel is never a distribution source package.
@@ -127,6 +127,15 @@ packages:
       # base for every device). merge_config.sh -m merges in place.
       scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}"
       make olddefconfig
+
+      # olddefconfig silently ignores a symbol this kernel does not know, so
+      # fail on an unknown symbol; an option dropped by an unmet dependency is
+      # only reported, because the base config also names options that exist on
+      # one architecture only.
+      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . "${BASE_CONFIG}"
+      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . --config .config \
+        "${BASE_CONFIG}" \
+        || echo "::warning::kernel/config options not present in the final .config"
 
       # Ship the finalized .config and Module.symvers inside the common image
       # deb (see the repack below). They must live in the deb, not beside it in

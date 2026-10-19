@@ -26,8 +26,8 @@
 # it can parse the device tree, so this is built-in rather than a module.
 # =============================================================================
 
-# BCM2712: Raspberry Pi 5 SoC. Built-in.
-CONFIG_ARCH_BCM2712=y
+# BCM2712: Raspberry Pi 5 SoC, selected by ARCH_BCM2835 (family symbol). Built-in.
+CONFIG_ARCH_BCM2835=y
 
 # =============================================================================
 # MMC / SD / eMMC — built-in. The Pi boots from the SD card; the kernel must
