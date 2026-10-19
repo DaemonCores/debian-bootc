@@ -42,3 +42,5 @@ Use one entry parameterised on `dpkg --print-architecture` (target and EFI suffi
 
 ## Resolution
 Resolved by removing the unconsumed arm64 entry (see [TD-20261018-grub-efi-arm64-unconsumed](TD-20261018-grub-efi-arm64-unconsumed.md)): a single `grub-efi-amd64-signed` entry now holds the GRUB pins, so there is nothing left to keep in sync. The parity test added earlier is deleted with it.
+
+The arm64 entry was restored later, because generic arm64 machines need the Fedora GRUB too. Both entries now carry no pin at all: each tracks the head of the `rhboot/grub2` default branch through `track:` (see [decisions](../decisions.md)), so there is no pin left to keep in sync. They still share the same source and differ only in target and output paths.
