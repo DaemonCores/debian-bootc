@@ -915,12 +915,18 @@ packages:
   - name: bootupd
     sources:
       - preinstall/output/bootupd
-      - patches/bootupd-0.2.35-dpkg.patch
+      - patches/bootupd-dpkg.patch
+    # Rolling release: the CI resolves the latest upstream release (tag and
+    # vendor tarball SHA-256) before each build. If it does not build, the
+    # last-good published deb is kept and an issue is opened.
+    track:
+      BOOTUPD_VER:
+        repo: coreos/bootupd
+        digests:
+          BOOTUPD_VENDOR_SHA256: "bootupd-{version}-vendor.tar.zstd"
     env:
       CARGO_HOME: "/build/rust"
       RUSTUP_HOME: "/build/rust"
-      BOOTUPD_VER: "v0.2.35"
-      BOOTUPD_VENDOR_SHA256: "7ada7d0c9d1facb4c5a138e1b014191971b8e97a2fca690b86357e9888584e8b"
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -935,7 +941,7 @@ packages:
       # to fall back to dpkg so the BIOS component's generate-update-metadata
       # works here instead of crashing. The rpm path stays intact for Fedora.
       git -C /build/bootupd apply \
-        "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootupd-0.2.35-dpkg.patch"
+        "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootupd-dpkg.patch"
 
       curl --retry 3 -fsSL \
         "https://github.com/coreos/bootupd/releases/download/${BOOTUPD_VER}/bootupd-${BOOTUPD_VER#v}-vendor.tar.zstd" \
@@ -990,8 +996,9 @@ packages:
   - name: libcomposefs
     sources:
       - preinstall/output/libcomposefs
-    env:
-      COMPOSEFS_VER: "v1.0.8"
+    track:
+      COMPOSEFS_VER:
+        repo: composefs/composefs
     build: |
       set -euo pipefail
       ARCH=$(dpkg --print-architecture)
@@ -1047,11 +1054,15 @@ packages:
     sources:
       - preinstall/output/ostree
       - ostreepostinstall
+    track:
+      OSTREE_VER:
+        repo: ostreedev/ostree
+        strip-v: true
+        digests:
+          OSTREE_SHA256: "libostree-{version}.tar.xz"
     env:
       CARGO_HOME: "/build/rust"
       RUSTUP_HOME: "/build/rust"
-      OSTREE_VER: "2026.1"
-      OSTREE_SHA256: "8e77c285dd6fa5ec5fb063130390977be727fe11107335ed8778a40385069e95"
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -1118,11 +1129,14 @@ packages:
     sources:
       - preinstall/output/bootc
       - bootcpostinstall
+    track:
+      BOOTC_VER:
+        repo: bootc-dev/bootc
+        digests:
+          BOOTC_VENDOR_SHA256: "bootc-{version}-vendor.tar.zstd"
     env:
       CARGO_HOME: "/build/rust"
       RUSTUP_HOME: "/build/rust"
-      BOOTC_VER: "v1.16.2"
-      BOOTC_VENDOR_SHA256: "53d759ca521144a675af67e68d23c3f5f18dca784e4e900052d0cfdc4467732b"
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
