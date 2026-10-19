@@ -25,7 +25,11 @@ kernel_patch_list() {
 }
 
 #######################################
-# Download and apply the patches of one class to a kernel source tree.
+# Download the patches of one class, check the sha256 of the files they touch
+# against kernel/patches.lock.json, then apply them to a kernel source tree.
+# The guard runs on the pristine tree, before any patch: a touched file that
+# changed upstream refuses the build (the last good deb stays published) until
+# the lock is refreshed. Set PATCH_GUARD_UPDATE=1 to rewrite the lock instead.
 # Arguments:
 #   $1 - manifest path
 #   $2 - class (kernel or module)
@@ -33,29 +37,48 @@ kernel_patch_list() {
 #   $4 - kernel version, e.g. 7.2.11
 #   $5 - kernel source tree
 # Returns:
-#   Exits 1 when a patch cannot be downloaded or does not apply.
+#   Exits 1 when a patch cannot be downloaded, a guarded file changed or a
+#   patch does not apply.
 #######################################
 kernel_apply_patches() {
   local manifest="$1" class="$2" arch="$3" version="$4" tree="$5"
-  local series="${version%.*}" name url file
+  local series="${version%.*}" name url dir file
+  local -a names=() files=()
   [[ "${version}" == *.*.* ]] || series="${version}"
+  dir=$(mktemp -d)
   while read -r name url; do
     [[ -n "${name}" ]] || continue
     url="${url//\{series\}/${series}}"
     url="${url//\{version\}/${version}}"
-    file=$(mktemp)
+    file="${dir}/${#files[@]}.patch"
     curl --retry 3 -fsSL "${url}" -o "${file}" \
       || {
         echo "ERROR: cannot download patch ${name}: ${url}" >&2
         exit 1
       }
-    patch -d "${tree}" -p1 --no-backup-if-mismatch --dry-run <"${file}" >/dev/null \
+    names+=("${name}")
+    files+=("${file}")
+  done < <(kernel_patch_list "${manifest}" "${class}" "${arch}")
+  ((${#files[@]})) || return 0
+
+  local guard=()
+  [[ "${PATCH_GUARD_UPDATE:-0}" != 1 ]] || guard=(--update)
+  python3 "${CI_SCRIPTS}/patch_guard.py" --tree "${tree}" \
+    --lock "$(dirname "${manifest}")/patches.lock.json" "${guard[@]}" "${files[@]}" \
+    || {
+      echo "ERROR: a file touched by the patches changed upstream" >&2
+      exit 1
+    }
+
+  local i
+  for i in "${!files[@]}"; do
+    patch -d "${tree}" -p1 --no-backup-if-mismatch --dry-run <"${files[i]}" >/dev/null \
       || {
-        echo "ERROR: patch ${name} does not apply to ${version}: ${url}" >&2
+        echo "ERROR: patch ${names[i]} does not apply to ${version}" >&2
         exit 1
       }
-    patch -d "${tree}" -p1 --no-backup-if-mismatch <"${file}" >/dev/null
-    rm -f "${file}"
-    echo "applied patch ${name}"
-  done < <(kernel_patch_list "${manifest}" "${class}" "${arch}")
+    patch -d "${tree}" -p1 --no-backup-if-mismatch <"${files[i]}" >/dev/null
+    echo "applied patch ${names[i]}"
+  done
+  rm -rf "${dir}"
 }
