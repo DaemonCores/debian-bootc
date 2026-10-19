@@ -15,6 +15,8 @@
 
 ---
 
+> **Notice for existing installations.** Until now the images were signed keyless, which a host cannot require, so installed systems accept whatever the registry serves. Images now carry a signature policy: hosts require this repository's cosign signature for `ghcr.io/daemoncores/debian-bootc`. Hosts installed before this change have no such policy; they pick it up with the first update to an image built after the signing key exists, and that update is the last one they accept without verification. If you installed from this repository and want to be sure, reinstall from a fresh ISO or check `/etc/containers/policy.json` after updating. If the signing key is ever regenerated, hosts that pinned the old public key refuse new images until they are reinstalled or their `/etc/pki/containers/image-signing.pub` is replaced.
+
 `debian-bootc` builds Debian 13 as a bootc/OSTree operating-system image. It packages the bootc stack that is not provided by Debian, assembles OCI images, boots them under QEMU for runtime validation, and generates installer artifacts.
 
 The repository is under active development. The amd64 path is the current installation target; arm64 image, package, and disk-image work is present in the pipeline but should be treated as being validated until the architecture matrix is explicitly released.
@@ -24,7 +26,7 @@ The repository is under active development. The amd64 path is the current instal
 - Debian packages for bootc, OSTree, composefs, bootupd, a BLS-capable GRUB build, first-boot setup, and bootc-specific service integration.
 - A signed APT repository published from the package manifest in `workflows/bootc-debs-builder/packages.yml`.
 - A full image and a reduced `minimal` image assembled from Debian Trixie.
-- Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and keyless cosign signing.
+- Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and cosign signing with a key owned by the repository.
 - Boot tests that install an image to a virtual disk, start it with QEMU/KVM, and execute `workflows/tests.yml` over SSH before publication.
 - Online and offline amd64 installer ISOs.
 - Optional raw image generation for the targets enabled by the caller workflow.
@@ -81,6 +83,9 @@ The installer is destructive to the selected disk. Review the prompt carefully a
 | `APT_GPG_KEY` | Sign the generated APT repository. |
 | `SB_SIGNING_KEY` | Sign the custom EFI bootloader package. |
 | `SB_SIGNING_CERT` | Certificate paired with the Secure Boot key. |
+| `PAT_SECRETS` | Token with `secrets:write`. Lets the pipeline create the keys below by itself on the first run. |
+| `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY` | Image signing key of this repository. Created automatically when `PAT_SECRETS` is set; a fork gets its own key and its own signed images. |
+| `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Created automatically like the image key when module signing is enabled. |
 
 GitHub Pages must be configured for Actions deployment so the APT repository can be published.
 

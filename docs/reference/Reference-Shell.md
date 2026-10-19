@@ -128,6 +128,23 @@ Convert the image filesystem layout to what bootc/ostree requires.
 Shared by Containerfile and Containerfile.minimal; do NOT change the layout
 or bootc fails.
 
+## `src/signaturepolicy/usr/libexec/debian-bootc/install-signature-policy`
+
+Make the host require this repository's image signature.
+
+Usage: install-signature-policy IMAGE_REF PUBLIC_KEY_BASE64
+
+Writes the repository's cosign public key and a containers-image policy that
+only accepts signed images for IMAGE_REF, plus the registries.d entry that
+lets the host fetch the signature attached to the image. Every other
+transport and registry keeps the default (accept anything) behaviour, so the
+host can still pull its other images.
+
+Does nothing when the public key is empty: a repository that has not
+generated its signing key yet (first CI run, or no PAT_SECRETS) ships images
+without a policy rather than a policy no image can satisfy. Shared by
+Containerfile and Containerfile.minimal.
+
 ## `workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst`
 
 (no header comment)
