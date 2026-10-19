@@ -40,8 +40,8 @@
 #   `linux-image-${KERNEL_VARIANT}-${ARCH}` apt install resolves to it via the
 #   virtual package mechanism once the kernel build succeeds. Until the kernel
 #   build publishes its first .deb, the install fails (the package is absent
-#   from every repo) — this is expected and tracked in P02 in todo/registry.md.
-#   See P02 in todo/registry.md and docs/minimal.md#kernel.
+#   from every repo) — this is expected.
+#   See docs/minimal.md ("Kernel and auto-update").
 #
 # Per-arch kernel modules (optional):
 #   The image installs ALL modules matching the target arch in a separate
@@ -56,7 +56,7 @@
 # Auto-update variant:
 #   ARG AUTOUPDATE=1 writes `1` to /usr/lib/bootc/autoupdate. Set AUTOUPDATE=0 to
 #   write `0` (bootc treats content `0` as disabled) for the `_lock` tag variant
-#   (auto-update disabled for minimal RAM). See P04 in todo/registry.md.
+#   (auto-update disabled for minimal RAM). See docs/minimal.md ("Kernel and auto-update").
 #
 # Trade-offs (documented in docs/minimal.md):
 #   - No man pages, no nano, no bash-completion
@@ -101,15 +101,15 @@ ARG KERNEL_CMDLINE_SERIAL=""
 # `minimal` installs linux-image-minimal-<arch> (custom kernel built from
 # kernel/config-minimal-<arch> by the bootc-debs-builder pipeline). Both names
 # are resolved via the `Provides` virtual-package mechanism of the custom
-# `linux-image-common` .deb once the kernel build publishes it. See P02 in
-# todo/registry.md. The CI builds the .deb with the matching KERNEL_VARIANT-<arch>
+# `linux-image-common` .deb once the kernel build publishes it. See
+# docs/minimal.md ("Kernel and auto-update"). The CI builds the .deb with the matching KERNEL_VARIANT-<arch>
 # name, so the Containerfile installs it directly with no if/else.
 ARG KERNEL_VARIANT=stock
 # `1` (default) writes /usr/lib/bootc/autoupdate so bootc performs automated ostree
 # upgrades (the `_autoupdate` tag variant); `0` writes `0` to that file, disabling
 # auto-update for the `_lock` tag variant (minimal RAM, no background upgrade
 # overhead). bootc reads the file content (0 = disabled); presence alone is not
-# sufficient. See P04 in todo/registry.md.
+# sufficient. See docs/minimal.md ("Kernel and auto-update").
 ARG AUTOUPDATE=1
 # SHA-256 of the bootc APT repo signing key and the repository URL. The CI
 # derives both at build time from the APT_GPG_KEY secret; the defaults only
@@ -169,7 +169,7 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # `Provides: linux-image-stock-${ARCH}, linux-image-minimal-${ARCH}` so apt
 # resolves the virtual package name to it once the kernel build publishes.
 # Until the first kernel build succeeds, the package is absent from every repo
-# and the install fails — see P02 in todo/registry.md.
+# and the install fails — see docs/minimal.md.
 # BOOT_PKG and FIRMWARE_PKGS stay separate ARGs because arm64 does NOT follow
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
 # Per-arch kernel modules are installed in a separate conditional RUN block

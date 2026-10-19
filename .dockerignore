@@ -16,7 +16,6 @@ tmp/
 .agents/
 .mcp.json*
 docs/
-todo/
 tests/
 .venv/
 .*_cache/
