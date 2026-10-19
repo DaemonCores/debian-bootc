@@ -95,11 +95,21 @@ RUN sed -i "s/{{ ARCH }}/${ARCH}/g" \
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1): amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm +
 # rpi3/rpi4/rpi5/rk3588 overlays.
+# Recommends are NOT installed (--no-install-recommends): they pulled a mail
+# server (exim4), cron, buildah, criu and ~100 other packages into the image.
+# The trailing block of the list below keeps, on purpose, the recommends the OS
+# needs: bootc install tools (parted dosfstools fdisk), rootless podman
+# (uidmap passt aardvark-dns nftables catatonit containers-storage
+# fuse-overlayfs), dracut (cryptsetup systemd-cryptsetup kpartx mdadm zstd),
+# hardware firmware (firmware-* pulled by firmware-linux-free/misc-nonfree),
+# console and ssh usability (console-common ncurses-term psmisc
+# linux-sysctl-defaults libpam-wtmpdb). Derived with apt-get -s, see
+# docs/tech-debt/TD-20261018-full-image-install-recommends.md.
 RUN for _r in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/* && apt update && break; \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
-    && apt install -y \
+    && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}-${ARCH} \
         ${FIRMWARE_PKGS} \
         bootc \
@@ -149,6 +159,32 @@ RUN for _r in 1 2 3 4 5; do \
         wpasupplicant \
         firstboot-user-setup \
         ${BOOT_PKG} \
+        parted \
+        dosfstools \
+        fdisk \
+        uidmap \
+        passt \
+        aardvark-dns \
+        nftables \
+        catatonit \
+        containers-storage \
+        fuse-overlayfs \
+        cryptsetup \
+        systemd-cryptsetup \
+        kpartx \
+        mdadm \
+        zstd \
+        firmware-ath9k-htc \
+        firmware-carl9170 \
+        firmware-intel-graphics \
+        firmware-intel-misc \
+        firmware-mediatek \
+        firmware-nvidia-graphics \
+        console-common \
+        ncurses-term \
+        psmisc \
+        linux-sysctl-defaults \
+        libpam-wtmpdb \
     && { [ -z "${APT_HOLD_PKG}" ] || apt-mark hold "${APT_HOLD_PKG}"; } \
     && apt update \
     && if [ "${ARCH}" = "amd64" ]; then \
