@@ -58,6 +58,12 @@ kernel_prepare() {
   # shellcheck source=kernel-source.sh
   . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
   kernel_fetch_source "${BUILT_VER%%-*}"
+  # The modules build against the same patched tree as the image.
+  # shellcheck source=kernel-patches.sh
+  . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-patches.sh"
+  kernel_apply_patches \
+    "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches.yml" \
+    kernel "${DEB_ARCH}" "${BUILT_VER%%-*}" "${SRCDIR}"
 
   apt-get install -y "${COMMON_DEB}"
 
