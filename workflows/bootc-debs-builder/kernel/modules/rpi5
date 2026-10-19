@@ -44,12 +44,26 @@ CONFIG_ARCH_BCM2835=y
 CONFIG_MMC_BCM2835=y
 
 # =============================================================================
-# Ethernet — built-in. Network must come up at boot so bootc can fetch the
-# next deployment.
+# Ethernet and RP1 I/O chip — modules. Network must come up at boot so bootc can
+# fetch the next deployment; the initramfs loads these modules.
 # =============================================================================
 
-# BCMGENET: module. Broadcom GENET Ethernet controller, used on the
-#           Raspberry Pi 5 (the wired Ethernet port). Kept as =m — see
-#           kernel/modules/rpi3 for the bcm-phy-lib/modpost rationale.
-CONFIG_BCMGENET=m
-CONFIG_BCM_NET_PHYLIB=m
+# The Pi 5 wired Ethernet, USB, I2C, SPI and UART sit behind the RP1 I/O chip,
+# which hangs off a PCIe link. Mainline 7.x ships the RP1 drivers
+# (drivers/misc/rp1, drivers/pinctrl, drivers/clk); the Debian 6.12 kernel does
+# not. The Ethernet MAC inside RP1 is a Cadence GEM, driven by MACB, not by
+# GENET (GENET is the Pi 4 controller, see kernel/modules/rpi4).
+# =============================================================================
+
+# PCIE_BRCMSTB: module. BCM2712 PCIe root complex that carries the RP1 chip.
+CONFIG_PCIE_BRCMSTB=m
+
+# MISC_RP1: module. Core driver of the RP1 peripheral chip.
+CONFIG_MISC_RP1=m
+
+# PINCTRL_RP1 and COMMON_CLK_RP1: modules. GPIO/pinmux and clocks of RP1.
+CONFIG_PINCTRL_RP1=m
+CONFIG_COMMON_CLK_RP1=m
+
+# MACB: module. Cadence GEM Ethernet controller inside RP1 (Pi 5 RJ45 port).
+CONFIG_MACB=m
