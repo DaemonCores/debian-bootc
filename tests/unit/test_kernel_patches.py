@@ -3,6 +3,9 @@
 Upstream is replaced by ``file://`` URLs, so no network is needed.
 """
 
+import hashlib
+import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -11,6 +14,14 @@ import pytest
 LIB = (
     Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
     'lib' / 'kernel-patches.sh'
+)
+GUARD = Path(
+    os.environ.get('CI_SCRIPTS') or
+    Path(__file__).resolve().parents[3] / 'DaemonCores-CI' / 'scripts'
+)
+pytestmark = pytest.mark.skipif(
+    not (GUARD / 'patch_guard.py').is_file(),
+    reason='DaemonCores-CI scripts not available'
 )
 PATCH_ONE = """--- a/file
 +++ b/file
@@ -66,6 +77,8 @@ def _manifest(root: Path, entries: list[tuple[str, str, str, str]]) -> Path:
             f'  - name: {name}', f'    url: file://{root}/{file}',
             f'    stage: {stage}', f'    class: {klass}'
         ]
+    lock = {'file': hashlib.sha256(b'base\n').hexdigest()}
+    (root / 'patches.lock.json').write_text(json.dumps(lock))
     path = root / 'patches.yml'
     path.write_text('\n'.join(lines) + '\n')
     return path
@@ -84,7 +97,7 @@ def _apply(root: Path, manifest: Path,
         The completed process.
     """
     script = (
-        f'set -euo pipefail; . {LIB}; '
+        f'set -euo pipefail; export CI_SCRIPTS={GUARD}; . {LIB}; '
         f'kernel_apply_patches {manifest} kernel {arch} 7.2.11 {root}/tree'
     )
     return subprocess.run(['bash', '-c', script],
@@ -145,3 +158,17 @@ def test_missing_patch_fails_hard(setup: Path) -> None:
     result = _apply(setup, manifest)
     assert result.returncode == 1
     assert 'cannot download patch gone' in result.stderr
+
+
+def test_changed_touched_file_refuses_the_build(setup: Path) -> None:
+    """A touched file that differs from the lock refuses the build.
+
+    Args:
+        setup: Source tree and patch files.
+    """
+    manifest = _manifest(setup, [('one', 'one.patch', 'common', 'kernel')])
+    (setup / 'tree' / 'file').write_text('changed upstream\n')
+    result = _apply(setup, manifest)
+    assert result.returncode == 1
+    assert 'changed upstream' in result.stderr
+    assert (setup / 'tree' / 'file').read_text() == 'changed upstream\n'
