@@ -145,7 +145,7 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | Technology | Version | Role |
 |------------|---------|------|
 | Debian | 13 Trixie (`debian:trixie`, unpinned) [src: file: Containerfile:5] | Base OS for images and build env |
-| bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1250] | Bootable container tooling (built from source) |
+| bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1272] | Bootable container tooling (built from source) |
 | OSTree | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1179] | Immutable OS deployment |
 | composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1120] | Root filesystem integrity |
 | bootupd | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1048] | Bootloader updates |
