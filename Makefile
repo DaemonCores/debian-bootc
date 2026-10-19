@@ -11,6 +11,11 @@ SHELL := /bin/bash -euo pipefail
 VENV = .venv
 VBIN = $(VENV)/bin
 
+# Shared checks and tooling (docstring gate, tests manifest, build context,
+# documentation sync, reference generation, local boot test) live in
+# DaemonCores-CI; CI exports CI_REPO, local runs use the sibling checkout.
+CI_REPO ?= ../DaemonCores-CI
+
 # ---- file sets ------------------------------------------------------------ #
 
 SHELL_SRCS := \
@@ -22,8 +27,7 @@ SHELL_SRCS := \
 	workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize \
 	workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize \
 	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup \
-	workflows/bootc-debs-builder/lib/kernel-prepare.sh \
-	scripts/e2e-local.sh
+	workflows/bootc-debs-builder/lib/kernel-prepare.sh
 
 # DEBIAN/postinst files use `set -e` (POSIX sh, not full bash pipefail).
 POSTINST_SRCS := \
@@ -46,7 +50,7 @@ YAML_SRCS := \
 	workflows/env.yml \
 	workflows/tests.yml
 
-PYTHON_SRCS := scripts/gen-recipe.py scripts/gen_docs.py
+PYTHON_SRCS := scripts/gen-recipe.py
 PYTHON_TESTS := tests
 
 # ---- venv bootstrap ------------------------------------------------------- #
@@ -71,7 +75,8 @@ admission: $(VBIN)/python
 		'basedpyright>=1.40.1' \
 		'pydoclint>=0.9.1' \
 		'bandit>=1.9.4' \
-		'pytest>=8'
+		'pytest>=8' \
+		'pyyaml>=6'
 
 # No-op once the toolchain is provisioned (fast path for every py-using target).
 py-ready:
@@ -81,9 +86,9 @@ py-ready:
 # Mirrors the reference `check-back` target: format-diff, lint, types, security.
 # All four sub-checks must pass for the gate to be green.
 
-.PHONY: check check-py check-shell check-containerfile check-yaml
+.PHONY: check check-py check-shell check-containerfile check-yaml check-shared
 
-check: check-py check-shell check-containerfile check-yaml
+check: check-py check-shell check-containerfile check-yaml check-shared
 
 check-py: py-ready
 	$(VBIN)/yapf --diff --recursive $(PYTHON_SRCS) $(PYTHON_TESTS)
@@ -109,6 +114,13 @@ check-containerfile:
 check-yaml:
 	@command -v yamllint >/dev/null 2>&1 || { echo "yamllint not found — pip install yamllint" >&2; exit 1; }
 	yamllint $(YAML_SRCS)
+
+# Shared gates from DaemonCores-CI (the same ones every repository runs).
+check-shared: py-ready
+	@test -d $(CI_REPO)/scripts || { echo "DaemonCores-CI not found: set CI_REPO" >&2; exit 1; }
+	$(VBIN)/python $(CI_REPO)/scripts/check_docstrings.py --root .
+	$(VBIN)/python $(CI_REPO)/scripts/check_tests_manifest.py --root .
+	$(VBIN)/python $(CI_REPO)/scripts/check_build_context.py --root .
 
 # ---- lint (alias for check, for discoverability) -------------------------- #
 
@@ -175,11 +187,12 @@ test: py-ready test-unit
 
 .PHONY: docs docs-check
 
-docs:
-	python3 scripts/gen_docs.py
+docs: py-ready
+	$(VBIN)/python $(CI_REPO)/scripts/gen_docs.py --root .
 
-docs-check:
-	python3 scripts/gen_docs.py --check
+docs-check: py-ready
+	$(VBIN)/python $(CI_REPO)/scripts/gen_docs.py --root . --check
+	$(VBIN)/python $(CI_REPO)/scripts/check_docs.py --root .
 
 # ---- build ---------------------------------------------------------------- #
 
@@ -196,7 +209,7 @@ build:
 
 # Usage: make e2e IMAGE=debian-bootc:local [ARCH=amd64]
 e2e:
-	scripts/e2e-local.sh "$(IMAGE)" "$(or $(ARCH),amd64)"
+	CI_REPO="$(abspath $(CI_REPO))" ROOT="$(CURDIR)" $(CI_REPO)/scripts/e2e-local.sh "$(IMAGE)" "$(or $(ARCH),amd64)"
 
 # ---- help ----------------------------------------------------------------- #
 
