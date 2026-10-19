@@ -14,7 +14,7 @@ The binary is already present through the `systemd` dependency that every image 
 
 To enable it, use `systemctl enable systemd-networkd.service` in the build RUN — the unit
 files are also part of `systemd`. See `Containerfile.minimal` Phase 3 for the canonical
-pattern [src: file: Containerfile.minimal:233].
+pattern [src: file: Containerfile.minimal:227].
 
 ## Source
 

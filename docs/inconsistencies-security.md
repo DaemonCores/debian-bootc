@@ -4,10 +4,10 @@ Focused security audit (0.8.2), 2026-10-18. Scope: OS image build (Containerfile
 
 | ID | Problem | Area | Severity |
 |---|---|---|---|
-| [TD-20261018-ssh-host-keys-baked-in-image](tech-debt/TD-20261018-ssh-host-keys-baked-in-image.md) | openssh-server is installed at build time and nothing removes or regenerates host keys, so all deployments may share a public host key (`Containerfile:136`, `Containerfile.minimal:187`) | Security | High |
+| [TD-20261018-ssh-host-keys-baked-in-image](tech-debt/TD-20261018-ssh-host-keys-baked-in-image.md) | openssh-server is installed at build time and nothing removes or regenerates host keys, so all deployments may share a public host key (`Containerfile:136`, `Containerfile.minimal:186`) | Security | High |
 | [TD-20261018-no-image-signature-policy](tech-debt/TD-20261018-no-image-signature-policy.md) | cosign-signed images, but no host-side `policy.json`/sigstore requirement while the auto-update timer is enabled (`workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:6`) | Security | Medium |
 | [TD-20261018-reusable-workflow-main-ref](tech-debt/TD-20261018-reusable-workflow-main-ref.md) | Shared workflows called at `@main` with `secrets: inherit` + write/id-token permissions (`.github/workflows/pipeline.yml:57-71`) | CI | Medium |
-| [TD-20261018-unverified-build-downloads](tech-debt/TD-20261018-unverified-build-downloads.md) | yq/gh/rustup/ostree fetched without checksum or version pin (`workflows/env.yml:99-102`, `workflows/bootc-debs-builder/packages.yml:1537-1413`) | Security | Medium |
+| [TD-20261018-unverified-build-downloads](tech-debt/TD-20261018-unverified-build-downloads.md) | yq/gh/rustup/ostree fetched without checksum or version pin (`workflows/env.yml:99-102`, `workflows/bootc-debs-builder/packages.yml:1237-1113`) | Security | Medium |
 | [TD-20261018-dhcp-domain-unsanitized-sed](tech-debt/TD-20261018-dhcp-domain-unsanitized-sed.md) | DHCP domain interpolated unescaped into a root sed program on `/etc/hosts` (`workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:32-36`) | Security | Medium |
 
 ## Checklist results
@@ -36,7 +36,7 @@ Focused security audit (0.8.2), 2026-10-18. Scope: OS image build (Containerfile
 
 **Transport & headers**
 - HTTPS / HSTS / CSP / X-Frame-Options / nosniff / CORS: N/A, no HTTP server.
-- APT transport: Debian sources are rewritten to `https://` at build (`Containerfile:64`) and signed with `Signed-By` keyrings. The project repo key is SHA-256 pinned (`Containerfile.minimal:152-155`). Verified present.
+- APT transport: Debian sources are rewritten to `https://` at build (`Containerfile:64`) and signed with `Signed-By` keyrings. The project repo key is SHA-256 pinned (`Containerfile.minimal:151-154`). Verified present.
 
 **Dependencies & supply chain**
 - Lockfile: N/A for this repo. Rust crates are built from upstream release tarballs, whose lockfiles live outside the repo.

@@ -31,9 +31,9 @@ metadata:
 
 ## Where (pointers)
 - `Containerfile.minimal:2-6` — ultra-minimal target stated
-- `Containerfile.minimal:127-133` — Phase 1 install of git/curl/wget
+- `Containerfile.minimal:126-132` — Phase 1 install of git/curl/wget
 - `Containerfile.minimal:151` — only later use (`wget` for the GPG key)
-- `Containerfile.minimal:264-295` — final phases, no purge
+- `Containerfile.minimal:258-289` — final phases, no purge
 
 ## Suggested direction
 Drop `git` and `curl` from Phase 1, and `apt purge --autoremove wget` after the key download, or fetch the key with an `ADD --checksum=sha256:...` instruction.

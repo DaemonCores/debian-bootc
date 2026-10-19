@@ -29,9 +29,9 @@ metadata:
 Upstream fixes, including bootloader-update and security fixes, do not reach the image. The bootupd 0.2→0.3 jump grows while the version-specific dpkg patch must be rebased.
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/packages.yml:1399` — BOOTUPD_VER v0.2.35
-- `workflows/bootc-debs-builder/packages.yml:1530` — OSTREE_VER 2026.1
-- `workflows/bootc-debs-builder/packages.yml:1598` — BOOTC_VER v1.16.2
+- `workflows/bootc-debs-builder/packages.yml:1099` — BOOTUPD_VER v0.2.35
+- `workflows/bootc-debs-builder/packages.yml:1230` — OSTREE_VER 2026.1
+- `workflows/bootc-debs-builder/packages.yml:1298` — BOOTC_VER v1.16.2
 - `workflows/bootc-debs-builder/patches/bootupd-dpkg.patch` — formerly version-bound, rebased on v0.3.2
 - `.github/dependabot.yml` — no coverage of packages.yml pins
 - Upstream tags checked 2026-10-18 via api.github.com/repos/{bootc-dev/bootc,ostreedev/ostree,coreos/bootupd,composefs/composefs}/releases/latest

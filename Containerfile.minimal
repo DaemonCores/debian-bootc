@@ -43,13 +43,12 @@
 #
 # Per-arch kernel modules (optional):
 #   The image installs ALL modules matching the target arch in a separate
-#   conditional RUN block below (after the main apt install): x86_64 ->
-#   linux-modules-x86-64; arm64 -> linux-modules-arm + rpi3/rpi4/rpi5/rk3588
-#   overlays so a single arm64 image boots on every SBC the project targets.
-#   The modules are optional — the base kernel (linux-image-common) works
-#   without them. Replaces the previous per-device DEVICE build-arg +
-#   linux-modules-${DEVICE} pattern: the device dimension is collapsed into the
-#   arch dimension.
+#   conditional RUN block below (after the main apt install): x86_64 needs none
+#   (its overlay is part of the kernel); arm64 -> the linux-modules-<device>
+#   packages of ARM_DEVICES (rpi3/rpi4 on the 4 KB kernel, rpi5/rk3588 on the
+#   16 KB one) so a single arm64 image boots on every SBC the project targets.
+#   The modules are optional — the kernel (linux-image-common) works
+#   without them.
 #
 # Auto-update variant:
 #   ARG AUTOUPDATE=1 writes `1` to /usr/lib/bootc/autoupdate. Set AUTOUPDATE=0 to
@@ -188,8 +187,8 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
 # Per-arch kernel modules are installed in a separate conditional RUN block
 # below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
-# amd64 -> linux-modules-x86-64; arm64 -> linux-modules-arm<suffix> + the device
-# overlays of ARM_DEVICES (rpi3/rpi4 on the 4 KB kernel, rpi5/rk3588 on the 16 KB one). The modules are OPTIONAL — the base image works without them.
+# amd64 needs none (its overlay is part of the kernel); arm64 -> the device
+# packages of ARM_DEVICES (rpi3/rpi4 on the 4 KB kernel, rpi5/rk3588 on the 16 KB one). The modules are OPTIONAL — the kernel works without them.
 RUN for _r in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/* && apt update && break; \
         [ "$_r" -lt 5 ] && sleep 30; \
@@ -213,16 +212,11 @@ RUN for _r in 1 2 3 4 5; do \
         /var/tmp/* \
         /run/* \
         /usr/sbin/policy-rc.d \
-    && apt update \
-    && if [ "${ARCH}" = "amd64" ]; then \
-        apt install -y --no-install-recommends \
-            linux-modules-x86-64; \
-    else \
+    && if [ "${ARCH}" = "arm64" ]; then \
         arm_modules=(); \
         for _d in ${ARM_DEVICES}; do arm_modules+=("linux-modules-${_d}"); done; \
-        apt install -y --no-install-recommends \
-            linux-modules-arm${KERNEL_SUFFIX} \
-            "${arm_modules[@]}"; \
+        apt update \
+        && apt install -y --no-install-recommends "${arm_modules[@]}"; \
     fi
 
 # -----------------------------------------------------------------------------

@@ -35,10 +35,10 @@ Key rotation or a layout fix must be applied twice, and `docs/AGENTS.md` already
 
 ## Where (pointers)
 - `Containerfile:43` — BOOTC_GPG_SHA256
-- `Containerfile.minimal:116` — duplicate BOOTC_GPG_SHA256
+- `Containerfile.minimal:115` — duplicate BOOTC_GPG_SHA256
 - `Containerfile:172-196` — ostree migration
-- `Containerfile.minimal:264-288` — duplicate ostree migration
-- `Containerfile.minimal:262` — 'Mirrors the main Containerfile exactly; do NOT change'
+- `Containerfile.minimal:258-282` — duplicate ostree migration
+- `Containerfile.minimal:256` — 'Mirrors the main Containerfile exactly; do NOT change'
 
 ## Suggested direction
 Move the shared phases into a script shipped in an overlay (e.g. `/usr/libexec/debian-bootc/ostree-layout`) or a shared build stage, and call it from both files.

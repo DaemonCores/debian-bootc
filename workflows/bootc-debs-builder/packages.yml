@@ -40,42 +40,33 @@ packages:
         /debs/firstboot-user-setup_${FIRSTBOOT_VER}_all.deb
 
   # ===========================================================================
-  # Kernel packages — SPLIT into ONE base image entry + ONE ARM-generic modules
-  # entry + ONE modules entry per device. The kernel image (vmlinuz + common
-  # modules) is compiled ONCE in the `linux-image` entry; `linux-modules-arm`
-  # depends on it and builds the ARM-generic options (ARM64, CMDLINE, PL011,
-  # MMC/USB/RTC subsystem cores) ONCE; each `linux-modules-<device>` entry then
-  # depends on `linux-modules-arm` and rebuilds ONLY its per-device modules from
-  # the arm overlay + its specific device overlay. This saves N-1 full kernel
+  # Kernel packages — ONE kernel build per page size + ONE modules entry per
+  # ARM device. The kernel (vmlinuz + common modules) is compiled in the
+  # `linux-image` entry from the base config, the architecture overlay
+  # (kernel/modules/arm or x86_64) and, on arm64, the page-size overlay. Each
+  # `linux-modules-<device>` entry depends on its kernel and rebuilds ONLY the
+  # per-device modules from the device overlay. This saves N-1 full kernel
   # rebuilds AND lets the builder skip a device entirely when that device's
-  # overlay is unchanged (the monolithic entry rebuilt everything whenever ANY
-  # overlay changed).
+  # overlay is unchanged.
   #
   # Wave layout (computed by the setup job from the `deps:` fields):
-  #   wave 0: linux-image             (no deps, full bindeb-pkg once)
-  #   wave 1: linux-modules-arm,      (deps: [linux-image]; modules-only,
-  #           linux-modules-generic,           run in parallel)
-  #           linux-modules-x86_64)
-  #   wave 2: linux-modules-rpi3,     (deps: [linux-modules-arm]; modules-only,
-  #           linux-modules-rpi4,              run in parallel)
-  #           linux-modules-rpi5,
-  #           linux-modules-rk3588
+  #   wave 0: linux-image, linux-image-16k   (no deps, full bindeb-pkg once)
+  #   wave 1: linux-modules-rpi3, -rpi4      (deps: [linux-image]; modules-only)
+  #           linux-modules-rpi5, -rk3588    (deps: [linux-image-16k])
   #
-  # The modules packages are OPTIONAL — the base image (linux-image-common)
-  # works without them. They carry device-specific SoC / Ethernet PHY / MMC /
-  # USB / RTC drivers and must be installed alongside linux-image-common. The
-  # ARM device modules (rpi3/rpi4/rpi5/rk3588) install transitively via apt:
-  # linux-modules-<device> Depends on linux-modules-arm which Depends on
-  # linux-image-common, so apt pulls the whole chain.
+  # The device modules packages are OPTIONAL — the kernel works without them.
+  # They carry device-specific SoC / Ethernet PHY / MMC / USB / RTC drivers and
+  # are installed alongside the kernel; they Depend on the kernel package.
   # ===========================================================================
 
   # linux-image: the ONE full kernel build. Merges the BASE config
   # (kernel/config — filesystems, virtio, serial, disables, the common
   # networking/cgroup/namespace set) into the Debian defconfig, then
   # `make bindeb-pkg` produces the vmlinuz + common modules as
-  # linux-image-common_<ver>_<arch>.deb. sources: lists ONLY kernel/config
-  # so changing a per-device overlay does NOT invalidate this package's
-  # cache (the common image is independent of the overlays).
+  # linux-image-common_<ver>_<arch>.deb. The architecture overlay
+  # (kernel/modules/arm or x86_64) is merged here too. sources: lists the base
+  # config and both architecture overlays, but no per-device overlay, so
+  # changing a device overlay does NOT invalidate this package's cache.
   #
   # Two kernels on arm64 (docs/decisions.md, "Two arm64 kernels"): the page size
   # is a compile-time choice, so the 4 KB kernel (older devices: Raspberry Pi 3
@@ -103,10 +94,14 @@ packages:
       KERNEL_PAGES: "4k"
     deb-glob: "linux-image-common_*"
     sources:
-      # Only the base config and the source download feed this package's
-      # content hash. A per-device overlay change must NOT trigger a full
-      # kernel rebuild — it only rebuilds that device's modules entry.
+      # The base config, the two architecture overlays and the source download
+      # feed this package's content hash. A per-device overlay change must NOT
+      # trigger a full kernel rebuild — it only rebuilds that device's modules
+      # entry. Both architecture overlays are listed because sources: is not
+      # per-arch, so an x86_64 overlay edit also invalidates the arm64 kernel.
       - kernel/config
+      - kernel/modules/arm
+      - kernel/modules/x86_64
       - kernel/patches.yml
       - kernel/patches.lock.json
       - lib/kernel-source.sh
@@ -159,10 +154,18 @@ packages:
       # below layers the project choices on top.
       make defconfig
 
+      # The architecture overlay (kernel/modules/arm or kernel/modules/x86_64)
+      # is part of the kernel build: it carries built-in (=y) options that a
+      # modules-only build cannot add to an existing kernel.
+      case "${DEB_ARCH}" in arm64) ARCH_OVERLAY_NAME=arm ;; *) ARCH_OVERLAY_NAME=x86_64 ;; esac
+      ARCH_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${ARCH_OVERLAY_NAME}"
+      test -f "${ARCH_OVERLAY}" \
+        || { echo "ERROR: kernel/modules/${ARCH_OVERLAY_NAME} overlay missing" >&2; exit 1; }
+      CONFIG_FILES=("${BASE_CONFIG}" "${ARCH_OVERLAY}")
+
       # arm64 only: the page-size overlay of this kernel (4 KB or 16 KB,
       # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
       # modules built later inherit it from the .config shipped in the deb.
-      CONFIG_FILES=("${BASE_CONFIG}")
       if [ "${DEB_ARCH}" = "arm64" ]; then
         PAGES_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/pages/${KERNEL_PAGES}"
         test -f "${PAGES_OVERLAY}" \
@@ -276,246 +279,42 @@ packages:
       # jobs (e.g. grub-efi-amd64-signed) of disk space.
       rm -rf "${SRCDIR}" /tmp/linux-*
 
-  # linux-modules-arm: ARM-generic modules — the ARM base layer. Depends on
-  # linux-image (the common kernel image built in wave 0). Builds ONLY modules
-  # from kernel/config + kernel/modules/arm and packages them as
-  # linux-modules-arm_<ver>_<arch>.deb. The ARM device modules (rpi3/rpi4/rpi5/
-  # rk3588) depend on THIS package (transitively on linux-image via it) and add
-  # their device-specific overlay on top of the arm overlay. The modules are
-  # OPTIONAL — the base image works without them. This entry carries the
-  # ARM64 core, the kernel command line, the PL011 UART, and the MMC/USB/RTC
-  # subsystem cores shared by every ARM device.
-  # It is built once per arm64 kernel (the "" key for the 4 KB kernel, "-16k" for
-  # the 16 KB one) because a module only loads into the kernel it was built for.
-  - name: linux-modules-arm
-    when:
-      arch: arm64
-    variant-name-prefix: linux-modules-arm
-    variant-env: KERNEL_SUFFIX
-    variants:
-      "":
-        deps:
-          - linux-image
-      "-16k":
-        deps:
-          - linux-image-16k
-    sources:
-      - kernel/config
-      - kernel/modules/arm
-      - preinstall/output/linux-modules-arm
-      - lib/kernel-prepare.sh
-      - lib/kernel-source.sh
-      - lib/kernel-patches.sh
-      - kernel/patches.yml
-      - kernel/patches.lock.json
-    build: |
-      set -euo pipefail
-      DEVICE=arm
-      SAVE_PWD=$(pwd)
-      DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
-      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
-      test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
-      test -f "${OVERLAY}" \
-        || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
-
-      # Bootstrap shared by the kernel module entries: locate the common deb,
-      # download the kernel source, seed .config (see lib/kernel-prepare.sh).
-      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
-      kernel_prepare
-      # Merge the base config THEN the overlay (last merge wins).
-      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
-      make olddefconfig
-
-      # Seed Module.symvers from the same deb, at
-      # /usr/lib/linux-kernel-build/Module.symvers. This is a modules-only build
-      # with no vmlinux.o, so without that symbol table modpost cannot verify
-      # the built-in kernel symbols the modules reference (__fentry__,
-      # __x86_return_thunk…) and fails with tens of thousands of
-      # undefined-symbol errors.
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
-        || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" Module.symvers
-      # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
-
-      # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
-      # the N-1 rebuild saving: modules are an order of magnitude faster
-      # than a full kernel build.
-      # Filter Module.symvers to vmlinux-only exports before patching modpost.
-      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
-      # etc.); if we feed those to modpost via -i it flags duplicate exports when
-      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
-      # the module build; inter-module exports are discovered by scanning .ko files.
-      if [ -f Module.symvers ]; then
-        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
-      fi
-      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
-      # absent. In-tree modules-only builds skip this flag by default (only the
-      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
-      # and reports 1400+ undefined-symbol errors.
-      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
-         && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
-        printf '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\n' \
-          >> scripts/Makefile.modpost
-      fi
-      make -j"$(nproc)" modules
-
-      # Install the modules into a DESTDIR packaging tree, then build a
-      # Debian package from that tree. The modules dir name matches the
-      # common image's /lib/modules/<KVER> so modprobe on the target
-      # resolves them under the running kernel.
-      DESTDIR="/output/linux-modules-${DEVICE}${KERNEL_SUFFIX:-}"
-      rm -rf "${DESTDIR}"
-      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
-      # modules.builtin and modules.builtin.modinfo are generated during a full
-      # kernel build; a modules-only build (make modules without vmlinux) may
-      # not produce them. Provide empty stubs so modules_install succeeds.
-      [ -f modules.builtin ] || touch modules.builtin
-      [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
-      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
-
-      if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
-        printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
-        printf '%s' "${MODULE_SIGNING_CERT}" > /tmp/mod_sign.x509
-        find "${DESTDIR}/lib/modules" -name "*.ko" | while IFS= read -r ko; do
-          scripts/sign-file sha512 /tmp/mod_sign.pem /tmp/mod_sign.x509 "${ko}"
-        done
-        rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
-      fi
-
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm/DEBIAN/control" \
-        "${DESTDIR}/DEBIAN/control"
-      sed -i \
-        -e "s|{{ VER }}|${BUILT_VER}|g" \
-        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
-        -e "s|{{ KVER }}|${KVER}|g" \
-        -e "s|{{ SUFFIX }}|${KERNEL_SUFFIX:-}|g" \
-        "${DESTDIR}/DEBIAN/control"
-
-      # Regenerate md5sums for the installed module files.
-      ( cd "${DESTDIR}" && \
-        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
-        > DEBIAN/md5sums )
-
-      # Build the modules deb.
-      dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
-
-      # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output linux-modules-${DEVICE}${KERNEL_SUFFIX:-} deb empty" >&2; exit 1; }
-
-  # linux-modules-generic: the DEFAULT device class — an empty meta-package.
-  # Depends on linux-image (the common kernel image built in wave 0). Produces
-  # a valid `linux-modules-generic_<ver>_<arch>.deb` that carries NO modules;
-  # its only purpose is to satisfy the `linux-modules-${DEVICE}` apt install
-  # line in Containerfile.minimal when DEVICE=generic (the default), so the
-  # install line always names a real package instead of relying on apt
-  # silently ignoring an empty `linux-modules-` package name. The overlay in
-  # kernel/modules/generic is a header-only stub (no CONFIG_ options), so the
-  # build skips the kernel source download + module compilation entirely and
-  # just assembles the empty .deb with a Depends on linux-image-common.
-  - name: linux-modules-generic
-    deps:
-      - linux-image
-    sources:
-      - kernel/config
-      - kernel/modules/generic
-      - preinstall/output/linux-modules-generic
-    build: |
-      set -euo pipefail
-      DEVICE=generic
-      SAVE_PWD=$(pwd)
-      DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
-      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
-      test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
-      test -f "${OVERLAY}" \
-        || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
-
-      # The linux-image wave installed linux-image-common_<ver>_<arch>.deb
-      # into the build container (via the deps install step). Derive the exact
-      # version from it so the empty generic package declares the matching
-      # Depends constraint.
-      # The workflow downloads ALL prior deb artifacts (both amd64 and arm64)
-      # into /tmp/prior, so the bare linux-image-common_*.deb glob catches the
-      # foreign-arch deb too and apt then fails with a Conflicts/Provides
-      # collision (the common deb Conflicts with linux-image-amd64 AND
-      # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
-      # matching-arch deb is selected.
-      COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
-      test -n "${COMMON_DEB}" \
-        || { echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2; exit 1; }
-      apt-get install -y "${COMMON_DEB}"
-      BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
-
-      # Assemble an EMPTY modules package. The generic overlay carries no
-      # CONFIG_ options, so there is no kernel source download, no module
-      # compilation — just the packaging tree with a control file declaring
-      # Depends: linux-image-common. The empty /lib/modules/<KVER> dir is kept
-      # so the package layout matches the other modules packages (dpkg-deb
-      # accepts an empty payload dir).
-      KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^daemoncores-kernel-//')
-      DESTDIR="/output/linux-modules-${DEVICE}"
-      rm -rf "${DESTDIR}"
-      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
-
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-generic/DEBIAN/control" \
-        "${DESTDIR}/DEBIAN/control"
-      sed -i \
-        -e "s|{{ VER }}|${BUILT_VER}|g" \
-        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
-        -e "s|{{ KVER }}|${KVER}|g" \
-        "${DESTDIR}/DEBIAN/control"
-
-      # No payload files -> no md5sums file (dpkg-deb accepts a package with
-      # only a control file). Build the empty modules deb.
-      dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
-
-      # Content check: the output deb exists and is non-empty.
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
-
   # linux-modules-arm-device: one template for all four ARM device-specific
   # module packages. The CI expands each variant into an independent build job
   # (see the manifest-expand action) and injects VARIANT from the variant key,
   # so this build script is written once.
-  # Variants (all wave 2, deps: linux-modules-arm):
-  #   linux-modules-rpi3 / linux-modules-rpi4
-  #   linux-modules-rpi5 / linux-modules-rk3588
+  # Variants (all wave 1): linux-modules-rpi3 / linux-modules-rpi4 depend on
+  # linux-image, linux-modules-rpi5 / linux-modules-rk3588 on linux-image-16k.
+  # Each starts from the .config shipped in its kernel deb (base + arm overlay
+  # + page size) and merges only its own device overlay.
   - name: linux-modules-arm-device
     when:
       arch: arm64
     # The kernel a device runs follows its hardware generation (docs/decisions.md,
     # "Two arm64 kernels"): the older devices need the 4 KB kernel, the recent ones
-    # run the 16 KB kernel. KERNEL_SUFFIX names the kernel (and its ARM-generic
-    # modules package) this device's modules are built against.
+    # run the 16 KB kernel. KERNEL_SUFFIX names the kernel this device's modules
+    # are built against.
     variants:
       rpi3:
         deps:
-          - linux-modules-arm
+          - linux-image
       rpi4:
         deps:
-          - linux-modules-arm
+          - linux-image
       rpi5:
         deps:
-          - linux-modules-arm-16k
+          - linux-image-16k
         env:
           KERNEL_SUFFIX: "-16k"
       rk3588:
         deps:
-          - linux-modules-arm-16k
+          - linux-image-16k
         env:
           KERNEL_SUFFIX: "-16k"
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
     variant-source: "kernel/modules/{variant}"
     sources:
-      - kernel/config
-      - kernel/modules/arm
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
       - lib/kernel-source.sh
@@ -527,22 +326,17 @@ packages:
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
-      ARM_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/arm"
       OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
-      test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
-      test -f "${ARM_OVERLAY}" \
-        || { echo "ERROR: kernel/modules/arm overlay missing" >&2; exit 1; }
       test -f "${OVERLAY}" \
         || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
 
-      # Bootstrap shared by the kernel module entries: locate the common deb,
+      # Bootstrap shared by the kernel module entries: locate the kernel deb,
       # download the kernel source, seed .config (see lib/kernel-prepare.sh).
+      # The seeded .config is the kernel's own (base + arm overlay + pages), so
+      # only the device overlay is merged on top.
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
       kernel_prepare
-      # Merge the base config THEN the arm overlay THEN the device overlay (last merge wins).
-      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${ARM_OVERLAY}" "${OVERLAY}"
+      scripts/kconfig/merge_config.sh -m .config "${OVERLAY}"
       make olddefconfig
 
       # Seed Module.symvers from the same deb, at
@@ -592,35 +386,32 @@ packages:
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
-      # Remove all files already shipped by linux-modules-arm so this device
+      # Remove all files already shipped by the kernel deb so this device
       # package only carries device-specific modules and dpkg does not refuse
       # to install two packages that own the same path. This includes .ko files
       # AND kernel metadata files (modules.builtin, modules.alias, modules.dep,
       # etc.) that make modules_install generates identically for every package.
-      ARM_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-modules-arm${KERNEL_SUFFIX:-}_*_${DEB_ARCH}.deb" | head -1)
-      if [ -n "${ARM_DEB}" ]; then
-        dpkg-deb --fsys-tarfile "${ARM_DEB}" | tar t | sed 's|^\./||' \
-          | while IFS= read -r f; do
-              target="${DESTDIR}/${f}"
-              # Must be an if, not `[ -f ] && rm`: the test is not the last
-              # command of the loop body by accident — a bare `&&` chain leaves
-              # the loop's exit status at 1 the moment a listed path is absent
-              # from DESTDIR (routine: linux-modules-arm carries files this
-              # device package does not build), and set -e + pipefail then kill
-              # the whole script right after modules_install with no error.
-              #
-              # The test must also accept symlinks. modules_install leaves
-              # /lib/modules/<ver>/{build,source} behind as symlinks, and -f is
-              # false for those, so they would survive here while
-              # linux-modules-arm ships them too — dpkg then refuses to unpack
-              # two device packages that both own /lib/modules/<ver>/build.
-              # Directories must stay excluded: rm -f on one would fail and
-              # abort the script under set -e.
-              if [ -f "${target}" ] || [ -L "${target}" ]; then
-                rm -f "${target}"
-              fi
-            done
-      fi
+      dpkg-deb --fsys-tarfile "${COMMON_DEB}" | tar t | sed 's|^\./||' \
+        | while IFS= read -r f; do
+            target="${DESTDIR}/${f}"
+            # Must be an if, not `[ -f ] && rm`: the test is not the last
+            # command of the loop body by accident — a bare `&&` chain leaves
+            # the loop's exit status at 1 the moment a listed path is absent
+            # from DESTDIR (routine: the kernel deb carries files this device
+            # package does not build), and set -e + pipefail then kill the
+            # whole script right after modules_install with no error.
+            #
+            # The test must also accept symlinks. modules_install leaves
+            # /lib/modules/<ver>/{build,source} behind as symlinks, and -f is
+            # false for those, so they would survive here while the kernel
+            # deb ships them too — dpkg then refuses to unpack two packages
+            # that both own /lib/modules/<ver>/build.
+            # Directories must stay excluded: rm -f on one would fail and
+            # abort the script under set -e.
+            if [ -f "${target}" ] || [ -L "${target}" ]; then
+              rm -f "${target}"
+            fi
+          done
 
       if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
         printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
@@ -635,9 +426,9 @@ packages:
         "${DESTDIR}/DEBIAN/control"
       sed -i \
         -e "s|{{ DEVICE }}|${DEVICE}|g" \
-        -e "s|{{ SUFFIX }}|${KERNEL_SUFFIX:-}|g" \
         -e "s|Version: {{ VER }}|Version: ${BUILT_VER}+r1|g" \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ KVER }}|${KVER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
         "${DESTDIR}/DEBIAN/control"
 
@@ -652,97 +443,6 @@ packages:
 
       # Content check: the output deb exists and is non-empty.
       test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
-
-  # linux-modules-x86_64: device-specific modules for x86_64 PCs / servers /
-  # VMs (NVMe, AHCI, physical NIC drivers, USB host controllers as modules).
-  # Same shape as the other device entries. x86_64 is NOT ARM, so it depends
-  # on linux-image directly (wave 1) rather than on linux-modules-arm.
-  - name: linux-modules-x86_64
-    when:
-      arch: amd64
-    # DEVICE is set to x86-64 (hyphen) inside the build so the generated deb
-    # name is linux-modules-x86-64 (Debian forbids underscores in package names).
-    # deb-glob overrides the default PACKAGE_* glob so build-deb.sh finds it.
-    deb-glob: "linux-modules-x86-64_*"
-    deps:
-      - linux-image
-    sources:
-      - kernel/config
-      - kernel/modules/x86_64
-      - preinstall/output/linux-modules-x86-64
-      - lib/kernel-prepare.sh
-      - lib/kernel-source.sh
-      - lib/kernel-patches.sh
-      - kernel/patches.yml
-      - kernel/patches.lock.json
-    build: |
-      set -euo pipefail
-      DEVICE=x86-64
-      SAVE_PWD=$(pwd)
-      DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
-      # The overlay directory uses underscores (filesystem name); DEVICE uses
-      # hyphens so the generated Debian package name is valid (no underscores).
-      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/x86_64"
-      test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
-      test -f "${OVERLAY}" \
-        || { echo "ERROR: kernel/modules/x86_64 overlay missing" >&2; exit 1; }
-
-      # Bootstrap shared by the kernel module entries: locate the common deb,
-      # download the kernel source, seed .config (see lib/kernel-prepare.sh).
-      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
-      kernel_prepare
-      # Merge the base config THEN the overlay (last merge wins).
-      scripts/kconfig/merge_config.sh -m .config "${BASE_CONFIG}" "${OVERLAY}"
-      make olddefconfig
-
-      # linux-modules-x86_64 uses an overlay that intentionally promotes some
-      # drivers from built-in (vmlinux) to loadable modules (USB_EHCI_HCD,
-      # USB_XHCI_HCD, etc.). Those symbols appear as vmlinux exports in
-      # Module.symvers (from linux-image's config), so feeding that symvers
-      # to modpost creates "exported twice. Previous export was in vmlinux"
-      # conflicts. Skip the vmlinux-only symvers feed for this package and use
-      # KBUILD_MODPOST_WARN=1: the symbols ARE in vmlinux at runtime, modpost
-      # simply cannot verify them without the matching vmlinux.o when the
-      # build config differs from linux-image.
-      make -j"$(nproc)" modules KBUILD_MODPOST_WARN=1
-
-      DESTDIR="/output/linux-modules-${DEVICE}"
-      rm -rf "${DESTDIR}"
-      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
-      # modules.builtin and modules.builtin.modinfo are generated during a full
-      # kernel build; a modules-only build (make modules without vmlinux) may
-      # not produce them. Provide empty stubs so modules_install succeeds.
-      [ -f modules.builtin ] || touch modules.builtin
-      [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
-      make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
-
-      if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
-        printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
-        printf '%s' "${MODULE_SIGNING_CERT}" > /tmp/mod_sign.x509
-        find "${DESTDIR}/lib/modules" -name "*.ko" | while IFS= read -r ko; do
-          scripts/sign-file sha512 /tmp/mod_sign.pem /tmp/mod_sign.x509 "${ko}"
-        done
-        rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
-      fi
-
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-x86-64/DEBIAN/control" \
-        "${DESTDIR}/DEBIAN/control"
-      sed -i \
-        -e "s|{{ VER }}|${BUILT_VER}|g" \
-        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
-        -e "s|{{ KVER }}|${KVER}|g" \
-        "${DESTDIR}/DEBIAN/control"
-
-      ( cd "${DESTDIR}" && \
-        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
-        > DEBIAN/md5sums )
-
-      dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   - name: ifupdown2

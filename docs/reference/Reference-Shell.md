@@ -90,9 +90,8 @@ hostname, and the locale/keyboard layout.
 ## `workflows/bootc-debs-builder/lib/kernel-prepare.sh`
 
 Shared kernel-module build bootstrap, sourced by the build: blocks of
-linux-modules-arm, linux-modules-arm-device and linux-modules-x86_64 in
-packages.yml. Listed in each entry's sources: so a change invalidates the
-cached debs.
+linux-modules-arm-device in packages.yml. Listed in its sources: so a change
+invalidates the cached debs.
 
 Inputs (set by the caller): DEB_ARCH, SAVE_PWD (repository root), and
 optionally KERNEL_SUFFIX ("-16k" selects the 16 KB arm64 kernel, empty or unset

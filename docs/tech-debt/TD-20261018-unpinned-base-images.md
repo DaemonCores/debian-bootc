@@ -11,7 +11,7 @@ metadata:
     - date: 2026-10-18
       status: Verified in source
       reviewer: Docker audit 0.8.2
-      note: re-confirmed by Docker audit 0.8.2 at Containerfile:5, Containerfile.minimal:69, Containerfile.iso:28; ID reused
+      note: re-confirmed by Docker audit 0.8.2 at Containerfile:5, Containerfile.minimal:68, Containerfile.iso:28; ID reused
     - date: 2026-10-18
       status: Accepted decision
       reviewer: Kronn audit validation card
@@ -35,7 +35,7 @@ Two builds of the same commit can produce different images. A regression in the 
 
 ## Where (pointers)
 - `Containerfile:3-5` — `FROM debian:trixie`, comment states intentional
-- `Containerfile.minimal:69` — `FROM debian:trixie`
+- `Containerfile.minimal:68` — `FROM debian:trixie`
 - `Containerfile.iso:28` — `FROM ...:latest-${ARCH}-autoupdate`
 - `docs/justifications.md:9` — trade-off recorded
 - `.github/dependabot.yml` — docker ecosystem configured (could bump digests)
