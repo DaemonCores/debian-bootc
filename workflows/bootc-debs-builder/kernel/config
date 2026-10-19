@@ -166,42 +166,62 @@ CONFIG_SERIAL_AMBA_PL011=y
 CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
 
 # =============================================================================
-# Disable — subsystems that have no use on a headless minimal server image.
-# Disabling at the kernel level removes the driver modules from the build
-# AND removes the core subsystem code from the vmlinux, saving both flash
-# and RAM. Shared by ALL devices; a downstream layer that needs one of these
-# (e.g. WiFi on an RPi) can re-enable it in its own overlay.
+# Hardware support — every subsystem stays available. This image cannot know in
+# advance what it runs on (server, desktop, laptop, VM, SBC), so drivers are
+# built as modules: udev loads one only when its device shows up, and hardware
+# without a given device pays nothing. Nothing is disabled to save space; a
+# missing driver is added here or in the per-device overlay, never dropped.
+# Shared by ALL devices.
 # =============================================================================
 
-# SND: disable the entire sound subsystem. No audio hardware used.
-# CONFIG_SOUND is not set
+# Sound: ALSA core and the generic USB/HDA class drivers.
+CONFIG_SOUND=m
+CONFIG_SND=m
+CONFIG_SND_USB_AUDIO=m
+CONFIG_SND_HDA_INTEL=m
 
-# DRM: modules, not disabled. This image cannot know in advance what it runs
-# on (server, desktop, VM, SBC), and the live installer needs KMS to draw its
-# GTK UI. As modules they cost nothing on hardware without a display: udev loads
-# a driver only when its device shows up. Only the drivers that are generic or
-# virtual live here; physical GPUs are in the per-device overlays.
+# Bluetooth: core, HCI over USB/UART and the common profiles.
+CONFIG_BT=m
+CONFIG_BT_HCIBTUSB=m
+CONFIG_BT_HCIUART=m
+CONFIG_BT_RFCOMM=m
+CONFIG_BT_BNEP=m
+
+# Wireless LAN: cfg80211 and mac80211 are the base of every Wi-Fi driver.
+CONFIG_WIRELESS=y
+CONFIG_CFG80211=m
+CONFIG_MAC80211=m
+
+# Input: USB HID, joysticks and tablets.
+CONFIG_USB_HID=m
+CONFIG_HID_GENERIC=m
+CONFIG_INPUT_JOYSTICK=y
+CONFIG_INPUT_TABLET=y
+
+# DRM/KMS: modules. The live installer needs KMS to draw its GTK UI. Generic
+# and virtual drivers live here; physical GPUs are in the per-device overlays.
 CONFIG_DRM=m
+CONFIG_DRM_KMS_HELPER=m
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FB=y
 
 # simpledrm: scanout through the firmware (EFI/UEFI GOP) framebuffer, the
-# fallback every x86 machine and VM has before a native driver loads.
+# fallback every machine has before a native driver loads.
 CONFIG_SYSFB_SIMPLEFB=y
 CONFIG_DRM_SIMPLEDRM=m
 
-# virtio-gpu: the paravirtual GPU of QEMU/KVM guests.
+# Paravirtual and emulated adapters of hypervisors.
 CONFIG_DRM_VIRTIO_GPU=m
-
-# bochs: the QEMU standard VGA adapter (-vga std, the default on q35).
 CONFIG_DRM_BOCHS=m
+CONFIG_DRM_CIRRUS_QEMU=m
+CONFIG_DRM_QXL=m
+CONFIG_DRM_VMWGFX=m
+CONFIG_DRM_HYPERV=m
 
-# BT: disable Bluetooth. No BT hardware on the minimal target.
-# CONFIG_BT is not set
-
-# WLAN: disable the wireless LAN (mac80211 + cfg80211) subsystem. No WiFi
-# on the minimal target; saves the entire wireless stack.
-# CONFIG_WIRELESS is not set
-# CONFIG_CFG80211 is not set
-# CONFIG_MAC80211 is not set
+# Display panels and bridges used on both architectures.
+CONFIG_DRM_PANEL_SIMPLE=m
+CONFIG_DRM_DISPLAY_CONNECTOR=m
+CONFIG_DRM_SIMPLE_BRIDGE=m
 
 # =============================================================================
 # Seccomp — built-in. podman/bootc/runc install a syscall sandbox filter on

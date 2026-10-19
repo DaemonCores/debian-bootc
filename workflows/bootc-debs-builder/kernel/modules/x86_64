@@ -7,7 +7,7 @@
 #
 # This file is NOT a full .config. It lists ONLY options that are specific
 # to the x86_64 device class — everything shared across all devices
-# (filesystems, virtio, serial console, the disabled subsystems) lives in
+# (filesystems, virtio, serial console, the shared hardware support) lives in
 # kernel/config and is NOT repeated here. The modules built from this overlay
 # are OPTIONAL; the base image (linux-image-common) works without them.
 #
@@ -70,35 +70,34 @@ CONFIG_USB_EHCI_HCD=m
 
 # =============================================================================
 # Graphics — physical GPU drivers as modules. The base config enables DRM as a
-# module; these load only when matching hardware is present, so a headless
-# server pays nothing for them.
+# module; these load only when matching hardware is present, so a machine
+# without the
+# device pays nothing for them.
 # =============================================================================
 
-# Intel integrated and discrete GPUs.
+# Intel integrated and discrete GPUs (i915 for legacy and Xe-era, xe for newer).
 CONFIG_DRM_I915=m
+CONFIG_DRM_XE=m
 
-# AMD Radeon / Ryzen integrated GPUs.
+# AMD Radeon / Ryzen integrated GPUs, including the older Southern/Sea Islands
+# parts and the display core.
 CONFIG_DRM_AMDGPU=m
+CONFIG_DRM_AMDGPU_SI=y
+CONFIG_DRM_AMDGPU_CIK=y
+CONFIG_DRM_AMD_DC=y
+
+# Legacy AMD/ATI Radeon.
+CONFIG_DRM_RADEON=m
 
 # NVIDIA GPUs through the in-tree nouveau driver.
 CONFIG_DRM_NOUVEAU=m
 
-# =============================================================================
-# Disable — x86_64-specific input subsystems that have no use on a headless
-# minimal server image. (The shared disable block — SOUND/BT/WLAN —
-# lives in config-common and is not repeated here.)
-# =============================================================================
-
-# USB_HID: disable the USB HID core. The minimal image has no need for USB
-# keyboards or mice at runtime (console is serial or KVM). A USB keyboard
-# can still be used if the user adds the module back via a downstream layer.
-# CONFIG_USB_HID is not set
-
-# INPUT_JOYSTICK: disable joystick subsystem.
-# CONFIG_INPUT_JOYSTICK is not set
-
-# INPUT_TABLET: disable tablet subsystem.
-# CONFIG_INPUT_TABLET is not set
+# Older and server adapters.
+CONFIG_DRM_GMA500=m
+CONFIG_DRM_MGAG200=m
+CONFIG_DRM_AST=m
+CONFIG_DRM_UDL=m
+CONFIG_DRM_VBOXVIDEO=m
 
 # =============================================================================
 # Disable debug/testing modules that reference x86-specific kernel symbols

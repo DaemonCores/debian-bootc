@@ -8,7 +8,7 @@
 #
 # This file is NOT a full .config. It lists ONLY options that are specific
 # to the Raspberry Pi 3 — everything shared across all devices (filesystems,
-# virtio, serial console, the disabled subsystems) lives in kernel/config, and
+# virtio, serial console, the shared hardware support) lives in kernel/config, and
 # everything shared across all ARM devices (ARM64, CMDLINE, PL011, MMC/USB/RTC
 # subsystem cores) lives in kernel/modules/arm. Neither is repeated here. The
 # modules built from this overlay are OPTIONAL; the base image
