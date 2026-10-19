@@ -81,6 +81,9 @@ LABEL ostree.bootable=1
 # Containerfile (the main one) does NOT carry this LABEL, so it only builds the
 # autoupdate variant (no _lock manifest list).
 LABEL org.daemoncores.autoupdate-variants="lock,autoupdate"
+# Also asks the CI for the 16 KB arm64 kernel image (tag `<tag>-16k`, arm64 only)
+# next to the 4 KB one, see docs/decisions.md ("Two arm64 kernels").
+LABEL org.daemoncores.arm64-16k="true"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
