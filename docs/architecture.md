@@ -21,7 +21,7 @@ The project targets Debian 13 (Trixie). `DaemonCores-VE` consumes the published 
 | `workflows/bootc-debs-builder/` | Package manifest, build scripts, package metadata, and overlays. |
 | `workflows/env.yml` | Package-builder environment recipe. |
 | `workflows/tests.yml` | Tests executed against a booted image. |
-| `kernel/` and `modules-kernel/` | Kernel and device-module configuration inputs. |
+| `workflows/bootc-debs-builder/kernel/` | Kernel base config and per-device module overlays, inputs of the `linux-*` packages. |
 | `.github/workflows/pipeline.yml` | Product-specific triggers for the shared pipeline. |
 
 ## Package layer

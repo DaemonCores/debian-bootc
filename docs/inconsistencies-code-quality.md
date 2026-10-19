@@ -22,6 +22,6 @@ Focused code-quality audit, 2026-10-18. Scope: shell scripts (`workflows/bootc-d
 - **Swallowed errors**: `|| true` in the ostree migration (existing TD) and on the kernel purge chain (folded into the kernel bootstrap TD). Other `|| true` uses were sampled and are deliberate and commented, for example `firstboot-user-setup:124-130` and `ifupdown2-autoconf:13`, `:52`.
 - **Copy-paste logic**: three findings above (kernel bootstrap, GRUB entries, firstboot prompts), plus the existing Containerfile phase duplication.
 - **Typing hygiene**: `scripts/gen-recipe.py` has one function with a `-> None` return annotation and a bare `list` annotation at `:34`. This is negligible for a 67-line script and verified clean. The shell scripts use `set -euo pipefail` and Google-style function headers.
-- **TODO/FIXME/HACK**: 0 in source (grep over Containerfiles, `workflows/`, `scripts/`, `src/`, `kernel/`, `modules-kernel/` and `.github/`). Verified clean.
+- **TODO/FIXME/HACK**: 0 in source (grep over Containerfiles, `workflows/`, `scripts/`, `src/`, `kernel/`, `kernel/modules/` and `.github/`). Verified clean.
 - **Assets**: the 4 SVGs in `assets/installer/` are vector files. No raster images over 300 KB. Verified clean.
 - **Requests in loops / memoization**: N/A. The repo has no request path. The only loops are `for grp …` with `getent`/`usermod` in `firstboot-user-setup:249-253`, which run once at first boot.

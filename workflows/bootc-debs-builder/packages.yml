@@ -82,7 +82,7 @@ packages:
       # Only the base config feeds this package's content hash. A per-device
       # overlay change must NOT trigger a full kernel rebuild — it only
       # rebuilds that device's modules entry.
-      - ../../kernel/config
+      - kernel/config
     env:
       # KCONFIG_VER is a rolling tag; the builder pins the exact Debian kernel
       # source via `apt-get source linux-image-$(dpkg --print-architecture)`,
@@ -94,7 +94,7 @@ packages:
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
       case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
-      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
 
@@ -220,7 +220,7 @@ packages:
 
   # linux-modules-arm: ARM-generic modules — the ARM base layer. Depends on
   # linux-image (the common kernel image built in wave 0). Builds ONLY modules
-  # from kernel/config + modules-kernel/arm and packages them as
+  # from kernel/config + kernel/modules/arm and packages them as
   # linux-modules-arm_<ver>_<arch>.deb. The ARM device modules (rpi3/rpi4/rpi5/
   # rk3588) depend on THIS package (transitively on linux-image via it) and add
   # their device-specific overlay on top of the arm overlay. The modules are
@@ -233,8 +233,8 @@ packages:
     deps:
       - linux-image
     sources:
-      - ../../kernel/config
-      - ../../modules-kernel/arm
+      - kernel/config
+      - kernel/modules/arm
       - preinstall/output/linux-modules-arm
       - lib/kernel-prepare.sh
     build: |
@@ -242,12 +242,12 @@ packages:
       DEVICE=arm
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/kernel/config"
-      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
+      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
       test -f "${OVERLAY}" \
-        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
 
       # Bootstrap shared by the kernel module entries: locate the common deb,
       # download the kernel source, seed .config (see lib/kernel-prepare.sh).
@@ -341,27 +341,27 @@ packages:
   # line in Containerfile.minimal when DEVICE=generic (the default), so the
   # install line always names a real package instead of relying on apt
   # silently ignoring an empty `linux-modules-` package name. The overlay in
-  # modules-kernel/generic is a header-only stub (no CONFIG_ options), so the
+  # kernel/modules/generic is a header-only stub (no CONFIG_ options), so the
   # build skips the kernel source download + module compilation entirely and
   # just assembles the empty .deb with a Depends on linux-image-common.
   - name: linux-modules-generic
     deps:
       - linux-image
     sources:
-      - ../../kernel/config
-      - ../../modules-kernel/generic
+      - kernel/config
+      - kernel/modules/generic
       - preinstall/output/linux-modules-generic
     build: |
       set -euo pipefail
       DEVICE=generic
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/kernel/config"
-      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
+      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
       test -f "${OVERLAY}" \
-        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
 
       # The linux-image wave installed linux-image-common_<ver>_<arch>.deb
       # into the build container (via the deps install step). Derive the exact
@@ -426,10 +426,10 @@ packages:
       rk3588: {}
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
-    variant-source: "../../modules-kernel/{variant}"
+    variant-source: "kernel/modules/{variant}"
     sources:
-      - ../../kernel/config
-      - ../../modules-kernel/arm
+      - kernel/config
+      - kernel/modules/arm
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
     build: |
@@ -437,15 +437,15 @@ packages:
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/kernel/config"
-      ARM_OVERLAY="${SAVE_PWD}/modules-kernel/arm"
-      OVERLAY="${SAVE_PWD}/modules-kernel/${DEVICE}"
+      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
+      ARM_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/arm"
+      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
       test -f "${ARM_OVERLAY}" \
-        || { echo "ERROR: modules-kernel/arm overlay missing" >&2; exit 1; }
+        || { echo "ERROR: kernel/modules/arm overlay missing" >&2; exit 1; }
       test -f "${OVERLAY}" \
-        || { echo "ERROR: modules-kernel/${DEVICE} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
 
       # Bootstrap shared by the kernel module entries: locate the common deb,
       # download the kernel source, seed .config (see lib/kernel-prepare.sh).
@@ -577,8 +577,8 @@ packages:
     deps:
       - linux-image
     sources:
-      - ../../kernel/config
-      - ../../modules-kernel/x86_64
+      - kernel/config
+      - kernel/modules/x86_64
       - preinstall/output/linux-modules-x86-64
       - lib/kernel-prepare.sh
     build: |
@@ -586,14 +586,14 @@ packages:
       DEVICE=x86-64
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      BASE_CONFIG="${SAVE_PWD}/kernel/config"
+      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
       # The overlay directory uses underscores (filesystem name); DEVICE uses
       # hyphens so the generated Debian package name is valid (no underscores).
-      OVERLAY="${SAVE_PWD}/modules-kernel/x86_64"
+      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/x86_64"
       test -f "${BASE_CONFIG}" \
         || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
       test -f "${OVERLAY}" \
-        || { echo "ERROR: modules-kernel/x86_64 overlay missing" >&2; exit 1; }
+        || { echo "ERROR: kernel/modules/x86_64 overlay missing" >&2; exit 1; }
 
       # Bootstrap shared by the kernel module entries: locate the common deb,
       # download the kernel source, seed .config (see lib/kernel-prepare.sh).
