@@ -119,6 +119,15 @@ Debian/Ubuntu host with /dev/kvm. It is not usable inside the dev container.
 
 (no header comment)
 
+## `src/ostreelayout/usr/libexec/debian-bootc/ostree-layout`
+
+Convert the image filesystem layout to what bootc/ostree requires.
+
+/home, /root, /mnt, /srv and /opt must be symlinks into /var so the read-only
+/usr tree can be swapped atomically while mutable state persists in /var.
+Shared by Containerfile and Containerfile.minimal; do NOT change the layout
+or bootc fails.
+
 ## `workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst`
 
 (no header comment)

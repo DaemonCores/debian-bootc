@@ -260,32 +260,9 @@ RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
 # -----------------------------------------------------------------------------
 # bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
 # read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# Mirrors the main Containerfile exactly; do NOT change the layout or bootc fails.
-RUN mkdir -p /var/home \
-        /var/roothome \
-        /var/mnt \
-        /var/srv \
-        /var/opt \
-        /var/usr/lib/locale \
-        /sysroot/ostree \
-    && { cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true; } \
-    && rm -rf /home \
-        /root \
-        /mnt \
-        /srv \
-        /opt \
-        /usr/lib/locale \
-        /tmp/* \
-        /var/tmp/* \
-        /run/* \
-        /usr/sbin/policy-rc.d \
-    && ln -s var/home / \
-    && ln -s var/mnt / \
-    && ln -s var/srv / \
-    && ln -s var/opt / \
-    && ln -s var/roothome /root \
-    && ln -s sysroot/ostree /ostree \
-    && ln -s var/usr/lib/locale /usr/lib/locale \
+# Shared with the main Containerfile through src/ostreelayout.
+COPY ./src/ostreelayout /
+RUN /usr/libexec/debian-bootc/ostree-layout \
     && rm -f /etc/ssh/ssh_host_*
 
 # -----------------------------------------------------------------------------
