@@ -1,0 +1,19 @@
+name: Kernel patch references
+
+# Thin caller: the job lives in DaemonCores-CI.  It recomputes the sha256 of the
+# kernel files the patches touch on the latest stable kernel and opens a pull
+# request when they changed, so the kernel build (which refuses a changed file)
+# is unblocked by a reviewed update rather than a silent one.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/patch-guard-refresh.yml@main
