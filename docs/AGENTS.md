@@ -44,6 +44,7 @@ Full grammar and cascade: [agents-md-format v1](https://github.com/DocRoms/Kronn
 | Add/fix a runtime boot test — `workflows/tests.yml` [src: file: workflows/tests.yml:1] | [architecture](architecture.md) |
 | Installer ISO — `Containerfile.iso`, `src/buildisopreinstall/`, `scripts/gen-recipe.py` [src: file: Containerfile.iso:28] | [architecture](architecture.md) |
 | CI triggers / stage selection — `.github/workflows/pipeline.yml` [src: file: .github/workflows/pipeline.yml:71] | [architecture](architecture.md) |
+| Versions and release channels (edge on push, stable by hand) — `.github/workflows/release.yml` [src: file: .github/workflows/release.yml:1] | [architecture](architecture.md) |
 
 **T2 — Search:** if T1 does not cover the task, search `docs/` first and load at most 3 relevant files.
 
