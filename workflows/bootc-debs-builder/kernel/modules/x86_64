@@ -69,8 +69,23 @@ CONFIG_USB_XHCI_HCD=m
 CONFIG_USB_EHCI_HCD=m
 
 # =============================================================================
+# Graphics — physical GPU drivers as modules. The base config enables DRM as a
+# module; these load only when matching hardware is present, so a headless
+# server pays nothing for them.
+# =============================================================================
+
+# Intel integrated and discrete GPUs.
+CONFIG_DRM_I915=m
+
+# AMD Radeon / Ryzen integrated GPUs.
+CONFIG_DRM_AMDGPU=m
+
+# NVIDIA GPUs through the in-tree nouveau driver.
+CONFIG_DRM_NOUVEAU=m
+
+# =============================================================================
 # Disable — x86_64-specific input subsystems that have no use on a headless
-# minimal server image. (The shared disable block — SOUND/DRM/BT/WLAN —
+# minimal server image. (The shared disable block — SOUND/BT/WLAN —
 # lives in config-common and is not repeated here.)
 # =============================================================================
 
