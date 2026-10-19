@@ -84,6 +84,7 @@ packages:
       # kernel rebuild — it only rebuilds that device's modules entry.
       - kernel/config
       - kernel/patches.yml
+      - kernel/patches.lock.json
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
     # Rolling: the kernel is the latest stable release of kernel.org (version
@@ -259,6 +260,7 @@ packages:
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
       - kernel/patches.yml
+      - kernel/patches.lock.json
     build: |
       set -euo pipefail
       DEVICE=arm
@@ -457,6 +459,7 @@ packages:
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
       - kernel/patches.yml
+      - kernel/patches.lock.json
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
@@ -609,6 +612,7 @@ packages:
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
       - kernel/patches.yml
+      - kernel/patches.lock.json
     build: |
       set -euo pipefail
       DEVICE=x86-64
