@@ -59,7 +59,7 @@ Unmask only the services needed by the deployed role.
 | `BOOT_PKG` | `grub-efi-amd64-signed` | Architecture-specific boot package. |
 | `FIRMWARE_PKGS` | empty | Additional firmware packages. |
 | `KERNEL_CMDLINE_SERIAL` | empty | Extra serial-console kernel arguments. |
-| `KERNEL_VARIANT` | `stock` | Selects `linux-image-<variant>-<arch>`. |
+| `KERNEL_VARIANT` | `minimal` | Selects `linux-image-<variant>-<arch>`. |
 | `AUTOUPDATE` | `1` | Writes the bootc automatic-update mode into the image. |
 | `PRODUCT_NAME` | empty | Display name consumed by the boot finalization tooling. |
 
@@ -73,7 +73,7 @@ amd64 example:
 podman build --format docker \
   --build-arg ARCH=amd64 \
   --build-arg BOOT_PKG=grub-efi-amd64-signed \
-  --build-arg KERNEL_VARIANT=stock \
+  --build-arg KERNEL_VARIANT=minimal \
   --build-arg AUTOUPDATE=1 \
   -f Containerfile.minimal \
   -t debian-bootc:minimal-amd64 .
@@ -88,7 +88,7 @@ podman build --format docker \
   --build-arg BOOT_PROFILE=generic \
   --build-arg FIRMWARE_PKGS="firmware-linux-free firmware-misc-nonfree" \
   --build-arg KERNEL_CMDLINE_SERIAL="console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200" \
-  --build-arg KERNEL_VARIANT=stock \
+  --build-arg KERNEL_VARIANT=minimal \
   --build-arg AUTOUPDATE=1 \
   -f Containerfile.minimal \
   -t debian-bootc:minimal-arm64 .
@@ -98,8 +98,8 @@ Use `AUTOUPDATE=0` for a lock variant.
 
 ## Kernel and auto-update
 
-- The kernel is not built by the Containerfile: `linux-image-${KERNEL_VARIANT}-${ARCH}` is installed from the project APT repository and resolves to the custom `linux-image-common` `.deb` through its `Provides:` virtual package. Until the kernel build has published its first `.deb`, the install fails because the package exists in no repository (expected).
-- The kernel config fragments and per-device module lists live in `workflows/bootc-debs-builder/kernel/`; `KERNEL_VARIANT=stock` is the default and does not consume them.
+- The kernel is not built by the Containerfile: `linux-image-${KERNEL_VARIANT}-${ARCH}` is installed from the project APT repository and resolves to the custom `daemoncores-kernel-<kver>` package (published as `linux-image-common_*.deb`) through its `Provides: linux-image-minimal-<arch>`. The package Conflicts with and Replaces the Debian `linux-image-<kver>` it overlaps, following the ostree package model. Until the kernel build has published its first `.deb`, the install fails because the package exists in no repository (expected).
+- The kernel config fragments and per-device module lists live in `workflows/bootc-debs-builder/kernel/`; `KERNEL_VARIANT=minimal` is the default and installs the kernel built from them. The standard image does not use this kernel: it runs Debian's `linux-image-<arch>`.
 - `AUTOUPDATE=1` writes `1` to `/usr/lib/bootc/autoupdate`; `AUTOUPDATE=0` writes `0`, which bootc reads as disabled (the file's presence alone is not enough). The lock variant uses it to avoid background upgrades on minimal RAM.
 
 ## Architecture boundary
