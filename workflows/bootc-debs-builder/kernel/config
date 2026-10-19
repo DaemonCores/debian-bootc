@@ -360,3 +360,30 @@ CONFIG_SCHED_BORE=y
 # /usr/lib/linux-kernel-build/config.
 # CONFIG_IKCONFIG is not set
 # CONFIG_IKCONFIG_PROC is not set
+
+# =============================================================================
+# LLM inference (KT-19) — added without measurement, compatibility checked only
+# (docs/kernel-patches.md). Shared by ALL devices.
+# =============================================================================
+
+# Preemption: PREEMPT_NONE and PREEMPT_VOLUNTARY are not selectable on x86_64
+# and arm64 in 7.2 (they depend on !ARCH_HAS_PREEMPT_LAZY / ARCH_NO_PREEMPT).
+# Lazy preemption is the throughput-oriented model left, and the default.
+CONFIG_PREEMPT_LAZY=y
+
+# Transparent huge pages: fewer TLB misses when a runtime maps multi-GB weights.
+# madvise only, so no process pays the memory cost unless it asks for it.
+CONFIG_TRANSPARENT_HUGEPAGE=y
+CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
+
+# Multi-gen LRU: better reclaim when the weights and the page cache compete for
+# RAM on small boards.
+CONFIG_LRU_GEN=y
+CONFIG_LRU_GEN_ENABLED=y
+
+# Compressed swap in RAM: lets a 4-8 GB board survive a model that slightly
+# overshoots its memory instead of hitting the OOM killer. zswap is compiled in
+# but off by default (ZSWAP_DEFAULT_ON unset); zram is inactive until a device
+# is configured.
+CONFIG_ZRAM=m
+CONFIG_ZSWAP=y
