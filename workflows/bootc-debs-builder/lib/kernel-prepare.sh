@@ -4,7 +4,7 @@
 # packages.yml. Listed in each entry's sources: so a change invalidates the
 # cached debs.
 #
-# Inputs (set by the caller): DEB_ARCH.
+# Inputs (set by the caller): DEB_ARCH, SAVE_PWD (repository root).
 # Outputs (globals): COMMON_DEB, BUILT_VER, KVER, SRCDIR, ARCH (kernel arch).
 # BUILT_VER and KVER are consumed by the sourcing build: blocks.
 # Leaves the shell inside the kernel source tree with .config seeded from the
@@ -14,6 +14,7 @@
 # Prepare the kernel source tree and seed its .config.
 # Globals:
 #   DEB_ARCH: read, architecture of the matching linux-image-common deb
+#   SAVE_PWD: read, repository root
 #   COMMON_DEB: set
 #   BUILT_VER: set
 #   KVER: set
@@ -40,11 +41,7 @@ kernel_prepare() {
       echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2
       exit 1
     }
-  # Extract version + kernel version from the deb WITHOUT installing it:
-  # installing the custom deb first makes `apt-get source linux` resolve to
-  # the non-existent `linux-upstream` pseudo-source (the deb Provides
-  # linux-image-<arch>, so apt picks the meta-source). Download the kernel
-  # source BEFORE installing the custom deb.
+  # Extract version + kernel version from the deb without installing it.
   BUILT_VER=$(dpkg-deb -f "${COMMON_DEB}" Version)
   KVER=$(dpkg-deb -f "${COMMON_DEB}" Package | sed 's/^daemoncores-kernel-//')
 
@@ -53,35 +50,15 @@ kernel_prepare() {
   apt-get update
   apt-get install -y --no-install-recommends \
     build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-    rsync libudev-dev elfutils dpkg-dev
+    rsync libudev-dev elfutils dpkg-dev curl xz-utils
 
-  # Download the Debian kernel source matching the installed common
-  # kernel (KVER pins the exact source version).
-  cd /tmp || return 1
-  # The Debian source package is always named `linux` regardless of the
-  # binary package name (linux-image-<kver> resolves to the linux-upstream
-  # pseudo-source which is NOT in the Debian archive). Wave 0 (linux-image)
-  # uses the same `apt-get source linux` form; we match it here so the
-  # module builds download the real Debian kernel source. This MUST run
-  # BEFORE the custom linux-image-common deb is installed (see above).
-  # Purge the pre-installed custom linux-image-common deb so apt-get source
-  # does not resolve 'linux' to the linux-upstream pseudo-source. The
-  # "Install dependency debs" step already installed it (transitively for
-  # the device entries via linux-modules-arm -> linux-image-common), so we
-  # must remove it before the source download resolves 'linux' to the real
-  # Debian source package.
-  apt-get purge -y linux-image-common || dpkg --purge linux-image-common || true
-  apt-get autoremove -y || true
-  apt-get source linux
-  SRCDIR=$(find /tmp -maxdepth 1 -name 'linux-*' -type d | head -1)
-  test -n "${SRCDIR}" \
-    || {
-      echo "ERROR: kernel source not downloaded" >&2
-      exit 1
-    }
+  # Download the kernel.org tarball of the version the common deb was built
+  # from (the upstream part of BUILT_VER, before the package revision), so the
+  # modules always match the kernel image whatever kernel.org released since.
+  # shellcheck source=kernel-source.sh
+  . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
+  kernel_fetch_source "${BUILT_VER%%-*}"
 
-  # Install the custom common deb AFTER the source download so apt-get
-  # source does not resolve to linux-upstream.
   apt-get install -y "${COMMON_DEB}"
 
   cd "${SRCDIR}" || return 1
