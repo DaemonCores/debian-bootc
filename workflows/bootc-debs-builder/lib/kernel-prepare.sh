@@ -4,7 +4,9 @@
 # packages.yml. Listed in each entry's sources: so a change invalidates the
 # cached debs.
 #
-# Inputs (set by the caller): DEB_ARCH, SAVE_PWD (repository root).
+# Inputs (set by the caller): DEB_ARCH, SAVE_PWD (repository root), and
+# optionally KERNEL_SUFFIX ("-16k" selects the 16 KB arm64 kernel, empty or unset
+# the default 4 KB one).
 # Outputs (globals): COMMON_DEB, BUILT_VER, KVER, SRCDIR, ARCH (kernel arch).
 # BUILT_VER and KVER are consumed by the sourcing build: blocks.
 # Leaves the shell inside the kernel source tree with .config seeded from the
@@ -14,6 +16,7 @@
 # Prepare the kernel source tree and seed its .config.
 # Globals:
 #   DEB_ARCH: read, architecture of the matching linux-image-common deb
+#   KERNEL_SUFFIX: read, optional, kernel flavour suffix of that deb
 #   SAVE_PWD: read, repository root
 #   COMMON_DEB: set
 #   BUILT_VER: set
@@ -35,7 +38,7 @@ kernel_prepare() {
   # collision (the common deb Conflicts with linux-image-amd64 AND
   # linux-image-arm64). Filter on the runner's DEB_ARCH so only the
   # matching-arch deb is selected.
-  COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common_*_${DEB_ARCH}.deb" | head -1)
+  COMMON_DEB=$(find /tmp/prior -maxdepth 1 -name "linux-image-common${KERNEL_SUFFIX:-}_*_${DEB_ARCH}.deb" | head -1)
   test -n "${COMMON_DEB}" \
     || {
       echo "ERROR: linux-image-common deb not found in /tmp/prior" >&2
