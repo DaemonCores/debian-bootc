@@ -10,6 +10,7 @@ MANIFEST = (
     'packages.yml'
 )
 GRUB_PINS = ('GRUB_VER', 'GRUB_FEDORA_BRANCH', 'GRUB_PINNED_COMMIT')
+GRUB_PACKAGES = ('grub-efi-amd64-signed', 'grub-efi-arm64-signed')
 
 
 def _packages() -> dict[str, dict[str, Any]]:
@@ -22,10 +23,14 @@ def _packages() -> dict[str, dict[str, Any]]:
     return {p['name']: p for p in data['packages']}
 
 
-def test_grub_entries_share_the_same_pins() -> None:
-    """amd64 and arm64 GRUB entries never ship different GRUB sources."""
+def test_grub_entries_follow_the_fedora_mainline() -> None:
+    """Both GRUB entries track the rhboot/grub2 head and pin nothing."""
     packages = _packages()
-    amd64 = packages['grub-efi-amd64-signed']['env']
-    arm64 = packages['grub-efi-arm64-signed']['env']
-    for pin in GRUB_PINS:
-        assert amd64[pin] == arm64[pin], pin
+    for name in GRUB_PACKAGES:
+        entry = packages[name]
+        assert entry['track']['GRUB_COMMIT'] == {
+            'repo': 'rhboot/grub2',
+            'head': True
+        }, name
+        for pin in GRUB_PINS:
+            assert pin not in entry.get('env', {}), (name, pin)

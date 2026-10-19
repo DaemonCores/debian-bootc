@@ -746,10 +746,13 @@ packages:
       arch: amd64
     sources:
       - preinstall/output/grub-efi-amd64-signed
-    env:
-      GRUB_VER: "1+2.12+9+fedora44"
-      GRUB_FEDORA_BRANCH: fedora-44
-      GRUB_PINNED_COMMIT: "5e9e7e44eddcab0174decc12c3799825e600639f"
+    # Rolling: the head of the Fedora GRUB mainline (the default branch of
+    # rhboot/grub2) is resolved before each build; nothing is pinned.  If that
+    # head does not build, the last-good published deb is kept.
+    track:
+      GRUB_COMMIT:
+        repo: rhboot/grub2
+        head: true
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
       SB_SIGNING_CERT: SB_SIGNING_CERT
@@ -759,10 +762,18 @@ packages:
       ARCH=$(dpkg --print-architecture)
       trap 'rm -f /tmp/sb.key /tmp/sb.crt' EXIT
 
-      git clone --branch "${GRUB_FEDORA_BRANCH}" \
-        https://github.com/rhboot/grub2.git /build/grub2-fedora
+      git clone https://github.com/rhboot/grub2.git /build/grub2-fedora
       cd /build/grub2-fedora
-      git checkout "${GRUB_PINNED_COMMIT}"
+      GRUB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+      git checkout "${GRUB_COMMIT}"
+      # Package version derived from the source: GRUB release, commit date
+      # (monotonic, so apt always sees a newer head as an upgrade) and the
+      # Fedora branch, e.g. 1+2.12+20261013+fedora46.
+      GRUB_UPSTREAM=$(sed -n 's/^AC_INIT(\[GRUB\],\[\([^]]*\)\].*/\1/p' \
+        configure.ac)
+      GRUB_DATE=$(git show -s --format=%cd --date=format:%Y%m%d HEAD)
+      GRUB_VER="1+${GRUB_UPSTREAM}+${GRUB_DATE}+${GRUB_BRANCH//-/}"
+      echo "GRUB ${GRUB_VER} from ${GRUB_BRANCH}@${GRUB_COMMIT}"
 
       ./bootstrap
 
@@ -920,10 +931,13 @@ packages:
       arch: arm64
     sources:
       - preinstall/output/grub-efi-arm64-signed
-    env:
-      GRUB_VER: "1+2.12+9+fedora44"
-      GRUB_FEDORA_BRANCH: fedora-44
-      GRUB_PINNED_COMMIT: "5e9e7e44eddcab0174decc12c3799825e600639f"
+    # Rolling: the head of the Fedora GRUB mainline (the default branch of
+    # rhboot/grub2) is resolved before each build; nothing is pinned.  If that
+    # head does not build, the last-good published deb is kept.
+    track:
+      GRUB_COMMIT:
+        repo: rhboot/grub2
+        head: true
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
       SB_SIGNING_CERT: SB_SIGNING_CERT
@@ -933,10 +947,18 @@ packages:
       ARCH=$(dpkg --print-architecture)
       trap 'rm -f /tmp/sb.key /tmp/sb.crt' EXIT
 
-      git clone --branch "${GRUB_FEDORA_BRANCH}" \
-        https://github.com/rhboot/grub2.git /build/grub2-fedora
+      git clone https://github.com/rhboot/grub2.git /build/grub2-fedora
       cd /build/grub2-fedora
-      git checkout "${GRUB_PINNED_COMMIT}"
+      GRUB_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+      git checkout "${GRUB_COMMIT}"
+      # Package version derived from the source: GRUB release, commit date
+      # (monotonic, so apt always sees a newer head as an upgrade) and the
+      # Fedora branch, e.g. 1+2.12+20261013+fedora46.
+      GRUB_UPSTREAM=$(sed -n 's/^AC_INIT(\[GRUB\],\[\([^]]*\)\].*/\1/p' \
+        configure.ac)
+      GRUB_DATE=$(git show -s --format=%cd --date=format:%Y%m%d HEAD)
+      GRUB_VER="1+${GRUB_UPSTREAM}+${GRUB_DATE}+${GRUB_BRANCH//-/}"
+      echo "GRUB ${GRUB_VER} from ${GRUB_BRANCH}@${GRUB_COMMIT}"
 
       ./bootstrap
 
