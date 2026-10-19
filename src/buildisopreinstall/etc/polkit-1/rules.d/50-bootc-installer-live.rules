@@ -4,3 +4,14 @@ polkit.addRule(function(action, subject) {
         return polkit.Result.YES;
     }
 });
+
+// The installer queues the Secure Boot certificate for MOK enrollment once
+// the install succeeded; only that helper is allowed without a prompt.
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.policykit.exec" &&
+        action.lookup("program") ===
+            "/usr/libexec/debian-bootc/mok-stage" &&
+        subject.user === "live") {
+        return polkit.Result.YES;
+    }
+});
