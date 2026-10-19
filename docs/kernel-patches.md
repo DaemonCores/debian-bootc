@@ -42,21 +42,38 @@ individual optimisations are taken only when they exist as separate patches.
 `bore-cachy` is not used on the current series: it is written against the
 CachyOS tree and does not apply to a plain kernel.org tree.
 
-## Rockchip and Raspberry Pi hardware (KT-18)
+## ROCKNIX device patches (KT-18)
 
-The device support that ROCKNIX and `raspberrypi/linux` carry for the boards we
-target is already in the mainline 7.x tree, so no device patch is listed in
-`kernel/patches.yml` for it. Everything is enabled as modules in the per-board
-overlays, which keeps a single kernel:
+The mainline device patches of ROCKNIX are applied, as `module` class on
+`arm64`. Each one was downloaded and tried against the pristine 7.2.11 tree
+(`patch --dry-run`, then in order):
 
-- Raspberry Pi 5: the Ethernet, USB, I2C, SPI and UART are behind the RP1 chip
-  on a PCIe link. `kernel/modules/rpi5` enables `PCIE_BRCMSTB`, `MISC_RP1`,
-  `PINCTRL_RP1`, `COMMON_CLK_RP1` and `MACB` (the Cadence GEM inside RP1). The
-  former `BCMGENET` entry was wrong for the Pi 5; GENET is the Pi 4 controller.
-- RK3588: `ROCKCHIP_DW_HDMI_QP` and `DRM_PANTHOR` are already in
-  `kernel/modules/arm`, and both symbols exist in 7.2.11.
+| Source directory | Patches | Result on 7.2.11 |
+|------------------|---------|------------------|
+| `mainline` | `0003` pwm_set_period, `0004` adc-keys, `0005` btrtl RTL8733BU | apply |
+| `mainline-rockchip` | `001`, `002`, `005`-`008` (RK817 charger and bindings) | apply in order (`005` and `008` need the earlier ones) |
+| `7.2` | `0010`-`0018` (Qualcomm MSM display, dispcc) | apply |
+| `7.2` | `0011-thermal-adc-tm5-drop-iio-val-int-check` | already in the mainline tree, not listed |
+| `7.2` | `9998` silence initramfs unpack warning | applies, `kernel` class (it edits `init/initramfs.c`, always built in) |
+| `7.2` | `9999` fix Rust build error | does not apply to 7.2.11; it only renames the `tools/perf` Rust cross targets to ROCKNIX's own `*-rocknix-linux-*` triples, which a standard toolchain does not provide, so it would not help us anyway |
 
-All symbols were checked against the 7.2.11 Kconfig files with
-`check_kconfig.py`. Not verified: that these boards boot, since no build or
-hardware test was run. A device patch is only added here if a board still lacks
-a driver once tested, and it follows the same module-or-kernel rule as above.
+Every touched file is a `tristate` driver (`CHARGER_RK817`, `KEYBOARD_ADC`,
+`BT_RTL`, `BT_HCIBTUSB`, `DRM_MSM`, `COMMON_CLK_QCOM`, `SM_DISPCC_*`) or a
+header, hence the `module` class. The module build applies the `kernel` then the
+`module` patches (`lib/kernel-prepare.sh`); the image build applies only the
+`kernel` ones.
+
+Not applied, with the reason:
+
+- `devices/RK3588/patches/linux/*` (16 files): ROCKNIX applies them to the
+  `armbian/linux-rockchip` `rk-6.1-rkr3` vendor tree, not to a kernel.org tree.
+  They were not tried against 7.2.11.
+- `raspberrypi/linux`: the project publishes a full kernel branch, not a patch
+  series, so there is no patch file to list.
+
+The `.config` side is separate: `kernel/modules/rpi5` enables `PCIE_BRCMSTB`,
+`MISC_RP1`, `PINCTRL_RP1`, `COMMON_CLK_RP1` and `MACB` (the Cadence GEM inside
+RP1); the former `BCMGENET` entry was wrong for the Pi 5. `kernel/modules/arm`
+has `ROCKCHIP_DW_HDMI_QP` and `DRM_PANTHOR`. Symbols were checked against the
+7.2.11 Kconfig files with `check_kconfig.py`. Not verified: that any board boots,
+since no build on the runner or hardware test was run.
