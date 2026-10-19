@@ -29,8 +29,24 @@ Archive.zip
 /.copilot/agents/tech-lead.md
 /.copilot/agents/qa-engineer.md
 /.copilot/agents/devils-advocate.md
+# Python tooling
 __pycache__/
-.pytest_cache/
+*.py[cod]
 .venv/
+venv/
+.pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage*
+htmlcov/
+
+# Local agent and Kronn state (never project content)
+/.claude/
+/lancedb/
+/docs/.kronn-citation-originals/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

@@ -21,3 +21,4 @@ tests/
 .venv/
 .*_cache/
 **/__pycache__/
+lancedb/
