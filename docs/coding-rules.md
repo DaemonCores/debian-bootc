@@ -54,15 +54,15 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 - Bash scripts start with `set -euo pipefail` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:7] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:5] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:6] [src: file: workflows/bootc-debs-builder/packages.yml:20]. `DEBIAN/postinst` files use `set -e` [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst:2].
 - Each standalone script opens with a header comment that names it and says what it does [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:3].
-- In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:99] [src: file: workflows/bootc-debs-builder/packages.yml:114].
-- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:411] [src: file: workflows/bootc-debs-builder/packages.yml:897].
-- Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:98].
+- In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:101] [src: file: workflows/bootc-debs-builder/packages.yml:116].
+- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:413] [src: file: workflows/bootc-debs-builder/packages.yml:899].
+- Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:100].
 - A `# shellcheck disable=` directive comes with a comment saying why [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:9] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:133].
 
 ### Common mistakes to avoid
 
-- Under `set -euo pipefail`, do not use `ls <glob>` in `$(…)` to find files that may be missing. A non-match makes bash exit silently. Use `find … -maxdepth 1 -name …`, which returns 0 [src: commit: e6d37cb] [src: file: workflows/bootc-debs-builder/packages.yml:260].
-- Do not make `[ test ] && cmd` the last command of a loop body under `set -e`. A false test leaves status 1 and kills the script silently. Use an explicit `if … fi` [src: commit: 6eb3362] [src: file: workflows/bootc-debs-builder/packages.yml:687].
+- Under `set -euo pipefail`, do not use `ls <glob>` in `$(…)` to find files that may be missing. A non-match makes bash exit silently. Use `find … -maxdepth 1 -name …`, which returns 0 [src: commit: e6d37cb] [src: file: workflows/bootc-debs-builder/packages.yml:262].
+- Do not make `[ test ] && cmd` the last command of a loop body under `set -e`. A false test leaves status 1 and kills the script silently. Use an explicit `if … fi` [src: commit: 6eb3362] [src: file: workflows/bootc-debs-builder/packages.yml:689].
 - Do not embed Python heredocs in `packages.yml` build scripts. One failed silently and the build fell back to stale debs. Use pure shell (`printf`, plus a `grep -q` idempotency guard) [src: commit: 396dbc5].
 - Use `dpkg-deb -Zgzip`, not `-Zgz`. The buildenv `dpkg-deb` rejects `gz`, and the early exit reused a corrupt old deb [src: commit: 7046317].
 
@@ -82,8 +82,8 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 ### Common mistakes to avoid
 
-- When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:904].
-- Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:131].
+- When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:906].
+- Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:133].
 
 ## Python
 
