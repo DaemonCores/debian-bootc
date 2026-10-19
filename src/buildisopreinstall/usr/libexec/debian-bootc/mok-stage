@@ -1,0 +1,83 @@
+#!/bin/bash
+#
+# Queue the DaemonCores Secure Boot certificate for MOK enrollment.
+#
+# Runs as root (through pkexec) from the live installer session once the
+# install succeeded. The one-time MokManager password is read from stdin so it
+# never appears in a process list or a log.
+
+set -euo pipefail
+
+readonly CERT=/usr/share/debian-bootc/sb_signing.crt
+
+#######################################
+# Print an error message on stderr.
+# Globals:
+#   None
+# Arguments:
+#   Message words.
+# Outputs:
+#   Writes the message to stderr.
+#######################################
+err() {
+  echo "mok-stage: $*" >&2
+}
+
+#######################################
+# Stage the certificate for the next MokManager run.
+# Globals:
+#   CERT
+# Arguments:
+#   None
+# Outputs:
+#   Writes diagnostics to stderr; never the password.
+# Returns:
+#   0 when staged, 2 when nothing needs staging (no UEFI, no mokutil,
+#   no certificate, already enrolled), 1 on failure.
+#######################################
+main() {
+  local password
+
+  if [[ ! -d /sys/firmware/efi ]]; then
+    err "no UEFI firmware, nothing to enroll"
+    return 2
+  fi
+  if ! command -v mokutil >/dev/null 2>&1 \
+    || ! command -v openssl >/dev/null 2>&1; then
+    err "mokutil or openssl not available"
+    return 2
+  fi
+  if [[ ! -f "${CERT}" ]]; then
+    err "certificate not found at ${CERT}"
+    return 2
+  fi
+  if mokutil --test-key "${CERT}" >/dev/null 2>&1; then
+    err "certificate already enrolled"
+    return 2
+  fi
+
+  IFS= read -r password || [[ -n "${password}" ]]
+  if [[ ${#password} -lt 8 ]]; then
+    err "password too short"
+    return 1
+  fi
+
+  # mokutil --import would prompt on the terminal; a crypt(3) hash file keeps
+  # the clear text password off the command line and out of any prompt.
+  local hash_file
+  hash_file="$(mktemp)"
+  trap "rm -f '${hash_file}'" EXIT
+  chmod 600 "${hash_file}"
+  printf '%s' "${password}" | openssl passwd -6 -stdin >"${hash_file}" \
+    || {
+      err "could not hash the password"
+      return 1
+    }
+  mokutil --import "${CERT}" --hash-file "${hash_file}" \
+    || {
+      err "mokutil --import failed"
+      return 1
+    }
+}
+
+main "$@"
