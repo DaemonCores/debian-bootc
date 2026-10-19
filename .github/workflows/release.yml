@@ -1,0 +1,26 @@
+name: Release
+
+# Thin caller: versioning lives in DaemonCores-CI.  Versions come from
+# Conventional Commits.  Every push to main that contains a fix, feat or
+# breaking change gets an `edge` pre-release; a `stable` release is only ever
+# published by running this workflow by hand.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  edge:
+    if: github.event_name == 'push'
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/release.yml@main
+    with:
+      channel: edge
+  stable:
+    if: github.event_name == 'workflow_dispatch'
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/release.yml@main
+    with:
+      channel: stable
