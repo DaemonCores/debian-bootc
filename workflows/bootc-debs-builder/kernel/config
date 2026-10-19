@@ -256,11 +256,9 @@ CONFIG_SECURITY_YAMA=y
 # BPF_LSM: built-in. Allows BPF programs to implement LSM hooks.
 CONFIG_BPF_LSM=y
 
-# LOCK_DOWN_KERNEL: built-in. Enables the kernel lockdown mechanism.
-CONFIG_LOCK_DOWN_KERNEL=y
-
-# LOCKDOWN_LSM: built-in. The lockdown LSM (protects /dev/mem, ioports).
-CONFIG_LOCKDOWN_LSM=y
+# SECURITY_LOCKDOWN_LSM: built-in. The lockdown LSM (protects /dev/mem,
+# ioports); it is the only symbol of the lockdown mechanism in this kernel.
+CONFIG_SECURITY_LOCKDOWN_LSM=y
 
 # LSM: ordered list of active LSMs — landlock,lockdown,yama,apparmor,bpf.
 CONFIG_LSM="landlock,lockdown,yama,apparmor,bpf"
@@ -271,9 +269,6 @@ CONFIG_LSM="landlock,lockdown,yama,apparmor,bpf"
 # defconfigs; restated so the common base is explicit and cannot regress.
 # =============================================================================
 
-# CGROUP_NS: built-in. Per-container cgroup namespace (virtualises /sys/fs/cgroup).
-CONFIG_CGROUP_NS=y
-
 # TIME_NS: built-in. Per-container monotonic clock virtualisation.
 CONFIG_TIME_NS=y
 
@@ -283,11 +278,8 @@ CONFIG_TIME_NS=y
 # v2 is the default. Shared by ALL devices.
 # =============================================================================
 
-# CGROUP_V2: built-in. The unified cgroup hierarchy.
-CONFIG_CGROUP_V2=y
-
-# CGROUP_DEFAULT_V2: built-in. Boot into cgroup v2 by default.
-CONFIG_CGROUP_DEFAULT_V2=y
+# No cgroup v2 symbol is set: this kernel has no CGROUP_V2 or CGROUP_DEFAULT_V2
+# option (the unified hierarchy is always available).
 
 # =============================================================================
 # Hardening — built-in. Defends against common kernel exploit classes (RWX
@@ -351,7 +343,6 @@ CONFIG_SYN_COOKIES=y
 
 # Scheduler statistics and latency accounting: per-task bookkeeping that only
 # debugging tools read.
-# CONFIG_SCHED_DEBUG is not set
 # CONFIG_SCHEDSTATS is not set
 # CONFIG_LATENCYTOP is not set
 
