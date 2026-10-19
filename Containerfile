@@ -20,7 +20,7 @@ LABEL ostree.bootable=1
 ARG ARCH=amd64
 # Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
 # absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
-# servers, VMs); `embedded` is arm64 boards and phones whose firmware loads U-Boot.
+# servers, VMs); `embedded` is arm64 boards whose firmware loads U-Boot.
 ARG BOOT_PROFILE=generic
 # Boot stack chosen by the CI from the architecture and the boot profile:
 # grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
