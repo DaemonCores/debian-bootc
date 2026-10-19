@@ -29,7 +29,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | Kernel module packages | `linux-modules-generic`, `linux-modules-arm`, `linux-modules-arm-device`, `linux-modules-x86_64` built from `modules-kernel/*` overlays on top of `kernel/config` [src: file: workflows/bootc-debs-builder/packages.yml:230] [src: file: modules-kernel/rk3588:5]. |
 | `BOOT_PKG` | Build arg for the boot package: `grub-efi-amd64-signed` on amd64, `u-boot-tools` on arm64 [src: file: Containerfile.minimal:89]. |
 | `PRODUCT_NAME` | Build arg written to `/usr/lib/bootc/product-name`, consumed by boot finalization tooling [src: file: Containerfile:82]. |
-| `BOOTC_GPG_SHA256` | Pinned SHA-256 of the APT signing key, checked during the build [src: file: Containerfile:43] [src: file: Containerfile:79]. |
+| `BOOTC_GPG_SHA256` | SHA-256 of the APT signing key, derived by the CI from `APT_GPG_KEY` and checked during the build [src: file: Containerfile:43] [src: file: Containerfile:79]. |
 | Package manifest | `workflows/bootc-debs-builder/packages.yml`: one entry per `.deb` with `name`, `upstream`, `deps`, `sources`, `deb-glob`, `env`, `secret-env`, `build` [src: file: workflows/bootc-debs-builder/packages.yml:2]. |
 | Repack | Package built from an existing Debian package (`upstream` field) plus a bootc overlay, e.g. ifupdown2, systemd-timesyncd [src: file: workflows/bootc-debs-builder/packages.yml:5] [src: file: workflows/bootc-debs-builder/packages.yml:878]. |
 | Wave | Group of packages with no pending `deps`, built in parallel; `deps` create later waves [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/packages.yml:6]. |
