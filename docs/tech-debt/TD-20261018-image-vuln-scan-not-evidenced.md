@@ -19,7 +19,7 @@ metadata:
 - **Area**: CI
 - **Category**: docker
 - **Severity**: Medium
-- **Status**: Confirmed by user
+- **Status**: Mitigated (report-only scan added in DaemonCores-CI f96533a, never run on GitHub)
 - **Effort**: M
 - **Blast radius**: module (5-10 files)
 
