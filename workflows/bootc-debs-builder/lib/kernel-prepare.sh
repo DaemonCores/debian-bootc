@@ -61,9 +61,14 @@ kernel_prepare() {
   # The modules build against the same patched tree as the image.
   # shellcheck source=kernel-patches.sh
   . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-patches.sh"
-  kernel_apply_patches \
-    "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches.yml" \
-    kernel "${DEB_ARCH}" "${BUILT_VER%%-*}" "${SRCDIR}"
+  # Kernel-class patches are already in the image; module-class patches only
+  # exist in the tree the modules are built from.
+  local class
+  for class in kernel module; do
+    kernel_apply_patches \
+      "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches.yml" \
+      "${class}" "${DEB_ARCH}" "${BUILT_VER%%-*}" "${SRCDIR}"
+  done
 
   apt-get install -y "${COMMON_DEB}"
 
