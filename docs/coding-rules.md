@@ -83,7 +83,7 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 ### Common mistakes to avoid
 
 - When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:906].
-- Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:133].
+- Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:187].
 
 ## Python
 
