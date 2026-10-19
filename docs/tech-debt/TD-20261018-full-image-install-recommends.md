@@ -47,3 +47,10 @@ Add `--no-install-recommends` and list any genuinely wanted recommends explicitl
 
 ## Resolution
 Phase 3 of `Containerfile` now passes `--no-install-recommends` and lists the recommends the OS needs. Simulated with `apt-get -s` against trixie plus the debian-bootc repo (amd64): 425 packages before, 353 after, and the list resolves without error. Dropped: exim4, cron, buildah, criu, logrotate and other unreviewed packages. Kept explicitly: parted/dosfstools/fdisk (bootc install), uidmap/passt/aardvark-dns/nftables/catatonit/containers-storage/fuse-overlayfs (rootless podman), cryptsetup/systemd-cryptsetup/kpartx/mdadm/zstd (dracut), the firmware-* recommends, and console/ssh helpers. No image was built or booted; the CI boot test is the check.
+
+Both architectures were simulated (arm64 with `APT::Architecture "arm64"`, the arm64 build args `BOOT_PKG=u-boot-tools` and no microcode, and the arm64 kernel modules). The package lists are read from the `Containerfile` itself, so they match what a build installs. After the change amd64 installs 354 packages and arm64 359, both without resolver errors. The architecture specific recommends are installed in the per-arch block at the end of the install `RUN`:
+
+- amd64: `firmware-intel-graphics`, `firmware-intel-misc`, `firmware-nvidia-graphics` (x86 GPU and platform firmware, previously in the global list).
+- arm64: `efibootmgr` (recommended by the GRUB EFI packages that `bootupd` pre-depends on), `libubootenv-tool` (`fw_printenv`/`fw_setenv`) and `device-tree-compiler`, both recommended by `u-boot-tools`.
+
+The remaining dropped recommends are the same on both architectures (compilers and binutils, buildah, criu, X11 client libraries, logrotate, slirp4netns, glib introspection, language data). Still not built: the arm64 image has not been built or booted either.
