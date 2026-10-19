@@ -121,3 +121,7 @@ CONFIG_DRM_VBOXVIDEO=m
 # =============================================================================
 
 # CONFIG_MODULE_SIG_ALL is not set
+# NR_CPUS: the distribution default (8192) sizes every per-CPU structure and
+# CPU mask for a machine nobody owns. 512 logical CPUs covers every shipping
+# x86 platform while trimming a few MB of resident kernel data.
+CONFIG_NR_CPUS=512

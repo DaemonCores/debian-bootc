@@ -326,3 +326,42 @@ CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y
 
 # SYN_COOKIES: built-in. SYN-flood protection on the listen path.
 CONFIG_SYN_COOKIES=y
+
+# =============================================================================
+# Memory footprint — features, never hardware. The target is the lowest idle RAM
+# the full hardware support allows: drivers stay (they are modules and cost
+# nothing until their device shows up), what goes is kernel machinery that a
+# production appliance does not use. Each option is a feature of the kernel
+# itself (debugging, tracing, profiling, crash capture), not a device. Shared by
+# ALL devices.
+# =============================================================================
+
+# BTF type information: the vmlinux BTF blob stays resident in kernel memory
+# (several MB) and only serves BPF CO-RE tooling. BPF itself (cgroup BPF, BPF LSM)
+# stays on.
+# CONFIG_DEBUG_INFO_BTF is not set
+# CONFIG_DEBUG_INFO_BTF_MODULES is not set
+
+# Function tracer: allocates per-CPU ring buffers and patches every function
+# prologue. A debugging aid, not a runtime need.
+# CONFIG_FTRACE is not set
+
+# Profiling hooks (perf/oprofile support code in the scheduler paths).
+# CONFIG_PROFILING is not set
+
+# Scheduler statistics and latency accounting: per-task bookkeeping that only
+# debugging tools read.
+# CONFIG_SCHED_DEBUG is not set
+# CONFIG_SCHEDSTATS is not set
+# CONFIG_LATENCYTOP is not set
+
+# Crash capture and kexec: reserve memory for a second kernel. bootc updates
+# reboot through the bootloader, and a crash kernel keeps RAM unusable.
+# CONFIG_KEXEC is not set
+# CONFIG_KEXEC_FILE is not set
+# CONFIG_CRASH_DUMP is not set
+
+# The running kernel's config embedded in vmlinux: the build already ships it in
+# /usr/lib/linux-kernel-build/config.
+# CONFIG_IKCONFIG is not set
+# CONFIG_IKCONFIG_PROC is not set
