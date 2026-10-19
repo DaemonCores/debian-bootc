@@ -42,8 +42,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 ├── scripts/
 │   └── gen-recipe.py              # regenerates bootc-installer recipe.json from Containerfile* at ISO build
 ├── assets/installer/              # installer SVG artwork
-├── docs/                          # agent/human docs, routed from docs/AGENTS.md (see docs/Home.md)
-└── todo/                          # working registries for in-progress efforts (kernel, package split, pipeline)
+└── docs/                          # agent/human docs, routed from docs/AGENTS.md (see docs/Home.md)
 ```
 
 Sources: [src: file: Containerfile:56] [src: file: Containerfile:73] [src: file: Containerfile:171] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:227] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
