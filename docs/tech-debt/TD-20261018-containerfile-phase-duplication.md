@@ -23,7 +23,7 @@ metadata:
 - **Area**: Infra
 - **Category**: code-quality
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Mitigated (ostree layout shared; phases 1 and 2 still duplicated)
 - **Effort**: M
 - **Blast radius**: local (1-2 files)
 
@@ -45,3 +45,6 @@ Move the shared phases into a script shipped in an overlay (e.g. `/usr/libexec/d
 
 ## Next step
 `create ticket`
+
+## Resolution
+The ostree filesystem migration now lives in `src/ostreelayout/usr/libexec/debian-bootc/ostree-layout`, copied and run by `Containerfile` and `Containerfile.minimal`. It is covered by shellcheck and shfmt (POSIX) in `make check`. Not executed: it rewrites `/home`, `/root` and `/usr/lib/locale`, so only the CI build and boot test can exercise it. Phase 1 (SSL prerequisites) and Phase 2 (bootc APT key) remain duplicated: the minimal image installs fewer tools, so they are not identical, and sharing them needs a build stage rather than a script.
