@@ -7,7 +7,7 @@
 #
 # This file is NOT a full .config. It lists ONLY options that are common to
 # ALL ARM devices — everything shared across all devices (filesystems, virtio,
-# the disabled subsystems) lives in kernel/config and is NOT repeated here.
+# the shared hardware support) lives in kernel/config and is NOT repeated here.
 # Device-specific overlays (kernel/modules/rpi3, rpi4, rpi5, rk3588) are merged
 # AFTER this file and keep ONLY device-specific options (SoC platform, Ethernet
 # PHY, device-specific MMC controller, device-specific RTC driver). The modules
@@ -119,3 +119,45 @@ CONFIG_USB_EHCI_HCD=y
 
 # RTC_CLASS: built-in. The RTC subsystem core.
 CONFIG_RTC_CLASS=y
+# =============================================================================
+# Graphics — GPU and display drivers for the arm64 SoCs, as modules. They load
+# only when the matching device-tree node exists, so boards without a display
+# pay nothing. Covers the SBC set (Broadcom, Rockchip) and the common Arm
+# GPUs/display engines of other SoCs, so any arm64 board gets video.
+# =============================================================================
+
+# Broadcom VideoCore (Raspberry Pi): display (vc4) and 3D (v3d).
+CONFIG_DRM_VC4=m
+CONFIG_DRM_V3D=m
+
+# Arm Mali GPUs: Midgard/Bifrost (panfrost), Valhall (panthor), Utgard (lima).
+CONFIG_DRM_PANFROST=m
+CONFIG_DRM_PANTHOR=m
+CONFIG_DRM_LIMA=m
+
+# Rockchip display subsystem and its HDMI/DisplayPort encoders.
+CONFIG_DRM_ROCKCHIP=m
+CONFIG_ROCKCHIP_VOP=y
+CONFIG_ROCKCHIP_VOP2=y
+CONFIG_ROCKCHIP_DW_HDMI=y
+CONFIG_ROCKCHIP_DW_HDMI_QP=y
+CONFIG_ROCKCHIP_DW_MIPI_DSI=y
+CONFIG_ROCKCHIP_ANALOGIX_DP=y
+
+# Other widespread arm64 SoC display/GPU stacks.
+CONFIG_DRM_MESON=m
+CONFIG_DRM_SUN4I=m
+CONFIG_DRM_MSM=m
+CONFIG_DRM_TEGRA=m
+CONFIG_DRM_ETNAVIV=m
+CONFIG_DRM_EXYNOS=m
+CONFIG_DRM_IMX=m
+CONFIG_DRM_MEDIATEK=m
+
+# Common bridges and panel glue.
+CONFIG_DRM_DW_HDMI=m
+CONFIG_DRM_DW_HDMI_CEC=m
+CONFIG_DRM_PANEL_SIMPLE=m
+CONFIG_DRM_PANEL_RASPBERRYPI_TOUCHSCREEN=m
+CONFIG_DRM_I2C_ADV7511=m
+CONFIG_DRM_LONTIUM_LT8912B=m
