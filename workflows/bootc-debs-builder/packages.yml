@@ -83,7 +83,9 @@ packages:
       # content hash. A per-device overlay change must NOT trigger a full
       # kernel rebuild — it only rebuilds that device's modules entry.
       - kernel/config
+      - kernel/patches.yml
       - lib/kernel-source.sh
+      - lib/kernel-patches.sh
     # Rolling: the kernel is the latest stable release of kernel.org (version
     # and tarball sha256 resolved before each build, nothing pinned). If that
     # release does not build, the last-good published deb is kept.
@@ -114,6 +116,13 @@ packages:
       # sha256. The kernel is never a distribution source package.
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
       kernel_fetch_source "${KERNEL_VER}" "${KERNEL_SHA256}"
+
+      # Apply the kernel-class patches fetched from their official upstream
+      # (kernel/patches.yml): common first, then this architecture.
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-patches.sh"
+      kernel_apply_patches \
+        "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches.yml" \
+        kernel "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -248,6 +257,8 @@ packages:
       - preinstall/output/linux-modules-arm
       - lib/kernel-prepare.sh
       - lib/kernel-source.sh
+      - lib/kernel-patches.sh
+      - kernel/patches.yml
     build: |
       set -euo pipefail
       DEVICE=arm
@@ -444,6 +455,8 @@ packages:
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
       - lib/kernel-source.sh
+      - lib/kernel-patches.sh
+      - kernel/patches.yml
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
@@ -594,6 +607,8 @@ packages:
       - preinstall/output/linux-modules-x86-64
       - lib/kernel-prepare.sh
       - lib/kernel-source.sh
+      - lib/kernel-patches.sh
+      - kernel/patches.yml
     build: |
       set -euo pipefail
       DEVICE=x86-64
