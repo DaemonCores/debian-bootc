@@ -145,13 +145,13 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | Technology | Version | Role |
 |------------|---------|------|
 | Debian | 13 Trixie (`debian:trixie`, unpinned) [src: file: Containerfile:5] | Base OS for images and build env |
-| bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1271] | Bootable container tooling (built from source) |
-| OSTree | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1178] | Immutable OS deployment |
-| composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1119] | Root filesystem integrity |
-| bootupd | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1047] | Bootloader updates |
-| GRUB (BLS-capable, signed) | 1+2.12+9+fedora44 [src: file: workflows/bootc-debs-builder/packages.yml:1100] | EFI bootloader (amd64/arm64) |
-| bootc-installer | 3.0.0+git0290d4f+bootc7 [src: file: workflows/bootc-debs-builder/packages.yml:1403] | Installer for ISOs |
-| fisherman | 0.3.0+git4dc8f1c [src: file: workflows/bootc-debs-builder/packages.yml:1337] | Go tool packaged as `.deb` (requires Go ≥ 1.22) [src: file: workflows/bootc-debs-builder/packages.yml:1343] |
+| bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1273] | Bootable container tooling (built from source) |
+| OSTree | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1180] | Immutable OS deployment |
+| composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1121] | Root filesystem integrity |
+| bootupd | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1049] | Bootloader updates |
+| GRUB (BLS-capable, signed) | 1+2.12+9+fedora44 [src: file: workflows/bootc-debs-builder/packages.yml:1102] | EFI bootloader (amd64/arm64) |
+| bootc-installer | 3.0.0+git0290d4f+bootc7 [src: file: workflows/bootc-debs-builder/packages.yml:1405] | Installer for ISOs |
+| fisherman | 0.3.0+git4dc8f1c [src: file: workflows/bootc-debs-builder/packages.yml:1339] | Go tool packaged as `.deb` (requires Go ≥ 1.22) [src: file: workflows/bootc-debs-builder/packages.yml:1345] |
 | firstboot-user-setup | 1.0.2 [src: file: workflows/bootc-debs-builder/packages.yml:18] | First-boot user wizard |
 | Rust | rustup minimal profile, version unpinned [src: file: workflows/env.yml:101] | Builds bootc/bootupd |
 | Podman | unpinned [src: file: README.md:62] | Image build |
