@@ -204,33 +204,10 @@ RUN for _r in 1 2 3 4 5; do \
 # -----------------------------------------------------------------------------
 # bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
 # read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# Mirrored in Containerfile.minimal; do NOT change the layout or bootc fails.
+# The layout script is shared with Containerfile.minimal (src/ostreelayout).
 COPY ./src/debianpostinstall /
-RUN mkdir -p /var/home \
-        /var/roothome \
-        /var/mnt \
-        /var/srv \
-        /var/opt \
-        /var/usr/lib/locale \
-        /sysroot/ostree \
-    && { cp -r /usr/lib/locale/* /var/usr/lib/locale/ || true; } \
-    && rm -rf /home \
-        /root \
-        /mnt \
-        /srv \
-        /opt \
-        /usr/lib/locale \
-        /tmp/* \
-        /var/tmp/* \
-        /run/* \
-        /usr/sbin/policy-rc.d \
-    && ln -s var/home / \
-    && ln -s var/mnt / \
-    && ln -s var/srv / \
-    && ln -s var/opt / \
-    && ln -s var/roothome /root \
-    && ln -s sysroot/ostree /ostree \
-    && ln -s var/usr/lib/locale /usr/lib/locale \
+COPY ./src/ostreelayout /
+RUN /usr/libexec/debian-bootc/ostree-layout \
     && systemctl enable ssh-host-keygen.service \
     && rm -f /etc/ssh/ssh_host_*
 
