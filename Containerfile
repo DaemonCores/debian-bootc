@@ -13,9 +13,10 @@ LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-boo
 LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
-# Also asks the CI for the 16 KB arm64 kernel image (tag `<tag>-16k`, arm64 only)
-# next to the 4 KB one, see docs/decisions.md ("Two arm64 kernels").
-LABEL org.daemoncores.arm64-16k="true"
+# Asks the CI for two arm64 kernels (docs/decisions.md, "Two arm64 kernels"): the
+# plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
+# `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
+LABEL org.daemoncores.arm64-4k-image="true"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name linux-image-${KERNEL_VARIANT}-${ARCH} and the
@@ -33,7 +34,8 @@ ARG KERNEL_VARIANT=minimal
 # (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
 # `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name and
 # ARM_DEVICES lists the device module packages that kernel serves. The CI passes the
-# 16 KB values for the `-16k` image; the defaults build the 4 KB one.
+# values per image (16 KB on the plain arm64 tag, 4 KB on `<tag>-4k`); the defaults
+# build the 4 KB one.
 ARG KERNEL_SUFFIX=""
 ARG ARM_DEVICES="rpi3 rpi4"
 # Boot stack chosen by the CI from the architecture and the boot profile:
