@@ -12,6 +12,7 @@
 #          series (7.2 for 7.2.11) and {version} by the full kernel version
 #   stage  common (every architecture) or an architecture (amd64, arm64);
 #          common patches are applied first, then the architecture ones
+#   license  SPDX licence of the patch
 #   class  kernel (applied to the kernel tree) or module (shipped as a module);
 #          the rule is in docs/kernel-patches.md
 #
@@ -20,4 +21,12 @@
 #   XanMod     https://gitlab.com/xanmod/linux-patches (one directory per series)
 #   ROCKNIX    https://github.com/ROCKNIX/distribution (mainline device patches)
 #   Raspberry  https://github.com/raspberrypi/linux (one branch per series)
-patches: []
+patches:
+  # Burst-Oriented Response Enhancer, a CFS/EEVDF scheduler tweak for
+  # interactive latency. The scheduler core cannot be a module, so it goes in
+  # the kernel; it is the only scheduler patch (no competing variant is applied).
+  - name: bore
+    url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/{series}/sched/0001-bore.patch
+    stage: common
+    license: GPL-2.0-only
+    class: kernel

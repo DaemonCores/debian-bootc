@@ -29,3 +29,15 @@ Each patch in the manifest carries its class (`module` or `kernel`). Whether a
 patch can be a module is checked by reading the patched sources, not assumed:
 core scheduler and memory-management code, for example, is generally not
 buildable as a module.
+
+## Current selection
+
+| Patch | Source | Stage | Class | Why |
+|-------|--------|-------|-------|-----|
+| `bore` | CachyOS `sched/0001-bore.patch` | common | kernel | Scheduler core, cannot be a module. The only scheduler patch: BORE variants for other schedulers (`prjc`, `muqss`) compete with it and are not applied. |
+
+XanMod is not applied: it is one monolithic patch that rewrites the same
+scheduler, memory and I/O files as BORE, so it would collide with it. Its
+individual optimisations are taken only when they exist as separate patches.
+`bore-cachy` is not used on the current series: it is written against the
+CachyOS tree and does not apply to a plain kernel.org tree.
