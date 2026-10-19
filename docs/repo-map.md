@@ -45,7 +45,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 └── docs/                          # agent/human docs, routed from docs/AGENTS.md (see docs/Home.md)
 ```
 
-Sources: [src: file: Containerfile:56] [src: file: Containerfile:73] [src: file: Containerfile:171] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:227] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
+Sources: [src: file: Containerfile:63] [src: file: Containerfile:80] [src: file: Containerfile:178] [src: file: Containerfile.minimal:133] [src: file: Containerfile.minimal:234] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
 
 Local, untracked tool state (not part of the project): `lancedb/` (empty index directories) and `.kronn/` (ignored via the user's global gitignore).
 
