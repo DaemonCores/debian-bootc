@@ -19,7 +19,7 @@ metadata:
 - **Area**: Security
 - **Category**: security
 - **Severity**: Medium
-- **Status**: Confirmed by user
+- **Status**: Blocked (design change needed, see Resolution)
 - **Effort**: M
 - **Blast radius**: module (3-5 files)
 
@@ -40,3 +40,8 @@ Ship a `policy.json` with a `sigstoreSigned` rule (Fulcio issuer + workflow subj
 
 ## Next step
 `create ticket`
+
+## Resolution
+Not shipped. The containers-image `policy.json` `sigstoreSigned` requirement can only match a Fulcio certificate through `fulcio.subjectEmail` (https://raw.githubusercontent.com/containers/image/main/docs/containers-policy.json.5.md). Keyless signing from GitHub Actions produces a certificate whose identity is a workflow URI, not an email, so the current keyless signatures cannot be required by a host policy. A wrong policy would also block every auto-update on installed hosts, and no image was booted here to prove it works.
+
+Options, all needing a decision: (1) sign with a long-lived cosign key held in a repository secret and ship its public key with `keyPath`; (2) keep keyless and verify only in CI; (3) wait for URI-SAN support in containers-image. Option 1 also needs a boot test that `bootc upgrade --check` rejects an unsigned tag before it is enabled.
