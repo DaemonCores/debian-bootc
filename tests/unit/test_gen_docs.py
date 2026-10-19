@@ -9,7 +9,11 @@ import gen_docs
 
 
 def test_shell_header_extracts_comment_block(tmp_path: Path) -> None:
-    """The header is the comment block right after the shebang."""
+    """The header is the comment block right after the shebang.
+
+    Args:
+        tmp_path: Scratch directory holding the sample script.
+    """
     script = tmp_path / "s.sh"
     script.write_text(
         "#!/bin/bash\n#\n# name - purpose\n# more\nset -e\n# x\n",

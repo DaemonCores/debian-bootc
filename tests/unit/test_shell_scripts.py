@@ -57,7 +57,14 @@ echo '  option domain-name "lab.example";' >"$lf"
 
 @pytest.fixture(name='sandbox')
 def fixture_sandbox(tmp_path: Path) -> Path:
-    """Build a sandbox root with stub binaries and the etc/run skeleton."""
+    """Build a sandbox root with stub binaries and the etc/run skeleton.
+
+    Args:
+        tmp_path: Scratch directory that becomes the sandbox root.
+
+    Returns:
+        The sandbox root, holding ``bin/``, ``etc/network/`` and ``run/``.
+    """
     bindir = tmp_path / 'bin'
     bindir.mkdir()
     for name, body in STUBS.items():
@@ -71,7 +78,16 @@ def fixture_sandbox(tmp_path: Path) -> Path:
 
 def run_script(sandbox: Path, name: str,
                **env: str) -> subprocess.CompletedProcess[str]:
-    """Run the real script *name* with ``/etc`` and ``/run`` redirected."""
+    """Run the real script *name* with ``/etc`` and ``/run`` redirected.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+        name: File name of the script under the ifupdown2 ``sbin`` directory.
+        **env: Extra environment variables for the stub binaries.
+
+    Returns:
+        The completed process, with captured text output.
+    """
     text = (SBIN / name).read_text()
     text = re.sub(r'(?<![\w.])/(etc|run)/', rf'{sandbox}/\1/', text)
     script = sandbox / name
@@ -88,14 +104,22 @@ def run_script(sandbox: Path, name: str,
 
 
 def test_domain_set_exits_quietly_without_ip(sandbox: Path) -> None:
-    """No global IPv4 address: nothing is rendered and the exit code is 0."""
+    """No global IPv4 address: nothing is rendered and the exit code is 0.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+    """
     result = run_script(sandbox, 'domain-set')
     assert result.returncode == 0
     assert not (sandbox / 'etc' / 'hosts').exists()
 
 
 def test_domain_set_renders_templates(sandbox: Path) -> None:
-    """IP, short hostname and DHCP domain are substituted into hosts/issue."""
+    """IP, short hostname and DHCP domain are substituted into hosts/issue.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+    """
     (sandbox / 'etc' /
      'hosts.tpl').write_text('{{ IP }} {{ HOST }}.{{ FQDN }}\n')
     (sandbox / 'etc' / 'issue.tpl').write_text('ip={{ IP }}\n')
@@ -109,7 +133,12 @@ def test_domain_set_renders_templates(sandbox: Path) -> None:
 
 @pytest.mark.parametrize('domain', ['', 'bad|dom&ain'])
 def test_domain_set_falls_back_to_local(sandbox: Path, domain: str) -> None:
-    """A missing or unsafe domain value is replaced by ``local``."""
+    """A missing or unsafe domain value is replaced by ``local``.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+        domain: Content of the DHCP domain file.
+    """
     (sandbox / 'etc' / 'hosts.tpl').write_text('{{ HOST }}.{{ FQDN }}\n')
     (sandbox / 'etc' / 'issue.tpl').write_text('x\n')
     (sandbox / 'run' / 'ifupdown2-dhcp-domain').write_text(domain)
@@ -119,7 +148,11 @@ def test_domain_set_falls_back_to_local(sandbox: Path, domain: str) -> None:
 
 
 def test_autoconf_skips_without_marker(sandbox: Path) -> None:
-    """Without the marker line the interfaces file is left untouched."""
+    """Without the marker line the interfaces file is left untouched.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+    """
     interfaces = sandbox / 'etc' / 'network' / 'interfaces'
     interfaces.write_text('custom\n')
     result = run_script(sandbox, 'ifupdown2-autoconf')
@@ -135,7 +168,15 @@ def test_autoconf_skips_without_marker(sandbox: Path) -> None:
 def test_autoconf_stanzas(
     sandbox: Path, dhcp4: str, dhcp6: str, expect_v4: str, expect_v6: str | None
 ) -> None:
-    """Stanzas follow which DHCP probes answered; the domain is handed over."""
+    """Stanzas follow which DHCP probes answered; the domain is handed over.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+        dhcp4: ``1`` when the stub DHCPv4 probe answers.
+        dhcp6: ``1`` when the stub DHCPv6 probe answers.
+        expect_v4: Stanza expected for the IPv4 family.
+        expect_v6: Stanza expected for IPv6, or ``None`` when absent.
+    """
     interfaces = sandbox / 'etc' / 'network' / 'interfaces'
     interfaces.write_text('# ifupdown2-autoconf\n')
     result = run_script(

@@ -26,6 +26,14 @@ COPY_RE = re.compile(
 
 
 def _local_sources(containerfile: Path) -> list[str]:
+    """List the local (non-URL) sources of the COPY/ADD instructions.
+
+    Args:
+        containerfile: Image definition to scan.
+
+    Returns:
+        The source argument of each local COPY or ADD instruction.
+    """
     return [
         m for m in COPY_RE.findall(containerfile.read_text())
         if not m.startswith(('http://', 'https://'))
@@ -33,6 +41,11 @@ def _local_sources(containerfile: Path) -> list[str]:
 
 
 def _packages() -> list[dict[str, Any]]:
+    """Load the package entries of ``packages.yml``.
+
+    Returns:
+        One mapping per package of the manifest.
+    """
     data = yaml.safe_load((PACKAGES / 'packages.yml').read_text())
     return cast(list[dict[str, Any]], data['packages'])
 
@@ -44,7 +57,11 @@ def test_containerfiles_found() -> None:
 
 @pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
 def test_copy_sources_exist(containerfile: Path) -> None:
-    """Every local COPY/ADD source resolves in the build context."""
+    """Every local COPY/ADD source resolves in the build context.
+
+    Args:
+        containerfile: Image definition under test.
+    """
     for source in _local_sources(containerfile):
         pattern = source.removeprefix('./')
         assert list(
@@ -84,7 +101,11 @@ def test_package_has_build_or_upstream() -> None:
 
 
 def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
-    """gen-recipe.py updates a recipe from the repo's Containerfiles."""
+    """gen-recipe.py updates a recipe from the repo's Containerfiles.
+
+    Args:
+        tmp_path: Scratch directory holding the recipe file.
+    """
     recipe = tmp_path / 'recipe.json'
     recipe.write_text(json.dumps({'distro_name': 'debian bootc', 'keep': 1}))
     subprocess.run(
@@ -104,13 +125,22 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
 
 
 def _ignore_patterns() -> list[str]:
+    """Read the active patterns of ``.dockerignore``.
+
+    Returns:
+        The non-empty, non-comment lines of the file.
+    """
     lines = (ROOT / '.dockerignore').read_text().splitlines()
     return [ln.strip() for ln in lines if ln.strip() and not ln.startswith('#')]
 
 
 @pytest.mark.parametrize('containerfile', CONTAINERFILES, ids=lambda p: p.name)
 def test_dockerignore_keeps_copy_sources(containerfile: Path) -> None:
-    """No COPY source is excluded from the build context by .dockerignore."""
+    """No COPY source is excluded from the build context by .dockerignore.
+
+    Args:
+        containerfile: Image definition under test.
+    """
     patterns = [p.rstrip('/') for p in _ignore_patterns()]
     for source in _local_sources(containerfile):
         top = source.removeprefix('./').split('/')[0]

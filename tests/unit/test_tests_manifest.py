@@ -18,10 +18,20 @@ VARIANTS = {'main', 'minimal'}
 
 
 def _load() -> dict[str, Any]:
+    """Parse ``workflows/tests.yml``.
+
+    Returns:
+        The manifest as a mapping.
+    """
     return cast(dict[str, Any], yaml.safe_load(MANIFEST.read_text()))
 
 
 def _entries() -> list[tuple[str, int, dict[str, Any]]]:
+    """List every test entry of every section of the manifest.
+
+    Returns:
+        One ``(section, index, entry)`` tuple per entry.
+    """
     data = _load()
     return [(section, i, cast(dict[str, Any], entry)) for section in SECTIONS
             for i, entry in enumerate(data.get(section) or [])]
@@ -41,7 +51,13 @@ def test_manifest_has_tests_and_timeouts() -> None:
 def test_entry_has_name_run_diag(
     section: str, index: int, entry: dict[str, Any]
 ) -> None:
-    """Every entry ships name, run and diag, as the harness requires."""
+    """Every entry ships name, run and diag, as the harness requires.
+
+    Args:
+        section: Manifest section the entry belongs to.
+        index: Position of the entry inside its section.
+        entry: The test entry itself.
+    """
     where = f'{section}[{index}]'
     for key in ('name', 'run', 'diag'):
         value = entry.get(key)
@@ -53,7 +69,13 @@ def test_entry_has_name_run_diag(
 def test_entry_gates_are_known(
     section: str, index: int, entry: dict[str, Any]
 ) -> None:
-    """``arch`` and ``variant`` gates only use values the harness knows."""
+    """``arch`` and ``variant`` gates only use values the harness knows.
+
+    Args:
+        section: Manifest section the entry belongs to.
+        index: Position of the entry inside its section.
+        entry: The test entry itself.
+    """
     where = f'{section}[{index}]'
     assert entry.get('arch', 'amd64') in ARCHES, f'{where} bad arch'
     assert entry.get('variant', 'main') in VARIANTS, f'{where} bad variant'

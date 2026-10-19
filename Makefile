@@ -91,7 +91,7 @@ check-py: py-ready
 	$(VBIN)/ruff check $(PYTHON_SRCS) $(PYTHON_TESTS)
 	$(VBIN)/mypy --explicit-package-bases $(PYTHON_SRCS)
 	$(VBIN)/basedpyright $(PYTHON_SRCS)
-	$(VBIN)/pydoclint $(PYTHON_SRCS)
+	$(VBIN)/pydoclint $(PYTHON_SRCS) $(PYTHON_TESTS)
 	$(VBIN)/bandit -q -r $(PYTHON_SRCS) --severity-level medium
 
 check-shell:

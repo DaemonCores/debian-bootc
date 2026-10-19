@@ -48,6 +48,17 @@ preflight() {
   podman image exists "${image}" || die "image not in local podman storage: ${image}"
 }
 
+#######################################
+# Run the image boot tests against a local podman image.
+# Globals:
+#   ROOT
+#   CI_REPO
+# Arguments:
+#   $1: image reference in local podman storage
+#   $2: architecture, amd64 (default) or arm64
+# Returns:
+#   Exits 1 on a usage error or a failed preflight, else the harness status.
+#######################################
 main() {
   local image="${1:-}" arch="${2:-amd64}"
   [[ -n "${image}" ]] || die "usage: $0 IMAGE [ARCH]"
