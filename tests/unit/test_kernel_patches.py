@@ -16,8 +16,8 @@ LIB = (
     'lib' / 'kernel-patches.sh'
 )
 GUARD = Path(
-    os.environ.get('CI_SCRIPTS') or
-    Path(__file__).resolve().parents[3] / 'DaemonCores-CI' / 'scripts'
+    os.environ.get('CI_SCRIPTS')
+    or Path(__file__).resolve().parents[3] / 'DaemonCores-CI' / 'scripts'
 )
 pytestmark = pytest.mark.skipif(
     not (GUARD / 'patch_guard.py').is_file(),
@@ -84,7 +84,8 @@ def _manifest(root: Path, entries: list[tuple[str, str, str, str]]) -> Path:
     return path
 
 
-def _apply(root: Path, manifest: Path,
+def _apply(root: Path,
+           manifest: Path,
            arch: str = 'amd64') -> subprocess.CompletedProcess[str]:
     """Run ``kernel_apply_patches`` for the kernel class.
 
