@@ -142,4 +142,8 @@ Containerfile and Containerfile.minimal.
 
 (no header comment)
 
+## `workflows/bootc-debs-builder/preinstall/output/grub-efi-arm64-signed/DEBIAN/postinst`
+
+(no header comment)
+
 <!-- gen:reference end -->
