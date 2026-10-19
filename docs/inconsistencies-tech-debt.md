@@ -6,14 +6,11 @@ Index of technical-debt findings for debian-bootc. Each row links to a detail fi
 
 | Component | Pinned in repo | Reality (checked 2026-10-18) | Source |
 |---|---|---|---|
-| bootupd | `v0.2.35` + local dpkg patch | upstream latest `v0.3.2` (a minor series behind) | `workflows/bootc-debs-builder/packages.yml:1273` |
-| bootc | `v1.16.2` | upstream latest `v1.17.1` | `workflows/bootc-debs-builder/packages.yml:1472` |
-| ostree | `2026.1` | upstream latest `v2026.4` | `workflows/bootc-debs-builder/packages.yml:1404` |
-| composefs | `v1.0.8` | upstream latest `v1.0.8` (current) | `workflows/bootc-debs-builder/packages.yml:1345` |
+| bootupd, bootc, ostree, composefs | latest upstream release, resolved by the CI at each build (`track:` in `packages.yml`) | the last-good published deb is kept when the latest release does not build | `workflows/bootc-debs-builder/packages.yml` |
 | Debian base | `debian:trixie` (Debian 13, moving tag) | current Debian stable | `Containerfile:5` |
 | Shared CI workflows | `DaemonCores-CI ...@main` | moving branch, no version | `.github/workflows/pipeline.yml:71` |
 
-Upstream versions came from `https://api.github.com/repos/<owner>/<repo>/releases/latest` for bootc-dev/bootc, ostreedev/ostree, coreos/bootupd and composefs/composefs.
+Upstream releases come from `https://api.github.com/repos/<owner>/<repo>/releases/latest` for bootc-dev/bootc, ostreedev/ostree, coreos/bootupd and composefs/composefs.
 
 ## Baseline checklist results
 
