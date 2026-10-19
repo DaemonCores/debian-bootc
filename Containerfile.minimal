@@ -29,18 +29,16 @@
 #
 # Custom kernel (optional):
 #   ARG KERNEL_VARIANT selects the kernel package via the
-#   `linux-image-${KERNEL_VARIANT}-${ARCH}` naming pattern. `stock` (default)
-#   installs the Debian stock metapackage `linux-image-stock-${ARCH}`;
-#   `minimal` installs `linux-image-minimal-${ARCH}`, the custom kernel built
-#   from the fragments in kernel/config-minimal-<arch> by the bootc-debs-builder
-#   pipeline.
-#   The custom kernel .deb is published as `linux-image-common` by the
-#   bootc-debs-builder pipeline and repacked with
-#   `Provides: linux-image-stock-${ARCH}, linux-image-minimal-${ARCH}` so the
-#   `linux-image-${KERNEL_VARIANT}-${ARCH}` apt install resolves to it via the
-#   virtual package mechanism once the kernel build succeeds. Until the kernel
-#   build publishes its first .deb, the install fails (the package is absent
-#   from every repo) — this is expected.
+#   `linux-image-${KERNEL_VARIANT}-${ARCH}` naming pattern. `minimal` (default)
+#   installs `linux-image-minimal-${ARCH}`, the custom kernel built from the
+#   fragments in kernel/config by the bootc-debs-builder pipeline.
+#   The custom kernel .deb is published as `daemoncores-kernel-<kver>` (file
+#   `linux-image-common_*.deb`) and carries
+#   `Provides: linux-image-minimal-${ARCH}`, so the apt install resolves to it
+#   through the virtual package mechanism. It Conflicts with and Replaces the
+#   Debian `linux-image-<kver>` it overlaps, like the ostree package does with
+#   libostree. Until the kernel build publishes its first .deb, the install
+#   fails (the package is absent from every repo) — this is expected.
 #   See docs/minimal.md ("Kernel and auto-update").
 #
 # Per-arch kernel modules (optional):
@@ -104,14 +102,10 @@ ARG FIRMWARE_PKGS=""
 # Extra kernel cmdline for serial consoles: empty on x86_64; arm64 adds
 # console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200.
 ARG KERNEL_CMDLINE_SERIAL=""
-# `stock` (default) installs the Debian linux-image-stock-<arch> metapackage;
-# `minimal` installs linux-image-minimal-<arch> (custom kernel built from
-# kernel/config-minimal-<arch> by the bootc-debs-builder pipeline). Both names
-# are resolved via the `Provides` virtual-package mechanism of the custom
-# `linux-image-common` .deb once the kernel build publishes it. See
-# docs/minimal.md ("Kernel and auto-update"). The CI builds the .deb with the matching KERNEL_VARIANT-<arch>
-# name, so the Containerfile installs it directly with no if/else.
-ARG KERNEL_VARIANT=stock
+# `minimal` (default) installs linux-image-minimal-<arch>, the virtual name provided
+# by the custom kernel .deb (`daemoncores-kernel-<kver>`, built from kernel/config by
+# the bootc-debs-builder pipeline). See docs/minimal.md ("Kernel and auto-update").
+ARG KERNEL_VARIANT=minimal
 # `1` (default) writes /usr/lib/bootc/autoupdate so bootc performs automated ostree
 # upgrades (the `_autoupdate` tag variant); `0` writes `0` to that file, disabling
 # auto-update for the `_lock` tag variant (minimal RAM, no background upgrade
@@ -171,9 +165,9 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # -----------------------------------------------------------------------------
 # Arch-specific kernel package is derived from KERNEL_VARIANT and ARCH via the
 # linux-image-${KERNEL_VARIANT}-${ARCH} naming pattern, so there is no if/else
-# here. The custom kernel .deb (linux-image-common, built by the
+# here. The custom kernel .deb (daemoncores-kernel-<kver>, built by the
 # bootc-debs-builder pipeline) is repacked with
-# `Provides: linux-image-stock-${ARCH}, linux-image-minimal-${ARCH}` so apt
+# `Provides: linux-image-minimal-${ARCH}` so apt
 # resolves the virtual package name to it once the kernel build publishes.
 # Until the first kernel build succeeds, the package is absent from every repo
 # and the install fails — see docs/minimal.md.
