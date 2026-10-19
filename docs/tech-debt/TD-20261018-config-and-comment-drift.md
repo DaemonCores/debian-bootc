@@ -33,7 +33,7 @@ A maintainer reading config.yml expects unsigned modules while CI builds both. A
 - `config.yml:6` — comment: both is future
 - `config.yml:11` — actual `default: both`
 - `Containerfile.minimal:11-19` — header names linux-image-${ARCH} / linux-image-amd64
-- `Containerfile.minimal:107` — actual ARG KERNEL_VARIANT=stock
+- `Containerfile.minimal:106` — actual ARG KERNEL_VARIANT=stock
 - `Containerfile:21-27` — explains why Debian's linux-image-<arch> must NOT be installed
 - `Containerfile:170` — 'Mirrors the main Containerfile exactly' inside the main Containerfile
 
