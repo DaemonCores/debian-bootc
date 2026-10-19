@@ -18,7 +18,7 @@ metadata:
 
 - **Area**: Backend
 - **Severity**: Low
-- **Status**: Confirmed by user
+- **Status**: Mitigated (detection in place; version bumps still pending)
 - **Effort**: M
 - **Blast radius**: module (5-10 files)
 
@@ -41,3 +41,6 @@ Add a scheduled job or Renovate custom-regex manager for the `*_VER` pins, and p
 
 ## Next step
 `create ticket`
+
+## Resolution
+`scripts/check_upstream_pins.py` compares the `BOOTC_VER`, `BOOTUPD_VER`, `OSTREE_VER` and `COMPOSEFS_VER` pins with the latest GitHub release of each upstream. `.github/workflows/upstream-pins.yml` runs it weekly with `--strict`, so an outdated pin fails the run. The comparison logic is unit tested with a stubbed fetch; the live GitHub query and the scheduled run have not been exercised yet. The bumps themselves (and the rebase of `bootupd-0.2.35-dpkg.patch` for bootupd 0.3) are not done: they need a build to validate.

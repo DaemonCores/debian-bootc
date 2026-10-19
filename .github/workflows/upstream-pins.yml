@@ -1,0 +1,22 @@
+name: Upstream pins
+
+# Weekly check that the boot-stack pins in packages.yml (bootc, bootupd, ostree,
+# composefs) are not behind their upstream release.  The job fails when a pin is
+# outdated so the failure surfaces in the Actions tab; it never bumps anything.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare pins with upstream releases
+        run: python3 scripts/check_upstream_pins.py --strict
