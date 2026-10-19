@@ -34,3 +34,24 @@ def test_grub_entries_follow_the_fedora_mainline() -> None:
         }, name
         for pin in GRUB_PINS:
             assert pin not in entry.get('env', {}), (name, pin)
+
+
+def test_custom_kernel_does_not_masquerade_as_debian() -> None:
+    """The project kernel has its own name and Provides only the minimal one."""
+    lines = _packages()['linux-image']['build'].splitlines()
+    build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
+    assert 'Package: daemoncores-kernel-' in build
+    assert 'Provides: linux-image-minimal-%s' in build
+    assert 'linux-image-stock' not in build
+    assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
+
+
+def test_standard_image_uses_the_debian_kernel() -> None:
+    """The standard Containerfile installs linux-image-${ARCH}, no modules."""
+    text = (MANIFEST.parents[2] / 'Containerfile').read_text()
+    assert 'linux-image-${ARCH} \\' in text
+    assert 'KERNEL_VARIANT' not in text
+    install = [
+        ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
+    ]
+    assert not any('linux-modules-' in ln for ln in install)
