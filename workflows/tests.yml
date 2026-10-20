@@ -61,6 +61,19 @@ tests:
     diag: |
       ls -la /etc/systemd/system/bootc-fetch-apply-updates.timer 2>&1
       systemctl is-enabled bootc-fetch-apply-updates.timer 2>&1
+  - name: the autoupdate command switches automatic updates off and on
+    run: |
+      cleanup() { autoupdate enable; }
+      trap cleanup EXIT
+      autoupdate disable
+      [ "$(systemctl is-enabled bootc-fetch-apply-updates.timer 2>&1)" = masked ]
+      autoupdate status | grep -q disabled
+      autoupdate enable
+      [ "$(systemctl is-enabled bootc-fetch-apply-updates.timer)" = enabled ]
+      autoupdate status | grep -q enabled
+    diag: |
+      command -v autoupdate 2>&1
+      ls -la /etc/systemd/system/bootc-fetch-apply-updates.timer 2>&1
   - name: ostree deployment present
     run: test -d /ostree/deploy
     diag: |
