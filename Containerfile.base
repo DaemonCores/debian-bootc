@@ -1,0 +1,68 @@
+#####################################################################################
+# Containerfile.base — layers shared by Containerfile and Containerfile.minimal
+#
+# Debian trixie with the project APT repository trusted. It carries no kernel and no
+# package set: Containerfile and Containerfile.minimal start `FROM` it and add theirs.
+# The CI builds it first, on the runner of the image it serves, and never pushes it;
+# a local build tags it `localhost/debian-bootc-base` (see docs/minimal.md).
+# NOTE: use debian trixie not pined for auto security update
+#####################################################################################
+FROM debian:trixie
+STOPSIGNAL SIGRTMIN+3
+
+# Labels and settings every image inherits; the images set their own title and description.
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
+LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
+# Setup all environement variables
+ENV DEBIAN_FRONTEND=noninteractive
+# Setup default shell with fail build on error (inherited by the images, docker format)
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# -----------------------------------------------------------------------------
+# Phase 1: SSL prerequisites + APT sources (debianpreinstall)
+# -----------------------------------------------------------------------------
+COPY ./src/debianpreinstall /
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        ca-certificates \
+        openssl \
+        wget \
+    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
+    && rm -f \
+        "/etc/ssl/certs/988a38cb.0" \
+        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
+        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
+
+# -----------------------------------------------------------------------------
+# Phase 2: Trust the bootc APT repository
+# -----------------------------------------------------------------------------
+# COPY ./src/bootcpreinstall / must precede the sed below: the sources file
+# /etc/apt/sources.list.d/debian-bootc.sources (carrying the {{ ARCH }} token)
+# is shipped by this layer. Without the COPY first, sed fails under
+# `set -euo pipefail` because the file does not exist yet.
+COPY ./src/bootcpreinstall /
+# Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
+ARG ARCH=amd64
+# SHA-256 checksum of the bootc APT repository signing key fetched below and
+# the repository URL. The CI derives both at build time from the repository's
+# APT_GPG_KEY secret; the defaults only serve local builds of the upstream
+# repository and must be overridden for any other APT repository.
+ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
+ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
+# Product display name, injected by the CI from the repo name (dashes -> spaces).
+# bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
+# /etc/os-release NAME.
+ARG PRODUCT_NAME=""
+RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
+        /etc/apt/sources.list.d/debian-bootc.sources \
+    && wget \
+        --progress=dot:giga \
+        -O /usr/share/keyrings/debian-bootc-keyring.gpg \
+        "${BOOTC_APT_URL%/}/gpg.key" \
+    && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
+        | sha256sum -c - \
+    && mkdir -p /usr/lib/bootc \
+    && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name

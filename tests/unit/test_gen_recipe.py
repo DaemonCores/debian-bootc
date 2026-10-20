@@ -30,7 +30,10 @@ def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
     Args:
         tmp_path: Scratch directory holding the fake Containerfiles.
     """
-    for name in ("Containerfile", "Containerfile.minimal", "Containerfile.iso"):
+    for name in (
+        "Containerfile", "Containerfile.minimal", "Containerfile.iso",
+        "Containerfile.base"
+    ):
         (tmp_path / name).write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
     assert [i["imgref"] for i in images] == [
