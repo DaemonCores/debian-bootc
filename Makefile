@@ -58,7 +58,7 @@ YAML_SRCS := \
 	workflows/env.yml \
 	workflows/tests.yml
 
-PYTHON_SRCS := scripts/gen-recipe.py
+PYTHON_SRCS := src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py
 PYTHON_TESTS := tests
 
 # ---- venv bootstrap ------------------------------------------------------- #

@@ -40,7 +40,10 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
     subprocess.run(
         [
             sys.executable, '-I',
-            str(ROOT / 'scripts' / 'gen-recipe.py'),
+            str(
+                ROOT / 'src' / 'buildisopreinstall' / 'usr' / 'libexec' /
+                'debian-bootc' / 'gen-recipe.py'
+            ),
             str(ROOT),
             str(recipe)
         ],

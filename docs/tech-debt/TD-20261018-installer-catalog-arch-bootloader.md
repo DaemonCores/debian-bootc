@@ -29,9 +29,9 @@ The installer catalogue is generated with a fixed `arches = ["amd64", "arm64"]` 
 A user booting the amd64 installer ISO is offered arm64 images that cannot run on that machine, and arm64 entries advertise a bootloader the image does not ship. Install fails late, after disk partitioning.
 
 ## Where (pointers)
-- `scripts/gen-recipe.py:33` — fixed arch list
-- `scripts/gen-recipe.py:46-56` — every entry gets bootloader grub2
-- `Containerfile.iso:56-64` — generator invoked at ISO build with ARCH available but not passed
+- `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py:33` — fixed arch list
+- `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py:46-56` — every entry gets bootloader grub2
+- `Containerfile.iso:59-67` — generator invoked at ISO build with ARCH available but not passed
 - `Containerfile:28-30` — BOOT_PKG differs per arch (grub vs u-boot-tools)
 
 ## Suggested direction
