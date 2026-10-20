@@ -149,13 +149,19 @@ ARG KERNEL_VARIANT=minimal
 # the defaults build the 4 KB one.
 ARG ARM_DEVICES="rpi3 rpi4"
 ARG KERNEL_SUFFIX=""
-RUN apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
+# The apt lists are wiped after every dpkg run (src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean),
+# so this layer refreshes them itself, then installs the kernel and the device modules in one
+# transaction.
+RUN for _r in 1 2 3 4 5; do \
+        apt update && break; \
+        [ "$_r" -lt 5 ] && sleep 30; \
+    done \
+    && set -- \
     && if [ "${ARCH}" = "arm64" ]; then \
-        for _d in ${ARM_DEVICES}; do \
-            apt install -y --no-install-recommends "linux-modules-${_d}"; \
-        done; \
-    fi
+        for _d in ${ARM_DEVICES}; do set -- "$@" "linux-modules-${_d}"; done; \
+    fi \
+    && apt install -y --no-install-recommends \
+        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} "$@"
 
 # -----------------------------------------------------------------------------
 # Phase 4: GRUB kernel command line (arch-conditional)

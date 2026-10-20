@@ -36,7 +36,7 @@ Recommends pulled in by ~50 packages add unreviewed packages and size to the OS 
 ## Where (pointers)
 - `Containerfile:101` — `apt install -y` without --no-install-recommends
 - `Containerfile:58` — same file uses the flag in Phase 1
-- `Containerfile.minimal:180` — minimal image uses the flag
+- `Containerfile.minimal:186` — minimal image uses the flag
 - `src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean:1` — lists cleanup via DPkg::Post-Invoke
 
 ## Suggested direction
