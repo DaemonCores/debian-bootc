@@ -90,6 +90,28 @@ packages:
           KERNEL_PAGES: "16k"
         sources:
           - kernel/pages/16k
+      # Unsigned-kernel twins of the generic images (amd64, and the plain-tag
+      # arm64 16 KB kernel): same build, MODULE_SIG_FORCE off. The 4 KB kernel
+      # serves the U-Boot devices, which have no secure boot, so it has no twin.
+      # `unsigned-kernel: true` keeps them out of the plan unless the CI runs the
+      # both signing mode.
+      "-nosign":
+        when:
+          arch: amd64
+          unsigned-kernel: true
+        deb-glob: "linux-image-common-nosign_*"
+        env:
+          KERNEL_SIGNING_ENFORCE: "no"
+      "-16k-nosign":
+        when:
+          arch: arm64
+          unsigned-kernel: true
+        deb-glob: "linux-image-common-16k-nosign_*"
+        env:
+          KERNEL_PAGES: "16k"
+          KERNEL_SIGNING_ENFORCE: "no"
+        sources:
+          - kernel/pages/16k
     env:
       KERNEL_PAGES: "4k"
     deb-glob: "linux-image-common_*"
@@ -269,12 +291,26 @@ packages:
       cp /tmp/linux-kernel.config "${REPACK_DIR}/usr/lib/linux-kernel-build/config"
       cp Module.symvers "${REPACK_DIR}/usr/lib/linux-kernel-build/Module.symvers"
 
+      # The unsigned-kernel variant (KERNEL_SUFFIX ending in -nosign) is a second
+      # package of the same kernel: a distinct name so both live in the APT pool,
+      # a Conflicts with the signed one (they ship the same files), and a
+      # Provides of the signed name, because the always-signed device modules
+      # Depend on daemoncores-kernel-<KVER> and must install on either.
       ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
-      sed -i -e "s/^Package: .*/Package: daemoncores-kernel-${ORIG_PKG#linux-image-}/" \
+      KERNEL_PKG="daemoncores-kernel-${ORIG_PKG#linux-image-}"
+      case "${KERNEL_SUFFIX:-}" in
+        *-nosign) PKG_NAME="${KERNEL_PKG}-nosign"; OTHER_PKG="${KERNEL_PKG}" ;;
+        *) PKG_NAME="${KERNEL_PKG}"; OTHER_PKG="${KERNEL_PKG}-nosign" ;;
+      esac
+      sed -i -e "s/^Package: .*/Package: ${PKG_NAME}/" \
         -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
         "${REPACK_DIR}/DEBIAN/control"
-      printf 'Provides: linux-image-minimal%s-%s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
-        "${KERNEL_SUFFIX:-}" "${DEB_ARCH}" "${ORIG_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
+      PROVIDES="linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}"
+      if [ "${PKG_NAME}" != "${KERNEL_PKG}" ]; then
+        PROVIDES="${PROVIDES}, ${KERNEL_PKG} (= ${BUILT_VER})"
+      fi
+      printf 'Provides: %s\nConflicts: %s, %s, linux-image-%s\nReplaces: %s\n' \
+        "${PROVIDES}" "${ORIG_PKG}" "${OTHER_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
         >> "${REPACK_DIR}/DEBIAN/control"
       dpkg-deb -b "${REPACK_DIR}" \
         "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"

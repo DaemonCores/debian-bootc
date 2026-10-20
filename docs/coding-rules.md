@@ -18,25 +18,25 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 
 ### Tools
 
-- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:21].
+- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:25].
 - Formatter: Not configured.
 - Type checker: N/A — not used in this project.
 - Build / check command: `make build` or directly `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62].
 
 ### Conventions
 
-- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:49] [src: file: Containerfile.minimal:123].
-- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:51] [src: file: Containerfile:72] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:145].
-- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:55] [src: file: Containerfile.minimal:127] [src: file: Containerfile.iso:65].
-- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:56] [src: file: Containerfile.minimal:128] [src: file: Containerfile.iso:66].
-- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:21] [src: file: Containerfile:30].
+- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:53] [src: file: Containerfile.minimal:127].
+- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:55] [src: file: Containerfile:72] [src: file: Containerfile.minimal:130] [src: file: Containerfile.minimal:145].
+- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:59] [src: file: Containerfile.minimal:131] [src: file: Containerfile.iso:65].
+- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:60] [src: file: Containerfile.minimal:132] [src: file: Containerfile.iso:66].
+- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:25] [src: file: Containerfile:34].
 - Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:76] [src: file: Containerfile.minimal:153].
 
 ### Common mistakes to avoid
 
 - In an `if/else/fi` inside `RUN`, ending the last package line with `\` and no `;` joins `else`/`fi` onto the `apt install` arguments. Terminate the command with `;` before `else`/`fi` [src: commit: c88288c].
 - Never start a `RUN` with `&&`. This mistake was hidden by layer caching until a no-cache build exposed it [src: commit: e4b073f].
-- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:99].
+- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:98].
 - Use the package names actually published in the APT repo. Debian names use hyphens, never underscores (the former `linux-modules-x86-64` package, not `linux-modules-x86_64`, was published under the hyphenated name) [src: commit: f35af91]. Do not install packages that have no `packages.yml` entry, e.g. `linux-headers` [src: commit: 7046317].
 
 ## Shell (bash / POSIX sh)
@@ -54,15 +54,15 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 - Bash scripts start with `set -euo pipefail` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:7] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:5] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:6] [src: file: workflows/bootc-debs-builder/packages.yml:20]. `DEBIAN/postinst` files use `set -e` [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst:2].
 - Each standalone script opens with a header comment that names it and says what it does [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:3].
-- In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:92] [src: file: workflows/bootc-debs-builder/packages.yml:111].
-- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:455] [src: file: workflows/bootc-debs-builder/packages.yml:609].
-- Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:91].
+- In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:114] [src: file: workflows/bootc-debs-builder/packages.yml:133].
+- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:491] [src: file: workflows/bootc-debs-builder/packages.yml:645].
+- Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:113].
 - A `# shellcheck disable=` directive comes with a comment saying why [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:9] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:133].
 
 ### Common mistakes to avoid
 
-- Under `set -euo pipefail`, do not use `ls <glob>` in `$(…)` to find files that may be missing. A non-match makes bash exit silently. Use `find … -maxdepth 1 -name …`, which returns 0 [src: commit: e6d37cb] [src: file: workflows/bootc-debs-builder/packages.yml:267].
-- Do not make `[ test ] && cmd` the last command of a loop body under `set -e`. A false test leaves status 1 and kills the script silently. Use an explicit `if … fi` [src: commit: 6eb3362] [src: file: workflows/bootc-debs-builder/packages.yml:407].
+- Under `set -euo pipefail`, do not use `ls <glob>` in `$(…)` to find files that may be missing. A non-match makes bash exit silently. Use `find … -maxdepth 1 -name …`, which returns 0 [src: commit: e6d37cb] [src: file: workflows/bootc-debs-builder/packages.yml:289].
+- Do not make `[ test ] && cmd` the last command of a loop body under `set -e`. A false test leaves status 1 and kills the script silently. Use an explicit `if … fi` [src: commit: 6eb3362] [src: file: workflows/bootc-debs-builder/packages.yml:443].
 - Do not embed Python heredocs in `packages.yml` build scripts. One failed silently and the build fell back to stale debs. Use pure shell (`printf`, plus a `grep -q` idempotency guard) [src: commit: 396dbc5].
 - Use `dpkg-deb -Zgzip`, not `-Zgz`. The buildenv `dpkg-deb` rejects `gz`, and the early exit reused a corrupt old deb [src: commit: 7046317].
 
@@ -82,8 +82,8 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 ### Common mistakes to avoid
 
-- When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:616].
-- Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:192].
+- When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:652].
+- Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:214].
 
 ## Python
 

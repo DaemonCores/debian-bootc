@@ -21,7 +21,7 @@ Upstream releases come from `https://api.github.com/repos/<owner>/<repo>/release
 - `--no-install-recommends`: missing on the main package install (`Containerfile:101`) → [TD-20261018-full-image-install-recommends](tech-debt/TD-20261018-full-image-install-recommends.md). `rm -rf /var/lib/apt/lists/*` is satisfied globally by the `DPkg::Post-Invoke` hook (`src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean:1`).
 - Base image pinning: moving tags (`Containerfile:5`, `Containerfile.minimal:68`, `Containerfile.iso:28`) → [TD-20261018-unpinned-base-images](tech-debt/TD-20261018-unpinned-base-images.md).
 - `ADD <remote-url>`: verified absent. The APT key is fetched with `wget` and checked with `sha256sum -c` (`Containerfile:76-80`).
-- Secrets via `ARG`: verified absent. The ARGs are arch/package selectors, a public key digest, `PRODUCT_NAME`, `IMAGE_REGISTRY`, `AUTOUPDATE` and `KERNEL_CMDLINE_SERIAL`.
+- Secrets via `ARG`: verified absent. The ARGs are arch/package selectors, a public key digest, `PRODUCT_NAME`, `IMAGE_REGISTRY` and `KERNEL_CMDLINE_SERIAL`.
 
 **docker-compose**: N/A, no compose file in the repo.
 
@@ -54,7 +54,7 @@ Upstream releases come from `https://api.github.com/repos/<owner>/<repo>/release
 | [TD-20261018-reusable-workflow-main-ref](tech-debt/TD-20261018-reusable-workflow-main-ref.md) | CI | Medium | Verified in source | Shared workflows called `@main` with `secrets: inherit` and id-token write |
 | [TD-20261018-unverified-build-downloads](tech-debt/TD-20261018-unverified-build-downloads.md) | Security | Medium | Verified in source | yq/gh `latest`, `curl \| sh` rustup, ostree tarball without checksum |
 | [TD-20261018-hardcoded-public-dns](tech-debt/TD-20261018-hardcoded-public-dns.md) | Other | Medium | **Fixed** | ifupdown2 autoconf forces Cloudflare/Google DNS on every host |
-| [TD-20261018-unpinned-base-images](tech-debt/TD-20261018-unpinned-base-images.md) | Infra | Low | Verified in source | `FROM debian:trixie` / `:latest-<arch>-autoupdate` without digest (documented trade-off) |
+| [TD-20261018-unpinned-base-images](tech-debt/TD-20261018-unpinned-base-images.md) | Infra | Low | Verified in source | `FROM debian:trixie` / `:latest_<arch>` without digest (documented trade-off) |
 | [TD-20261018-full-image-install-recommends](tech-debt/TD-20261018-full-image-install-recommends.md) | Infra | Low | Verified in source | `Containerfile:101` installs ~50 packages with Recommends |
 | [TD-20261018-bootc-stack-behind-upstream](tech-debt/TD-20261018-bootc-stack-behind-upstream.md) | Backend | Low | Verified in source | bootupd/bootc/ostree pins trail upstream; no automated bump |
 | [TD-20261018-domain-set-dead-reset-branch](tech-debt/TD-20261018-domain-set-dead-reset-branch.md) | Backend | Low | **Fixed** | Unreachable `resetdomaine` writes `${HOSTS}` (whole file) instead of `${HOST}` |

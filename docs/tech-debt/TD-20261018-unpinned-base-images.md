@@ -1,6 +1,6 @@
 ---
 name: td-20261018-unpinned-base-images
-description: Image builds use moving base tags (`debian:trixie`, `:latest-<arch>-autoupdate`) without a digest.
+description: Image builds use moving base tags (`debian:trixie`, `:latest_<arch>`) without a digest.
 metadata:
   type: tech-debt
   audit_history:
@@ -28,7 +28,7 @@ metadata:
 - **Blast radius**: local (1-2 files)
 
 ## Problem (fact)
-`Containerfile` and `Containerfile.minimal` start `FROM debian:trixie`, and `Containerfile.iso` starts `FROM ghcr.io/daemoncores/debian-bootc:latest-${ARCH}-autoupdate`. None are digest-pinned. For `debian:trixie` this is a documented choice to receive security updates automatically.
+`Containerfile` and `Containerfile.minimal` start `FROM debian:trixie`, and `Containerfile.iso` starts `FROM ghcr.io/daemoncores/debian-bootc:latest_${ARCH}`. None are digest-pinned. For `debian:trixie` this is a documented choice to receive security updates automatically.
 
 ## Impact
 Two builds of the same commit can produce different images. A regression in the upstream base, or in the freshly published base for the ISO, cannot be bisected to a commit. The QEMU tests in `workflows/tests.yml` are the only guard.
@@ -36,7 +36,7 @@ Two builds of the same commit can produce different images. A regression in the 
 ## Where (pointers)
 - `Containerfile:3-5` — `FROM debian:trixie`, comment states intentional
 - `Containerfile.minimal:68` — `FROM debian:trixie`
-- `Containerfile.iso:28` — `FROM ...:latest-${ARCH}-autoupdate`
+- `Containerfile.iso:28` — `FROM ...:latest_${ARCH}`
 - `docs/justifications.md:9` — trade-off recorded
 - `.github/dependabot.yml` — docker ecosystem configured (could bump digests)
 

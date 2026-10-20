@@ -14,7 +14,7 @@ install list of the `Containerfile`, they only came in as recommends.
 This is a hypothesis, not a confirmed root cause: no image could be built or booted
 where it was found (no container runtime on the workstation, and the cancelled CI runs
 never reached the boot test). The five packages are installed explicitly again
-[src: file: Containerfile:192-196]; the next boot test of the CI decides whether the
+[src: file: Containerfile:191-195]; the next boot test of the CI decides whether the
 hypothesis holds.
 
 ## What NOT to do
