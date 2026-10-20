@@ -5,8 +5,8 @@ Focused code-quality audit, 2026-10-18. Scope: shell scripts (`workflows/bootc-d
 | ID | Problem | Area | Severity |
 |---|---|---|---|
 | [TD-20261018-kernel-modules-bootstrap-duplication](tech-debt/TD-20261018-kernel-modules-bootstrap-duplication.md) | Kernel-source bootstrap that was copy-pasted in 3 linux-modules-* builds, now shared in `lib/kernel-prepare.sh` | Backend | Medium |
-| [TD-20261018-containerfile-phase-duplication](tech-debt/TD-20261018-containerfile-phase-duplication.md) | SSL/APT-key/ostree phases hand-synced between Containerfiles (`Containerfile.minimal:259`) | Infra | Low |
-| [TD-20261018-swallowed-errors-ostree-migration](tech-debt/TD-20261018-swallowed-errors-ostree-migration.md) | `&& cp … \|\| true &&` swallows mkdir failures (`Containerfile:179`, `Containerfile.minimal:268`) | Infra | Low |
+| [TD-20261018-containerfile-phase-duplication](tech-debt/TD-20261018-containerfile-phase-duplication.md) | SSL/APT-key/ostree phases hand-synced between Containerfiles (`Containerfile.minimal:257`) | Infra | Low |
+| [TD-20261018-swallowed-errors-ostree-migration](tech-debt/TD-20261018-swallowed-errors-ostree-migration.md) | `&& cp … \|\| true &&` swallows mkdir failures (`Containerfile:179`, `Containerfile.minimal:266`) | Infra | Low |
 | [TD-20261018-grub-efi-entries-duplicated-pins](tech-debt/TD-20261018-grub-efi-entries-duplicated-pins.md) | GRUB version/branch/commit pins and build steps duplicated in amd64/arm64 entries (`packages.yml:1101-977`, `:1149-1151`) | Backend | Low |
 | [TD-20261018-grub-efi-arm64-unconsumed](tech-debt/TD-20261018-grub-efi-arm64-unconsumed.md) | grub-efi-arm64-signed built and signed, but nothing in the repo installs it (Inferred) (`packages.yml:1269`) | Backend | Low |
 | [TD-20261018-firstboot-duplicated-prompt-logic](tech-debt/TD-20261018-firstboot-duplicated-prompt-logic.md) | Password loop duplicated, and the display-name pipeline duplicated and diverged (`firstboot-user-setup:59-67` vs `:149-150`) | Backend | Low |

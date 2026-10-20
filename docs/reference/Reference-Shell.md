@@ -141,7 +141,7 @@ KERNEL_SIGNING_ENFORCE ("no" to leave MODULE_SIG_FORCE off, default "yes").
 
 (no header comment)
 
-## `src/ostreelayout/usr/libexec/debian-bootc/ostree-layout`
+## `src/debianpostinstall/usr/libexec/debian-bootc/ostree-layout`
 
 Convert the image filesystem layout to what bootc/ostree requires.
 
@@ -150,7 +150,33 @@ Convert the image filesystem layout to what bootc/ostree requires.
 Shared by Containerfile and Containerfile.minimal; do NOT change the layout
 or bootc fails.
 
-## `src/signaturepolicy/usr/libexec/debian-bootc/install-signature-policy`
+## `src/minimalpostinstall/usr/libexec/debian-bootc/ostree-layout`
+
+Convert the image filesystem layout to what bootc/ostree requires.
+
+/home, /root, /mnt, /srv and /opt must be symlinks into /var so the read-only
+/usr tree can be swapped atomically while mutable state persists in /var.
+Shared by Containerfile and Containerfile.minimal; do NOT change the layout
+or bootc fails.
+
+## `src/debianpostinstall/usr/libexec/debian-bootc/install-signature-policy`
+
+Make the host require this repository's image signature.
+
+Usage: install-signature-policy IMAGE_REF PUBLIC_KEY_BASE64
+
+Writes the repository's cosign public key and a containers-image policy that
+only accepts signed images for IMAGE_REF, plus the registries.d entry that
+lets the host fetch the signature attached to the image. Every other
+transport and registry keeps the default (accept anything) behaviour, so the
+host can still pull its other images.
+
+Does nothing when the public key is empty: a repository that has not
+generated its signing key yet (first CI run, or no PAT_SECRETS) ships images
+without a policy rather than a policy no image can satisfy. Shared by
+Containerfile and Containerfile.minimal.
+
+## `src/minimalpostinstall/usr/libexec/debian-bootc/install-signature-policy`
 
 Make the host require this repository's image signature.
 
