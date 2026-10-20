@@ -33,9 +33,9 @@ If the keys are baked in, every machine installed from the same image digest has
 
 ## Where (pointers)
 - `Containerfile:136` — `openssh-server` installed at build time
-- `Containerfile.minimal:186` — `openssh-server` installed at build time
-- `Containerfile.minimal:195-199` — cleanup `rm -rf` list, no `/etc/ssh/ssh_host_*`
-- `Containerfile:180-189` — ostree migration cleanup, no `/etc/ssh/ssh_host_*`
+- `Containerfile.minimal:192` — `openssh-server` installed at build time
+- `Containerfile.minimal:201-205` — cleanup `rm -rf` list, no `/etc/ssh/ssh_host_*`
+- `Containerfile:180-195` — ostree migration cleanup, no `/etc/ssh/ssh_host_*`
 - `workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:256-262` — configures sshd but never regenerates host keys
 
 ## Suggested direction

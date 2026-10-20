@@ -51,7 +51,7 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
 def test_both_images_install_the_same_project_kernel() -> None:
     """Containerfile and Containerfile.minimal install the single kernel."""
     root = MANIFEST.parents[2]
-    kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \\'
+    kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}'
     for name in ('Containerfile', 'Containerfile.minimal'):
         text = (root / name).read_text()
         install = [
