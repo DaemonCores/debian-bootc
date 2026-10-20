@@ -40,8 +40,10 @@ POSTINST_SRCS := \
 	workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst \
 	workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst \
 	workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst \
-	src/ostreelayout/usr/libexec/debian-bootc/ostree-layout \
-	src/signaturepolicy/usr/libexec/debian-bootc/install-signature-policy \
+	src/debianpostinstall/usr/libexec/debian-bootc/ostree-layout \
+	src/minimalpostinstall/usr/libexec/debian-bootc/ostree-layout \
+	src/debianpostinstall/usr/libexec/debian-bootc/install-signature-policy \
+	src/minimalpostinstall/usr/libexec/debian-bootc/install-signature-policy \
 	src/debianpostinstall/usr/bin/autoupdate \
 	src/minimalpostinstall/usr/bin/autoupdate \
 	workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst \

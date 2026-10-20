@@ -35,7 +35,7 @@ A broken ostree layout is not caught at build time. It surfaces only later at QE
 
 ## Where (pointers)
 - `Containerfile:172-179` — mkdir/cp chain ending in `|| true`
-- `Containerfile.minimal:261-268` — same pattern
+- `Containerfile.minimal:259-266` — same pattern
 - `Containerfile:51` — strict SHELL that this bypasses
 
 ## Suggested direction
