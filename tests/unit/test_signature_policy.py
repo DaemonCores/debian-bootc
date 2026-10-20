@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 SCRIPT = (
-    Path(__file__).resolve().parents[2] / 'src' / 'debianpostinstall' / 'usr' /
+    Path(__file__).resolve().parents[2] / 'src' / 'basepostinstall' / 'usr' /
     'libexec' / 'debian-bootc' / 'install-signature-policy'
 )
 IMAGE = 'ghcr.io/owner/some-distro'
