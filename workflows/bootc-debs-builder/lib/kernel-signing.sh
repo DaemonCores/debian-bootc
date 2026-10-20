@@ -13,9 +13,13 @@
 # MODULE_SIGNING_KEY and MODULE_SIGNING_CERT (PEM secrets of the CI).
 
 #######################################
-# Install the CI signing key in the current kernel source tree, or turn the
-# automatic signing off when no key is configured.
+# Install the CI signing key in the current kernel source tree. Signing stays
+# optional: without a configured key the full kernel build keeps the kernel's
+# own behaviour (it generates a throw-away key), and only a modules-only tree,
+# which cannot generate one, has the automatic signing turned off.
 # Must run from the kernel source tree, before `make olddefconfig`.
+# Arguments:
+#   $1: "modules-only" for a tree that only builds modules, empty otherwise
 # Globals:
 #   MODULE_SIGNING_ACTIVE: read, "yes" when the modules must be signed
 #   MODULE_SIGNING_KEY: read, private key (PEM), required when active
@@ -25,10 +29,12 @@
 #######################################
 kernel_signing_setup() {
   if [ "${MODULE_SIGNING_ACTIVE:-}" != "yes" ]; then
-    # No key to sign with: without this the seeded .config still asks for
-    # certs/signing_key.pem, which a modules-only tree does not have, and
-    # modules_install aborts with an SSL "No such file or directory".
-    scripts/config --disable MODULE_SIG_ALL
+    if [ "${1:-}" = "modules-only" ]; then
+      # No key to sign with: the seeded .config still asks for
+      # certs/signing_key.pem, which a modules-only tree does not have, and
+      # modules_install aborts with an SSL "No such file or directory".
+      scripts/config --disable MODULE_SIG_ALL
+    fi
     return 0
   fi
   if [ -z "${MODULE_SIGNING_KEY:-}" ] || [ -z "${MODULE_SIGNING_CERT:-}" ]; then
