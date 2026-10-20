@@ -68,7 +68,7 @@ Build-time suites: 13 labelled content checks across the `packages.yml` build sc
 
 - `bootc-finalize`, `firstboot-user-setup`, `policy-rc.d`: no unit tests (only `domain-set` and `ifupdown2-autoconf` are covered) [src: file: tests/unit/test_shell_scripts.py:1].
 - `make e2e` has only been exercised up to its prerequisite check (no `/dev/kvm` in the dev container); the full boot path is validated by CI only.
-- Installer ISOs (`Containerfile.iso`, `bootc-installer`): `workflows/tests.yml` has no installer/ISO test; the build only checks that the launcher and GResource bundle exist [src: file: workflows/bootc-debs-builder/packages.yml:1351].
+- Installer ISOs (`Containerfile.iso`, `bootc-installer`): `workflows/tests.yml` has no installer/ISO test; the build only checks that the launcher and GResource bundle exist [src: file: workflows/bootc-debs-builder/packages.yml:1365].
 - `fisherman`: no runtime test in `workflows/tests.yml` [src: file: workflows/bootc-debs-builder/packages.yml:1080].
 - arm64 image: only the u-boot-tools test is arm64-specific [src: file: workflows/tests.yml:105]; bootloader, btrfs, podman and sshd tests are amd64-only. The 5 networking tests added in the stabilization pass are split: SSH host keys is all-targets; ifupdown2-autoconf, main-IP are variant:main; networkd-active, minimal-IP are variant:minimal.
 - Raspberry Pi `.img` artifacts (`run_img_rpi`): no boot test in this repo [src: file: .github/workflows/pipeline.yml:44].

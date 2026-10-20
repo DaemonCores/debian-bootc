@@ -79,6 +79,9 @@
         "encryption": {
             "template": "encryption"
         },
+        "autoupdate": {
+            "template": "autoupdate"
+        },
         "user": {
             "template": "user"
         }
