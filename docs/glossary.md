@@ -6,7 +6,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 
 | Term | Definition |
 |------|------------|
-| bootc | Bootable OCI container tooling: the OS is shipped as a container image and deployed/updated by `bootc`; built from source here as a `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:963]. See [architecture](architecture.md). |
+| bootc | Bootable OCI container tooling: the OS is shipped as a container image and deployed/updated by `bootc`; built from source here as a `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:971]. See [architecture](architecture.md). |
 | OSTree | Content-addressed object store for bootable OS trees; provides the atomic `/usr` deployment [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/control:13]. |
 | composefs / libcomposefs | Integrity-protected filesystem image library used by OSTree; enabled for the root via `[composefs] enabled=yes` [src: file: workflows/bootc-debs-builder/ostreepostinstall/usr/lib/ostree/prepare-root.conf:5]. |
 | `prepare-root.conf` | OSTree config shipped in the `ostree` deb: read-only sysroot plus composefs root [src: file: workflows/bootc-debs-builder/ostreepostinstall/usr/lib/ostree/prepare-root.conf:1]. |
@@ -31,7 +31,7 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | `PRODUCT_NAME` | Build arg written to `/usr/lib/bootc/product-name`, consumed by boot finalization tooling [src: file: Containerfile:58]. |
 | `BOOTC_GPG_SHA256` | SHA-256 of the APT signing key, derived by the CI from `APT_GPG_KEY` and checked during the build [src: file: Containerfile:41] [src: file: Containerfile:77]. |
 | Package manifest | `workflows/bootc-debs-builder/packages.yml`: one entry per `.deb` with `name`, `upstream`, `deps`, `sources`, `deb-glob`, `env`, `secret-env`, `build` [src: file: workflows/bootc-debs-builder/packages.yml:2]. |
-| Repack | Package built from an existing Debian package (`upstream` field) plus a bootc overlay, e.g. ifupdown2, systemd-timesyncd [src: file: workflows/bootc-debs-builder/packages.yml:5] [src: file: workflows/bootc-debs-builder/packages.yml:579]. |
+| Repack | Package built from an existing Debian package (`upstream` field) plus a bootc overlay, e.g. ifupdown2, systemd-timesyncd [src: file: workflows/bootc-debs-builder/packages.yml:5] [src: file: workflows/bootc-debs-builder/packages.yml:587]. |
 | Wave | Group of packages with no pending `deps`, built in parallel; `deps` create later waves [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/packages.yml:6]. |
 | Content cache | Per-deb reuse: declared `sources` and `env` are hashed; unchanged packages are restored instead of rebuilt [src: file: workflows/bootc-debs-builder/packages.yml:7] [src: file: workflows/bootc-debs-builder/packages.yml:9]. See [justifications § Content-addressed package reuse](justifications.md#content-addressed-package-reuse). |
 | Buildenv | Toolchain image `ghcr.io/<owner>/<repo>-buildenv` assembled with buildah from `workflows/env.yml`; package builds run inside it [src: file: workflows/env.yml:5]. |
