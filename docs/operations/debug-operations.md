@@ -9,11 +9,11 @@ Operational commands and troubleshooting for debian-bootc. The repo has no Makef
 |--------|---------|
 | Build full image (amd64 host) | `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62] |
 | Build minimal image (amd64) | `podman build --format docker --build-arg ARCH=amd64 --build-arg BOOT_PKG=grub-efi-amd64-signed --build-arg KERNEL_VARIANT=minimal --build-arg AUTOUPDATE=1 -f Containerfile.minimal -t debian-bootc:minimal-amd64 .` [src: file: docs/minimal.md:73] |
-| Lint a built image (local equivalent of CI bootc validation) | `podman run --rm debian-bootc:local bootc container lint` [src: file: docs/testing-quality.md:92] |
+| Lint a built image (local equivalent of CI bootc validation) | `podman run --rm debian-bootc:local bootc container lint` [src: file: docs/testing-quality.md:93] |
 | Inspect a built image (shell, no boot) | `podman run --rm -it debian-bootc:local bash` [src: inferred: standard podman usage; the image is Debian-based, `Containerfile:5`] |
 | Start / stop | N/A — no long-running service in this repo. The image is booted only by the CI harness (`bootc install` to a virtual disk, QEMU/KVM + UEFI, SSH) [src: file: workflows/tests.yml:1] |
 | Test (runtime) | Runs in CI on every image build from `workflows/tests.yml`; no local runner script in the repo [src: file: workflows/tests.yml:3] |
-| Test (pre-commit smoke) | `grep -c '^  - name:' workflows/tests.yml; grep -c '^    diag:' workflows/tests.yml` (counts must match) and `python3 -m py_compile scripts/gen-recipe.py` [src: file: docs/testing-quality.md:78] |
+| Test (pre-commit smoke) | `grep -c '^  - name:' workflows/tests.yml; grep -c '^    diag:' workflows/tests.yml` (counts must match) and `python3 -m py_compile scripts/gen-recipe.py` [src: file: docs/testing-quality.md:79] |
 | Deploy (push to `main`) | Triggers the full pipeline; untouched stages auto-skip; `docs/**` / `**.md`-only pushes do not trigger it [src: file: .github/workflows/pipeline.yml:18] |
 | Deploy (manual, stage selection) | `gh workflow run pipeline.yml -f run_debs=true -f run_image=true -f run_iso=true` (also `rebuild_env`, `run_img_rpi`, `sign_modules`) [src: file: .github/workflows/pipeline.yml:26] |
 | Rebuild package toolchain image | `gh workflow run pipeline.yml -f rebuild_env=true` — needed once to seed it or after editing `workflows/env.yml` [src: file: .github/workflows/pipeline.yml:29] |
@@ -31,7 +31,7 @@ N/A — no compose file and no long-running containers. The containers below are
 | `ghcr.io/<owner>/<repo>-buildenv` | — | Toolchain for `.deb` package builds [src: file: workflows/env.yml:5] | Package `build:` scripts under `set -euo pipefail` + content checks [src: file: workflows/bootc-debs-builder/packages.yml:20] |
 | Full image (`Containerfile`) | — | Debian 13 bootc OS image [src: file: Containerfile:5] | bootc lint + runtime tests in `workflows/tests.yml` [src: file: workflows/tests.yml:1] |
 | Minimal image (`Containerfile.minimal`) | — | Reduced multi-arch image, autoupdate/lock variants [src: file: Containerfile.minimal:107] | Same as full image; `variant: main` tests report SKIP [src: file: workflows/tests.yml:18] |
-| Installer ISO (`Containerfile.iso`) | — | Installer media [src: file: Containerfile.iso:28] | No runtime test [src: file: docs/testing-quality.md:65] |
+| Installer ISO (`Containerfile.iso`) | — | Installer media [src: file: Containerfile.iso:28] | No runtime test [src: file: docs/testing-quality.md:66] |
 <!-- kronn:section:end -->
 
 <!-- kronn:section name="troubleshooting" curated="ai" owner="audit" audit="2026-10-18" -->

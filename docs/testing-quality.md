@@ -13,7 +13,7 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 | Signing key integrity | `sha256sum -c` against `BOOTC_GPG_SHA256` (derived from the `APT_GPG_KEY` secret) [src: file: Containerfile:78] [src: file: Containerfile.minimal:155] | Full and minimal images | Yes (image build fails) |
 | Image build | `podman build --format docker ... -f Containerfile` [src: file: README.md:62] | Every root `Containerfile*` (architecture × update-variant matrix) [src: file: docs/architecture.md:54] | Yes |
 | bootc validation (lint) | Runs in the shared image workflow after the build [src: file: docs/architecture.md:60]; a second `/usr/lib/modules/<kver>/` fails it [src: file: Containerfile:21] | Every image | Yes |
-| Runtime boot tests | `workflows/tests.yml`, run over SSH on a QEMU/KVM boot of the installed image [src: file: workflows/tests.yml:1] | 35 tests, see [Test suites](#test-suites) | Yes: a failing test blocks the push [src: file: workflows/tests.yml:3] |
+| Runtime boot tests | `workflows/tests.yml`, run over SSH on a QEMU/KVM boot of the installed image [src: file: workflows/tests.yml:1] | 45 tests, see [Test suites](#test-suites) | Yes: a failing test blocks the push [src: file: workflows/tests.yml:3] |
 | Test manifest integrity | The harness refuses to run if any test lacks `diag` [src: file: workflows/tests.yml:11] | `workflows/tests.yml` | Yes |
 | Format / lint of shell, YAML, Python | shellcheck (`.shellcheckrc`), hadolint (`.hadolint.yaml`), yamllint (`.yamllint.yml`), ruff (`pyproject.toml`) — run via `make lint` [src: file: Makefile:1] | All scripts, Containerfiles, YAML manifests, `scripts/gen-recipe.py` | Yes, via the `.github/workflows/lint.yml` caller of the shared DaemonCores-CI `lint.yml` (not yet run on GitHub) |
 <!-- kronn:section:end -->
@@ -24,7 +24,7 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 | Layer | Runner | Config file | Runtime / version |
 |-------|--------|-------------|-------------------|
 | Local smoke checks | `make test` — manifest integrity (name/diag count), Python syntax, ruff [src: file: Makefile:1] | `workflows/tests.yml`, `scripts/gen-recipe.py` | Local, no container needed |
-| Unit tests (pytest) | `make test-unit`: `tests/unit/` covers `gen-recipe.py` and the `domain-set` / `ifupdown2-autoconf` boot scripts (sandboxed root, stub binaries) [src: file: tests/unit/test_shell_scripts.py:1] | `pyproject.toml` | Local, no container, no privilege |
+| Unit tests (pytest) | `make test-unit`: `tests/unit/` covers `gen-recipe.py` and the `domain-set` / `ifupdown2-autoconf` boot scripts, the installer `mok-stage` (one import for all certificates, private keys refused) and `lib/kernel-signing.sh` (forces enforcement only when signing is active) (sandboxed root, stub binaries) [src: file: tests/unit/test_shell_scripts.py:1] | `pyproject.toml` | Local, no container, no privilege |
 | Integration tests (pytest) | `make test-unit` also runs `tests/integration/`: `gen-recipe.py` runs on the real Containerfiles and the kernel helper users hash their library [src: file: tests/integration/test_build_context.py:1] | `pyproject.toml` | Local, no container; does not run `podman build` |
 | Shared checks | `make check-shared` and `make docs-check` run the `DaemonCores-CI/scripts/` gates: docstring presence (`check_docstrings.py`), `workflows/tests.yml` manifest (`check_tests_manifest.py`), `COPY` sources, `.dockerignore` and `packages.yml` coherence (`check_build_context.py`), reference pages (`gen_docs.py --check`) and `[src: file: path:LINE]` citations plus relative links (`check_docs.py`) [src: file: Makefile:1] | `pyproject.toml` | Local and CI, no container; `CI_REPO` points at the DaemonCores-CI checkout |
 | Local boot test (e2e) | `make e2e IMAGE=<ref> [ARCH=amd64]` runs `DaemonCores-CI/scripts/e2e-local.sh`, which drives the CI harness `image-test/image-test.sh` on a local image [src: file: Makefile:1] | `workflows/tests.yml` | Needs podman, sudo, apt-get and `/dev/kvm` on a Debian/Ubuntu host; `DaemonCores-CI` is fetched automatically into the untracked `.ci/` (override with `CI_REPO`) |
@@ -38,19 +38,20 @@ Test-entry fields: `name`, `run` (pass on exit 0), `expect` (optional output mat
 <!-- kronn:section name="test-suites" curated="ai" owner="audit" audit="2026-10-18" -->
 ## Test suites
 
-All runtime suites are section groups in `workflows/tests.yml` (42 tests, each with a `diag`).
+All runtime suites are section groups in `workflows/tests.yml` (45 tests, each with a `diag`).
 
 | Suite (section in `workflows/tests.yml`) | Tests | Gating |
 |-------|-------|--------|
 | bootc / ostree / immutability / service stability [src: file: workflows/tests.yml:30] | 10 | 8 all targets; logind not-masked and FailureAction=none: all targets |
 | bootloader / secure boot [src: file: workflows/tests.yml:72] | 6 | 5 × `arch: amd64` (bootupd, GRUB, shim, SB cert); 1 × `arch: arm64` (u-boot-tools) [src: file: workflows/tests.yml:105] |
 | kernel / initramfs / dracut [src: file: workflows/tests.yml:112] | 4 | all targets |
-| filesystems (btrfs) [src: file: workflows/tests.yml:135] | 2 | `arch: amd64` |
-| podman [src: file: workflows/tests.yml:154] | 2 | `arch: amd64` |
-| networking / repacked packages [src: file: workflows/tests.yml:169] | 9 | ifupdown2 / autoconf / IP: `variant: main`; sshd: `arch: amd64`; SSH host keys: all targets; networkd active / IP: `variant: minimal` |
-| first-boot tooling [src: file: workflows/tests.yml:198] | 2 | firstboot wizard `variant: main` |
-| rollback preparation, pre-reboot [src: file: workflows/tests.yml:211] | 3 | all targets |
-| post-rollback verification, after reboot [src: file: workflows/tests.yml:233] | 4 | all targets |
+| module signing (derived from the modules, adapts to the CI option) [src: file: workflows/tests.yml:128] | 3 | all targets; an unsigned module must be refused only when the build is signed |
+| filesystems (btrfs) [src: file: workflows/tests.yml:199] | 2 | `arch: amd64` |
+| podman [src: file: workflows/tests.yml:218] | 2 | `arch: amd64` |
+| networking / repacked packages [src: file: workflows/tests.yml:233] | 9 | ifupdown2 / autoconf / IP: `variant: main`; sshd: `arch: amd64`; SSH host keys: all targets; networkd active / IP: `variant: minimal` |
+| first-boot tooling [src: file: workflows/tests.yml:262] | 2 | firstboot wizard `variant: main` |
+| rollback preparation, pre-reboot [src: file: workflows/tests.yml:275] | 3 | all targets |
+| post-rollback verification, after reboot [src: file: workflows/tests.yml:297] | 4 | all targets |
 
 Build-time suites: 13 labelled content checks across the `packages.yml` build scripts, plus one `cargo test` (bootupd `query_files_dpkg`, at least 1 passing test) [src: file: workflows/bootc-debs-builder/packages.yml:914].
 <!-- kronn:section:end -->
