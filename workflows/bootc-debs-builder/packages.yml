@@ -177,11 +177,13 @@ packages:
       # Merge the base config (filesystems, virtio, serial, disables — the
       # base for every device). merge_config.sh -m merges in place.
       scripts/kconfig/merge_config.sh -m .config "${CONFIG_FILES[@]}"
-      # Sign the in-tree modules with the CI key and trust it in the kernel
-      # keyring (lib/kernel-signing.sh); the device module packages use the same.
+      # Sign the in-tree modules with the CI key, trust it in the kernel keyring
+      # and enforce signatures + MOK keyrings when active (lib/kernel-signing.sh); the device module packages use the same.
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
       kernel_signing_setup
       make olddefconfig
+      # Active signing is enforced: fail when olddefconfig dropped a forced option.
+      kernel_signing_verify
 
       # olddefconfig silently ignores a symbol this kernel does not know, so
       # fail on an unknown symbol; an option dropped by an unmet dependency is

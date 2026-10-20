@@ -84,11 +84,18 @@ The installer is destructive to the selected disk. Review the prompt carefully a
 | `APT_GPG_KEY` | Signs the generated APT repository. Generated automatically. The image build derives the key pin from it, nothing is committed. |
 | `SB_SIGNING_KEY`, `SB_SIGNING_CERT` | Self-signed Secure Boot key and certificate for the custom EFI bootloader package. Generated automatically; firmware only trusts the certificate once it is enrolled (MOK or db). |
 | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY` | Image signing key of this repository. Generated automatically; a fork gets its own key and its own signed images. |
-| `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Generated automatically when module signing is enabled. |
+| `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Generated automatically when module signing is enabled. When it is active the kernel build also enforces signatures (`MODULE_SIG_FORCE`) and builds the secondary and machine keyrings; when it is not, nothing is signed and nothing is forced. |
 
 Without `PAT_SECRETS` nothing is generated: images are signed keyless and modules stay unsigned. The workflow needs `actions: write` so `prepare` can restart the pipeline.
 
 ### Secure Boot enrollment during install
+
+A fork keeps its own key: drop the public certificate of that key in
+`src/buildisopreinstall/usr/share/debian-bootc/mok.d/` (`*.crt`, `*.cer`,
+`*.pem`, `*.der`). The installer reads that directory at install time and
+enrolls every certificate in one `mokutil --import`, so there is a single
+MokManager password. Files holding a private key are refused; never
+distribute private keys.
 
 The installer enrolls the signing certificate for you. After a successful
 install on a UEFI machine, the patched `bootc-installer`

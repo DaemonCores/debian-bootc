@@ -37,9 +37,9 @@ A compromised or changed upstream artifact enters the build environment, or the 
 - `workflows/env.yml:74-83` — yq from releases/latest, no checksum
 - `workflows/env.yml:89-97` — gh version resolved from releases/latest, no checksum
 - `workflows/env.yml:99-102` — `curl https://sh.rustup.rs | sh`
-- `workflows/bootc-debs-builder/packages.yml:1245-1121` — ostree tarball piped to tar, no checksum
-- `workflows/bootc-debs-builder/packages.yml:1125-1003` — bootupd download IS checksum-verified (contrast)
-- `workflows/bootc-debs-builder/packages.yml:1317-1195` — bootc download IS checksum-verified (contrast)
+- `workflows/bootc-debs-builder/packages.yml:1247-1123` — ostree tarball piped to tar, no checksum
+- `workflows/bootc-debs-builder/packages.yml:1127-1005` — bootupd download IS checksum-verified (contrast)
+- `workflows/bootc-debs-builder/packages.yml:1319-1197` — bootc download IS checksum-verified (contrast)
 
 ## Suggested direction
 Pin yq/gh/rustup-init versions with per-arch SHA-256 values in env.yml, as is already done for `BOOTC_GPG_SHA256`. Add an `OSTREE_SHA256` env var and `sha256sum -c` to the ostree build, following the bootupd/bootc pattern.

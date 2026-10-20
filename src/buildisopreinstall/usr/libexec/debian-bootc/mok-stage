@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# Queue the DaemonCores Secure Boot certificate for MOK enrollment.
+# Queue the DaemonCores Secure Boot certificate and every public certificate
+# dropped in MOK_DIR for MOK enrollment, in ONE request (one password).
 #
 # Runs as root (through pkexec) from the live installer session once the
 # install succeeded. The one-time MokManager password is read from stdin so it
@@ -9,6 +10,9 @@
 set -euo pipefail
 
 readonly CERT=/usr/share/debian-bootc/sb_signing.crt
+# Public certificates (PEM or DER) of forks and extra layers; read at install
+# time, so adding one needs no rebuild. Never put a private key here.
+readonly MOK_DIR=/usr/share/debian-bootc/mok.d
 
 #######################################
 # Print an error message on stderr.
@@ -24,19 +28,46 @@ err() {
 }
 
 #######################################
-# Stage the certificate for the next MokManager run.
+# List the certificates to enroll that are not yet trusted.
 # Globals:
 #   CERT
+#   MOK_DIR
+# Outputs:
+#   Writes one path per line on stdout; skips files holding a private key.
+#######################################
+pending_certs() {
+  local cert
+  for cert in "${CERT}" "${MOK_DIR}"/*.crt "${MOK_DIR}"/*.cer \
+    "${MOK_DIR}"/*.pem "${MOK_DIR}"/*.der; do
+    [[ -f "${cert}" ]] || continue
+    if grep -q 'PRIVATE KEY' "${cert}" 2>/dev/null; then
+      err "refusing ${cert}: contains a private key"
+      continue
+    fi
+    if mokutil --test-key "${cert}" >/dev/null 2>&1; then
+      err "${cert} already enrolled"
+      continue
+    fi
+    printf '%s\n' "${cert}"
+  done
+}
+
+#######################################
+# Stage the certificates for the next MokManager run.
+# Globals:
+#   CERT
+#   MOK_DIR
 # Arguments:
 #   None
 # Outputs:
 #   Writes diagnostics to stderr; never the password.
 # Returns:
 #   0 when staged, 2 when nothing needs staging (no UEFI, no mokutil,
-#   no certificate, already enrolled), 1 on failure.
+#   no certificate, all already enrolled), 1 on failure.
 #######################################
 main() {
   local password
+  local -a certs
 
   if [[ ! -d /sys/firmware/efi ]]; then
     err "no UEFI firmware, nothing to enroll"
@@ -47,12 +78,9 @@ main() {
     err "mokutil or openssl not available"
     return 2
   fi
-  if [[ ! -f "${CERT}" ]]; then
-    err "certificate not found at ${CERT}"
-    return 2
-  fi
-  if mokutil --test-key "${CERT}" >/dev/null 2>&1; then
-    err "certificate already enrolled"
+  mapfile -t certs < <(pending_certs)
+  if [[ ${#certs[@]} -eq 0 ]]; then
+    err "no certificate to enroll"
     return 2
   fi
 
@@ -75,7 +103,7 @@ main() {
       err "could not hash the password"
       return 1
     }
-  mokutil --import "${CERT}" --hash-file "${hash_file}" \
+  mokutil --import "${certs[@]}" --hash-file "${hash_file}" \
     || {
       err "mokutil --import failed"
       return 1
