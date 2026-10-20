@@ -343,10 +343,10 @@ packages:
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
       kernel_prepare
       scripts/kconfig/merge_config.sh -m .config "${OVERLAY}"
-      # Sign the modules with the CI key at modules_install, when one is configured, else
-      # leave it off (lib/kernel-signing.sh).
+      # Sign the modules with the CI key at modules_install, or turn the
+      # automatic signing off when no key is configured (lib/kernel-signing.sh).
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
-      kernel_signing_setup modules-only
+      kernel_signing_setup
       make olddefconfig
 
       # Seed Module.symvers from the same deb, at
