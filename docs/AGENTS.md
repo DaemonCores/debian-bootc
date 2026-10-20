@@ -39,7 +39,7 @@ Full grammar and cascade: [agents-md-format v1](https://github.com/DocRoms/Kronn
 | Task | Files |
 |------|-------|
 | Change the full image (packages, config overlays) — `Containerfile`, `src/debianpreinstall/`, `src/bootcpreinstall/`, `src/debianpostinstall/` [src: file: CONTRIBUTING.md:30] | [architecture](architecture.md), [justifications](justifications.md) |
-| Change the minimal image — `Containerfile.minimal`, `src/minimalpostinstall/` [src: file: Containerfile.minimal:66] | [minimal](minimal.md), [architecture](architecture.md) |
+| Change the minimal image — `Containerfile.minimal`, `src/minimalpostinstall/` [src: file: Containerfile.base:10] | [minimal](minimal.md), [architecture](architecture.md) |
 | Add/modify a custom `.deb` — `workflows/bootc-debs-builder/packages.yml` + its overlay dirs [src: file: workflows/bootc-debs-builder/packages.yml:1] | [architecture](architecture.md) |
 | Add/fix a runtime boot test — `workflows/tests.yml` [src: file: workflows/tests.yml:1] | [architecture](architecture.md) |
 | Installer ISO — `Containerfile.iso`, `src/buildisopreinstall/`, `scripts/gen-recipe.py` [src: file: Containerfile.iso:28] | [architecture](architecture.md) |
@@ -76,10 +76,10 @@ If T0–T2 are insufficient, state which additional file you need and why. Never
 ## 2. DO NOT (critical)
 
 - **Add a package build input without declaring it** in that package's `sources`/`env` in `packages.yml` — only declared paths and env are hashed, so the content cache would reuse a stale `.deb` [src: file: workflows/bootc-debs-builder/packages.yml:7] [src: file: CONTRIBUTING.md:47].
-- **Install Debian's stock kernel** (`linux-image-amd64`/`linux-image-arm64`) in an image — use `linux-image-${KERNEL_VARIANT}-${ARCH}` from the custom deb; a second `/usr/lib/modules/<kver>/` fails bootc lint [src: file: Containerfile:25].
+- **Install Debian's stock kernel** (`linux-image-amd64`/`linux-image-arm64`) in an image — use `linux-image-${KERNEL_VARIANT}-${ARCH}` from the custom deb; a second `/usr/lib/modules/<kver>/` fails bootc lint [src: file: Containerfile:48].
 - **Add a test to `workflows/tests.yml` without a `diag` command** — the harness fails the build if any test lacks one [src: file: workflows/tests.yml:9].
-- **Change the APT signing key URL or default digest in only one of `Containerfile` and `Containerfile.minimal`** — both verify the digest (the CI passes `BOOTC_GPG_SHA256` and `BOOTC_APT_URL` as build arguments) [src: file: Containerfile:45] [src: file: Containerfile.minimal:120].
-- **Pin `debian:trixie` to a digest** — left unpinned on purpose for automatic security updates [src: file: Containerfile:3].
+- **Change the APT signing key URL or default digest anywhere but `Containerfile.base`** — it is the only place that verifies the digest for every image (the CI passes `BOOTC_GPG_SHA256` and `BOOTC_APT_URL` as build arguments to the base build) [src: file: Containerfile.base:53] [src: file: Containerfile.base:54].
+- **Pin `debian:trixie` to a digest** — left unpinned on purpose for automatic security updates [src: file: Containerfile.base:8].
 - **Add job logic to `.github/workflows/pipeline.yml`** — it is a thin caller; the job graph lives in `DaemonCores/DaemonCores-CI` [src: file: .github/workflows/pipeline.yml:3].
 - **Guess** when info is missing — say `NOT_FOUND` and ask the user.
 - **Invent file paths** — if you don't know where code goes, check [architecture § Repository layout](architecture.md#repository-layout) or ask.
@@ -99,8 +99,8 @@ If T0–T2 are insufficient, state which additional file you need and why. Never
 | Container build tool | Podman with `--format docker` [src: file: README.md:62] |
 | Host architecture for local full-image build | amd64 [src: file: README.md:57] |
 | Local build command | `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62] |
-| Network access | Build fetches the signing key and packages from `https://daemoncores.github.io/debian-bootc` [src: file: Containerfile:80] |
-| Minimal image build args | `ARCH`, `BOOT_PKG`, `FIRMWARE_PKGS`, `KERNEL_CMDLINE_SERIAL` [src: file: Containerfile.minimal:92] — see [minimal](minimal.md) |
+| Network access | Build fetches the signing key and packages from `https://daemoncores.github.io/debian-bootc` [src: file: Containerfile.base:32] |
+| Minimal image build args | `ARCH`, `BOOT_PKG`, `FIRMWARE_PKGS`, `KERNEL_CMDLINE_SERIAL` [src: file: Containerfile.minimal:97] — see [minimal](minimal.md) |
 | Package builds | Run in CI inside the `ghcr.io/<owner>/<repo>-buildenv` image defined by `workflows/env.yml` [src: file: workflows/env.yml:5] |
 | CI secrets | `PAT_SECRETS` (required for generation), optional `PAT_PKG`; `APT_GPG_KEY`, `SB_SIGNING_KEY`, `SB_SIGNING_CERT` and the cosign and module keys are generated [src: file: README.md:80] |
 
@@ -125,8 +125,8 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | What | File(s) |
 |------|---------|
 | Project documentation | `docs/` |
-| Full image definition | `Containerfile` [src: file: Containerfile:5] |
-| Minimal image definition (one image per tag) | `Containerfile.minimal` [src: file: Containerfile.minimal:117] |
+| Full image definition | `Containerfile` [src: file: Containerfile.base:10] |
+| Minimal image definition (one image per tag) | `Containerfile.minimal` [src: file: Containerfile.minimal:150] |
 | Installer ISO image | `Containerfile.iso` [src: file: Containerfile.iso:28] |
 | Custom `.deb` manifest (names, deps, versions, build scripts) | `workflows/bootc-debs-builder/packages.yml` [src: file: workflows/bootc-debs-builder/packages.yml:12] |
 | Package build toolchain image | `workflows/env.yml` [src: file: workflows/env.yml:15] |
@@ -134,7 +134,7 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | Kernel base config | `kernel/config` [src: file: workflows/bootc-debs-builder/packages.yml:76] |
 | Kernel module selection per target | `kernel/modules/{arm,generic,rk3588,rpi3,rpi4,rpi5,x86_64}` [src: file: workflows/bootc-debs-builder/kernel/modules/x86_64:1] |
 | Module signing default | `config.yml` [src: file: config.yml:11] |
-| Image APT source for the bootc repo | `src/bootcpreinstall/etc/apt/sources.list.d/debian-bootc.sources` [src: file: Containerfile:75] |
+| Image APT source for the bootc repo | `src/bootcpreinstall/etc/apt/sources.list.d/debian-bootc.sources` [src: file: Containerfile:68] |
 | Installer recipe (image list) | `src/buildisopreinstall/etc/bootc-installer/recipe.json`, regenerated by `scripts/gen-recipe.py` [src: file: scripts/gen-recipe.py:2] |
 | CI entry point | `.github/workflows/pipeline.yml` [src: file: .github/workflows/pipeline.yml:71] |
 
@@ -144,7 +144,7 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 
 | Technology | Version | Role |
 |------------|---------|------|
-| Debian | 13 Trixie (`debian:trixie`, unpinned) [src: file: Containerfile:5] | Base OS for images and build env |
+| Debian | 13 Trixie (`debian:trixie`, unpinned) [src: file: Containerfile.base:10] | Base OS for images and build env |
 | bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1114] | Bootable container tooling (built from source) |
 | OSTree | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1038] | Immutable OS deployment |
 | composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:984] | Root filesystem integrity |

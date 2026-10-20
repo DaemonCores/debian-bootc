@@ -1,18 +1,15 @@
 #####################################################################################
-# Base image
-# NOTE: use debian trixie not pined for auto security update
+# Standard image, built on Containerfile.base (Debian trixie, not pinned for auto
+# security update, with the SSL prerequisites and the trusted bootc APT repository).
+# The CI builds the base once per job and passes it as BASE_IMAGE; it never pushes it.
 #####################################################################################
-FROM debian:trixie
-STOPSIGNAL SIGRTMIN+3
+ARG BASE_IMAGE=localhost/debian-bootc-base
+FROM ${BASE_IMAGE}
+# The shell is inherited from the base; repeated so the linter and the reader see it.
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
-# Environment setup
 LABEL org.opencontainers.image.title="Debian Trixie bootc"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootable bootc/ostree container image, signed with cosign."
-LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
-LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
-LABEL org.opencontainers.image.licenses="LGPL-2.1"
-LABEL containers.bootc=1
-LABEL ostree.bootable=1
 # Asks the CI for two arm64 kernels (docs/decisions.md, "Two arm64 kernels"): the
 # plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
 # `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
@@ -22,88 +19,12 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # and the plain-tag arm64 kernel only. The 4 KB image has no twin.
 LABEL org.daemoncores.unsigned-kernel-image="true"
 
-# Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
-# Drives the kernel package name linux-image-${KERNEL_VARIANT}-${ARCH} and the
-# boot stack (${BOOT_PKG} is separate because arm64 does NOT follow grub-efi-${ARCH}).
-ARG ARCH=amd64
-# Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
-# absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
-# servers, VMs); `embedded` is arm64 boards whose firmware loads U-Boot.
-ARG BOOT_PROFILE=generic
-# Kernel variant: `minimal` (default) is the project kernel built from kernel.org
-# (daemoncores-kernel-<kver>), the same kernel as Containerfile.minimal.
-ARG KERNEL_VARIANT=minimal
-# arm64 only. The arm64 distribution ships two kernels because the page size is a
-# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
-# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
-# `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name and
-# ARM_DEVICES lists the device module packages that kernel serves. The CI passes the
-# values per image (16 KB on the plain arm64 tag, 4 KB on `<tag>-4k`); the defaults
-# build the 4 KB one.
-ARG KERNEL_SUFFIX=""
-ARG ARM_DEVICES="rpi3 rpi4"
-# Boot stack chosen by the CI from the architecture and the boot profile:
-# grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
-# u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
-# grub-efi-${ARCH} pattern in the embedded profile.
-ARG BOOT_PKG=grub-efi-amd64-signed
-# Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
-ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
-# Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
-# the arm64 embedded profile (no GRUB).
-ARG APT_HOLD_PKG=grub-efi-amd64-signed
-# SHA-256 checksum of the bootc APT repository signing key fetched below and
-# the repository URL. The CI derives both at build time from the repository's
-# APT_GPG_KEY secret; the defaults only serve local builds of the upstream
-# repository and must be overridden for any other APT repository.
-ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
-ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
-# Product display name, injected by the CI from the repo name (dashes -> spaces).
-# bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
-# /etc/os-release NAME.
-ARG PRODUCT_NAME=""
-# Setup all environement variables
-ENV DEBIAN_FRONTEND=noninteractive
-# Setup default shell with fail build on error
-SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 # -----------------------------------------------------------------------------
-# Phase 1: SSL prerequisites + APT sources (debianpreinstall)
+# Phase 3: Install the package set, kernel excluded (arch-conditional via ARG)
 # -----------------------------------------------------------------------------
-COPY ./src/debianpreinstall /
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        ca-certificates \
-        openssl \
-        git \
-        curl \
-        wget \
-    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
-    && rm -f \
-        "/etc/ssl/certs/988a38cb.0" \
-        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
-        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
-
-# -----------------------------------------------------------------------------
-# Phase 2: Trust the bootc APT repository
-# -----------------------------------------------------------------------------
-COPY ./src/bootcpreinstall /
-RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
-        /etc/apt/sources.list.d/debian-bootc.sources \
-    && wget \
-        --progress=dot:giga \
-        -O /usr/share/keyrings/debian-bootc-keyring.gpg \
-        "${BOOTC_APT_URL%/}/gpg.key" \
-    && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
-        | sha256sum -c - \
-    && mkdir -p /usr/lib/bootc \
-    && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name
-
-# -----------------------------------------------------------------------------
-# Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
-# -----------------------------------------------------------------------------
-# Both images run the single project kernel (daemoncores-kernel-<kver>, built from
-# kernel.org), installed through the virtual name linux-image-${KERNEL_VARIANT}-${ARCH}.
+# The kernel is NOT in this list: it is installed by the next RUN, so the signed image
+# and its -nosign twin share every layer up to here.
 # The standard image adds the same per-arch driver modules (linux-modules-*, see the
 # block after this RUN) so its hardware support does not shrink. Debian's own
 # linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/ fails bootc lint.
@@ -124,12 +45,29 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
 # The architecture specific recommends are installed in the per-arch block at
 # the end of this RUN: x86 GPU firmware on amd64; efibootmgr and the U-Boot
 # tooling (libubootenv-tool, device-tree-compiler) on arm64.
+# Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
+ARG ARCH=amd64
+# Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
+# absent): `generic` boots through UEFI with the Fedora GRUB, `embedded` is arm64
+# boards whose firmware loads U-Boot. The CI derives BOOT_PKG and APT_HOLD_PKG from it.
+ARG BOOT_PROFILE=generic
+# Boot stack chosen by the CI from the architecture and the boot profile:
+# grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
+# u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
+# grub-efi-${ARCH} pattern in the embedded profile.
+ARG BOOT_PKG=grub-efi-amd64-signed
+# Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
+ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
+# Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
+# the arm64 embedded profile (no GRUB).
+ARG APT_HOLD_PKG=grub-efi-amd64-signed
 RUN for _r in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/* && apt update && break; \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
+        git \
+        curl \
         ${FIRMWARE_PKGS} \
         bootc \
         bootupd \
@@ -214,13 +152,38 @@ RUN for _r in 1 2 3 4 5; do \
             firmware-intel-misc \
             firmware-nvidia-graphics; \
     else \
-        arm_modules=(); \
-        for _d in ${ARM_DEVICES}; do arm_modules+=("linux-modules-${_d}"); done; \
         apt install -y --no-install-recommends \
             efibootmgr \
             libubootenv-tool \
-            device-tree-compiler \
-            "${arm_modules[@]}"; \
+            device-tree-compiler; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Phase 3.1: Kernel and its device modules
+# -----------------------------------------------------------------------------
+# The only layer that differs between the signed image and its `-nosign` twin: the
+# project kernel (daemoncores-kernel-<kver>, built from kernel.org) is installed
+# through the virtual name linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}.
+# Debian's own linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/
+# fails bootc lint. The standard image adds the same per-arch driver modules
+# (linux-modules-*) so its hardware support does not shrink.
+# Kernel variant: `minimal` (default) is the project kernel, the same as Containerfile.minimal.
+ARG KERNEL_VARIANT=minimal
+# arm64 only. The arm64 distribution ships two kernels because the page size is a
+# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
+# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
+# `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name
+# (`-nosign` selects the unsigned-kernel twin) and ARM_DEVICES lists the device
+# module packages that kernel serves. The CI passes the values per image; the
+# defaults build the 4 KB one.
+ARG ARM_DEVICES="rpi3 rpi4"
+ARG KERNEL_SUFFIX=""
+RUN apt install -y --no-install-recommends \
+        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
+    && if [ "${ARCH}" != "amd64" ]; then \
+        for _d in ${ARM_DEVICES}; do \
+            apt install -y --no-install-recommends "linux-modules-${_d}"; \
+        done; \
     fi
 
 # -----------------------------------------------------------------------------

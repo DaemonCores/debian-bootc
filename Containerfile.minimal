@@ -6,7 +6,7 @@
 # masking; the < 10 MB stretch goal is unreachable without dropping systemd.
 #
 # Multi-arch strategy (BuildKit):
-#   - Single FROM debian:trixie; the image is built NATIVELY on the target-arch
+#   - Built on Containerfile.base (debian:trixie); the image is built NATIVELY on the target-arch
 #     runner (no QEMU cross-build), so apt pulls arch-matching .deb packages.
 #   - ARG ARCH (default amd64; CI overrides to arm64 via --build-arg ARCH=arm64)
 #     selects the kernel and firmware packages via the linux-image-${ARCH}
@@ -19,7 +19,7 @@
 #                    firmware-misc-nonfree
 #
 # Both architectures share:
-#   - debian:trixie base (no -slim variant published for trixie as of 2025)
+#   - Containerfile.base (debian:trixie, no -slim variant published for trixie as of 2025)
 #   - bootc / dracut / ostree stack (from the bootc APT repo)
 #   - systemd-networkd (shipped by systemd, not a separate package on Trixie)
 #   - systemd-timesyncd (repacked with network-online drop-in from bootc repo)
@@ -63,16 +63,13 @@
 # This file intentionally does NOT touch the original Containerfile.
 # #####################################################################################
 
-FROM debian:trixie
-STOPSIGNAL SIGRTMIN+3
+ARG BASE_IMAGE=localhost/debian-bootc-base
+FROM ${BASE_IMAGE}
+# The shell is inherited from the base; repeated so the linter and the reader see it.
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.title="Debian Trixie bootc minimal (multi-arch)"
 LABEL org.opencontainers.image.description="Ultra-minimal Debian 13 Trixie bootc/ostree image for x86_64 and ARM64. Research target: ~50 MB RAM idle."
-LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie"
-LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
-LABEL org.opencontainers.image.licenses="LGPL-2.1"
-LABEL containers.bootc=1
-LABEL ostree.bootable=1
 # Asks the CI for two arm64 kernels (docs/decisions.md, "Two arm64 kernels"): the
 # plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
 # `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
@@ -82,10 +79,18 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # and the plain-tag arm64 kernel only. The 4 KB image has no twin.
 LABEL org.daemoncores.unsigned-kernel-image="true"
 
+# Standing on Containerfile.base (SSL prerequisites, trusted bootc APT repository), so
+# the build starts at the package set. The CI builds the base once per job and passes
+# it as BASE_IMAGE; it never pushes it.
+# -----------------------------------------------------------------------------
+# Phase 3: Install the ultra-minimal package set, kernel excluded
+# -----------------------------------------------------------------------------
+# The kernel is installed by the next RUN, so the signed image and its `-nosign` twin
+# share every layer up to here. BOOT_PKG and FIRMWARE_PKGS stay separate ARGs because
+# arm64 does NOT follow the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is
+# empty on x86_64. wget, kept by the base for its key download, is purged here: the
+# minimal image does not carry it.
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
-# Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
-# grub-efi-${ARCH} on x86_64 and arm64 generic, u-boot-tools on arm64 embedded boards
-# (via BOOT_PKG override).
 ARG ARCH=amd64
 # Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
 # absent): `generic` boots through UEFI with the Fedora GRUB (amd64, and arm64 PCs,
@@ -99,92 +104,11 @@ ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: empty on x86_64 (downstream adds microcode); arm64 ships
 # firmware-linux-free firmware-misc-nonfree for SBC peripherals.
 ARG FIRMWARE_PKGS=""
-# Extra kernel cmdline for serial consoles: empty on x86_64; arm64 adds
-# console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200.
-ARG KERNEL_CMDLINE_SERIAL=""
-# `minimal` (default) installs linux-image-minimal-<arch>, the virtual name provided
-# by the custom kernel .deb (`daemoncores-kernel-<kver>`, built from kernel/config by
-# the bootc-debs-builder pipeline). See docs/minimal.md ("Kernel and auto-update").
-ARG KERNEL_VARIANT=minimal
-# arm64 only. The arm64 distribution ships two kernels because the page size is a
-# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
-# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
-# `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name and
-# ARM_DEVICES lists the device module packages that kernel serves. The CI passes the
-# values per image (16 KB on the plain arm64 tag, 4 KB on `<tag>-4k`); the defaults
-# build the 4 KB one.
-ARG KERNEL_SUFFIX=""
-ARG ARM_DEVICES="rpi3 rpi4"
-# SHA-256 of the bootc APT repo signing key and the repository URL. The CI
-# derives both at build time from the APT_GPG_KEY secret; the defaults only
-# serve local builds of the upstream repository.
-ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
-ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
-# Product display name (dashes -> spaces); empty falls back to /etc/os-release NAME.
-ARG PRODUCT_NAME=""
-
-ENV DEBIAN_FRONTEND=noninteractive
-SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
-
-# -----------------------------------------------------------------------------
-# Phase 1: SSL prerequisites + APT sources (debianpreinstall)
-# -----------------------------------------------------------------------------
-COPY ./src/debianpreinstall /
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        ca-certificates \
-        openssl \
-        wget \
-    && sed -i "s|http://|https://|g" /etc/apt/sources.list.d/debian.sources \
-    && rm -f \
-        "/etc/ssl/certs/988a38cb.0" \
-        "/etc/ssl/certs/NetLock_Arany_=Class_Gold=_Főtanúsítvány.pem" \
-        "/usr/share/ca-certificates/mozilla/NetLock_Arany_=Class_Gold=_Főtanúsítvány.crt"
-
-# -----------------------------------------------------------------------------
-# Phase 2: Trust the bootc APT repository
-# -----------------------------------------------------------------------------
-# COPY ./src/bootcpreinstall / must precede the sed below: the sources file
-# /etc/apt/sources.list.d/debian-bootc.sources (carrying the {{ ARCH }} token)
-# is shipped by this layer. Without the COPY first, sed fails under
-# `set -euo pipefail` because the file does not exist yet. Mirrors the main
-# Containerfile (COPY then sed, same order).
-COPY ./src/bootcpreinstall /
-RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
-        /etc/apt/sources.list.d/debian-bootc.sources \
-    && wget \
-        --progress=dot:giga \
-        -O /usr/share/keyrings/debian-bootc-keyring.gpg \
-        "${BOOTC_APT_URL%/}/gpg.key" \
-    && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
-        | sha256sum -c - \
-    && mkdir -p /usr/lib/bootc \
-    && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name \
-    && apt-get purge -y --autoremove wget
-
-# -----------------------------------------------------------------------------
-# Phase 3: Install the ultra-minimal package set (arch-conditional via ARG)
-# -----------------------------------------------------------------------------
-# Arch-specific kernel package is derived from KERNEL_VARIANT and ARCH via the
-# linux-image-${KERNEL_VARIANT}-${ARCH} naming pattern, so there is no if/else
-# here. The custom kernel .deb (daemoncores-kernel-<kver>, built by the
-# bootc-debs-builder pipeline) is repacked with
-# `Provides: linux-image-minimal-${ARCH}` so apt
-# resolves the virtual package name to it once the kernel build publishes.
-# Until the first kernel build succeeds, the package is absent from every repo
-# and the install fails — see docs/minimal.md.
-# BOOT_PKG and FIRMWARE_PKGS stay separate ARGs because arm64 does NOT follow
-# the grub-efi-${ARCH} pattern (u-boot-tools) and firmware is empty on x86_64.
-# Per-arch kernel modules are installed in a separate conditional RUN block
-# below (Phase 3.1) so each arch gets ALL its SBC-relevant modules in one go:
-# amd64 needs none (its overlay is part of the kernel); arm64 -> the device
-# packages of ARM_DEVICES (rpi3/rpi4 on the 4 KB kernel, rpi5/rk3588 on the 16 KB one). The modules are OPTIONAL — the kernel works without them.
 RUN for _r in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/* && apt update && break; \
         [ "$_r" -lt 5 ] && sleep 30; \
     done \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
         bootc \
         bootupd \
         podman \
@@ -197,20 +121,44 @@ RUN for _r in 1 2 3 4 5; do \
         iproute2 \
         systemd-timesyncd \
         ca-certificates \
+    && apt-get purge -y --autoremove wget \
     && rm -rf \
         /tmp/* \
         /var/tmp/* \
         /run/* \
-        /usr/sbin/policy-rc.d \
+        /usr/sbin/policy-rc.d
+
+# -----------------------------------------------------------------------------
+# Phase 3.1: Kernel and its device modules
+# -----------------------------------------------------------------------------
+# The only layer that differs between the signed image and its `-nosign` twin. The
+# kernel package is derived from KERNEL_VARIANT, KERNEL_SUFFIX and ARCH via the
+# linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} naming pattern, so there is no
+# if/else. The custom kernel .deb (daemoncores-kernel-<kver>, built by the
+# bootc-debs-builder pipeline) is repacked with `Provides: linux-image-minimal-${ARCH}`
+# so apt resolves the virtual name once the kernel build publishes. Until the first
+# kernel build succeeds, the package is absent from every repo and the install fails;
+# see docs/minimal.md ("Kernel and auto-update").
+ARG KERNEL_VARIANT=minimal
+# arm64 only. The arm64 distribution ships two kernels because the page size is a
+# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
+# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
+# `-16k`) for recent hardware. ARM_DEVICES lists the device module packages that
+# kernel serves (rpi3/rpi4 on the 4 KB kernel, rpi5/rk3588 on the 16 KB one); they
+# are optional, the kernel works without them. The CI passes the values per image;
+# the defaults build the 4 KB one.
+ARG ARM_DEVICES="rpi3 rpi4"
+ARG KERNEL_SUFFIX=""
+RUN apt install -y --no-install-recommends \
+        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} \
     && if [ "${ARCH}" = "arm64" ]; then \
-        arm_modules=(); \
-        for _d in ${ARM_DEVICES}; do arm_modules+=("linux-modules-${_d}"); done; \
-        apt update \
-        && apt install -y --no-install-recommends "${arm_modules[@]}"; \
+        for _d in ${ARM_DEVICES}; do \
+            apt install -y --no-install-recommends "linux-modules-${_d}"; \
+        done; \
     fi
 
 # -----------------------------------------------------------------------------
-# Phase 3: GRUB kernel command line (arch-conditional)
+# Phase 4: GRUB kernel command line (arch-conditional)
 # -----------------------------------------------------------------------------
 # quiet: suppress kernel boot messages. init_on_alloc=0: disable default-on page
 # zeroing hardening (unjustified on a no-untrusted-workload minimal image; saves
@@ -222,6 +170,9 @@ RUN for _r in 1 2 3 4 5; do \
 # Idempotent upsert without a conditional: touch guarantees the file exists (u-boot
 # on arm64 ships no /etc/default/grub), sed -i /d removes any prior directive line,
 # printf >> appends the fresh value. Fixes A3 (no duplication on rebuild).
+# Extra kernel cmdline for serial consoles: empty on x86_64; arm64 adds
+# console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200.
+ARG KERNEL_CMDLINE_SERIAL=""
 COPY ./src/minimalpostinstall /
 RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
     && printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0%s%s"\n' \
@@ -255,7 +206,7 @@ RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
         logrotate.service
 
 # -----------------------------------------------------------------------------
-# Phase 4: ostree filesystem migration
+# Phase 5: ostree filesystem migration
 # -----------------------------------------------------------------------------
 # bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
 # read-only /usr tree can be swapped atomically while mutable state persists in /var.
@@ -273,7 +224,7 @@ COPY ./src/signaturepolicy /
 RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_PUBKEY_B64}"
 
 # -----------------------------------------------------------------------------
-# Phase 5: Healthcheck
+# Phase 6: Healthcheck
 # -----------------------------------------------------------------------------
 # bootc images are updated in-place via ostree; a healthcheck would spawn a
 # process on a schedule, defeating the minimal RAM target.

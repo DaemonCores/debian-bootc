@@ -146,3 +146,20 @@ def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
     build = _packages()['linux-image']['build']
     assert 'PROVIDES="${PROVIDES}, ${KERNEL_PKG} (= ${BUILT_VER})"' in build
     assert 'Conflicts: %s, %s, linux-image-%s' in build
+
+
+def test_images_build_on_the_shared_base() -> None:
+    """Both images start from the base and install the kernel in its own RUN."""
+    root = MANIFEST.parents[2]
+    base = (root / 'Containerfile.base').read_text()
+    assert 'FROM debian:trixie' in base
+    assert 'KERNEL_SUFFIX' not in base
+    for name in ('Containerfile', 'Containerfile.minimal'):
+        text = (root / name).read_text()
+        assert 'FROM ${BASE_IMAGE}' in text, name
+        assert 'FROM debian:trixie' not in text, name
+        suffix = text.index('ARG KERNEL_SUFFIX')
+        assert text.index(
+            '        linux-image-${KERNEL_VARIANT}'
+        ) > suffix, name
+        assert 'bootcpreinstall' not in text, name

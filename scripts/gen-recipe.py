@@ -48,8 +48,9 @@ def _build_images(
     images: list[JsonObject] = []
 
     containerfiles = sorted(
-        cf for cf in os.listdir(ctx_dir) if cf.startswith("Containerfile") and
-        os.path.isfile(os.path.join(ctx_dir, cf)) and cf != "Containerfile.iso"
+        cf for cf in os.listdir(ctx_dir) if cf.startswith("Containerfile")
+        and os.path.isfile(os.path.join(ctx_dir, cf)) and cf not in
+        ("Containerfile.iso", "Containerfile.base")
     )
 
     for cf in containerfiles:
