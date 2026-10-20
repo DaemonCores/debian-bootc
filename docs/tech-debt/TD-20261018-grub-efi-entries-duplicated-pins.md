@@ -30,9 +30,9 @@ metadata:
 A GRUB bump or security pin change has to be made in two places. If one is missed, amd64 and arm64 ship different GRUB builds under the same `GRUB_VER` label.
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/packages.yml:809-685` — amd64 pins
-- `workflows/bootc-debs-builder/packages.yml:983-859` — identical arm64 pins
-- `workflows/bootc-debs-builder/packages.yml:974-850` — 'mirrors grub-efi-amd64-signed'
+- `workflows/bootc-debs-builder/packages.yml:811-687` — amd64 pins
+- `workflows/bootc-debs-builder/packages.yml:985-861` — identical arm64 pins
+- `workflows/bootc-debs-builder/packages.yml:976-852` — 'mirrors grub-efi-amd64-signed'
 
 ## Suggested direction
 Use one entry parameterised on `dpkg --print-architecture` (target and EFI suffix), or move the shared build into a sourced script that holds a single pin.

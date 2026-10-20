@@ -87,3 +87,13 @@ def test_kernel_signing_users_hash_the_library() -> None:
             for e in users} == {'linux-image', 'linux-modules-arm-device'}
     for entry in users:
         assert library in entry['sources'], entry['name']
+
+
+def test_kernel_signing_forces_only_when_active() -> None:
+    """Enforcement and the MOK keyrings are tied to the signing option."""
+    text = (PACKAGES / 'lib/kernel-signing.sh').read_text()
+    assert 'MODULE_SIG_FORCE' in text
+    assert 'INTEGRITY_MACHINE_KEYRING' in text
+    assert 'kernel_signing_verify' in text
+    kernel = next(e for e in _packages() if e['name'] == 'linux-image')
+    assert 'kernel_signing_verify' in kernel['build']

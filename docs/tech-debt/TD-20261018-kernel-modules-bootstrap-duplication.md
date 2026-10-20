@@ -30,7 +30,7 @@ The `build:` scripts of `linux-modules-arm`, `linux-modules-arm-device` and `lin
 Fixes to this bootstrap are delicate and well documented (the linux-upstream pseudo-source and the modpost `__fentry__` failure), and each one must be applied 3–4 times by hand. If one copy is missed, a single device's module job breaks.
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/packages.yml:290` — linux-modules-arm-device, the only entry left that sources `kernel_prepare`
+- `workflows/bootc-debs-builder/packages.yml:292` — linux-modules-arm-device, the only entry left that sources `kernel_prepare`
 
 ## Suggested direction
 Extract the bootstrap into one script, for example `workflows/bootc-debs-builder/preinstall/build/kernel-prepare.sh`, add it to each entry's `sources:` so it is hashed, and source it from each `build:` block.

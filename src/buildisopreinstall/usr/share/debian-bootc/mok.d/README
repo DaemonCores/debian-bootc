@@ -1,0 +1,5 @@
+Public certificates (*.crt, *.cer, *.pem, *.der) placed here are enrolled
+through MOK by the installer (mok-stage), all in one request with one password.
+A fork drops the certificate of its own signing key here to have its modules
+trusted by the machine keyring. Only certificates: files holding a private key
+are refused.
