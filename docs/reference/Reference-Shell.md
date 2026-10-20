@@ -167,7 +167,7 @@ generated its signing key yet (first CI run, or no PAT_SECRETS) ships images
 without a policy rather than a policy no image can satisfy. Shared by
 Containerfile and Containerfile.minimal.
 
-## `src/autoupdate/usr/bin/autoupdate`
+## `src/debianpostinstall/usr/bin/autoupdate`
 
 Switch the automatic bootc updates on or off.
 
@@ -177,8 +177,21 @@ Automatic updates are driven by bootc-fetch-apply-updates.timer, enabled by
 the bootc package. Masking it (a symlink to /dev/null in /etc/systemd/system)
 is the opt-out the bootc-installer writes at install time; this command does
 the same on devices that were not installed with the bootc-installer, such
-as embedded boards flashed from a disk image. Shared by Containerfile and
-Containerfile.minimal.
+as embedded boards flashed from a disk image. The same file sits in
+src/debianpostinstall and src/minimalpostinstall (one per image).
+
+## `src/minimalpostinstall/usr/bin/autoupdate`
+
+Switch the automatic bootc updates on or off.
+
+Usage: autoupdate enable|disable|status
+
+Automatic updates are driven by bootc-fetch-apply-updates.timer, enabled by
+the bootc package. Masking it (a symlink to /dev/null in /etc/systemd/system)
+is the opt-out the bootc-installer writes at install time; this command does
+the same on devices that were not installed with the bootc-installer, such
+as embedded boards flashed from a disk image. The same file sits in
+src/debianpostinstall and src/minimalpostinstall (one per image).
 
 ## `workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst`
 

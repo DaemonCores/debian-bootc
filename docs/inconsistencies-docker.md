@@ -4,7 +4,7 @@ Scope: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`, `.dockerig
 
 The images are bootc/ostree **bootable OS images** (`LABEL containers.bootc=1` [src: file: Containerfile.base:17]), not long-running app containers. Therefore:
 - No `USER <non-root>`: N/A. The image is a root filesystem booted by systemd as PID 1 (`STOPSIGNAL SIGRTMIN+3` [src: file: Containerfile.base:11]).
-- `HEALTHCHECK NONE` is set explicitly with a rationale in all three files [src: file: Containerfile:216-217] [src: file: Containerfile.minimal:237-238] [src: file: Containerfile.iso:106-107].
+- `HEALTHCHECK NONE` is set explicitly with a rationale in all three files [src: file: Containerfile:212-213] [src: file: Containerfile.minimal:233-234] [src: file: Containerfile.iso:106-107].
 - Multi-stage and `COPY --chown`: N/A. There is no build toolchain stage, and every `COPY` writes OS files that root must own.
 - Apt list cleanup is global via `DPkg::Post-Invoke` [src: file: src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean:1].
 - No secrets in `ARG`. The only remote fetch (bootc GPG key) is checked with `sha256sum -c` [src: file: Containerfile.base:61-66]. No `ADD <url>`.
