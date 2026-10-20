@@ -151,7 +151,7 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | bootupd | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:865] | Bootloader updates |
 | GRUB (BLS-capable, signed) | 1+2.12+9+fedora44 [src: file: workflows/bootc-debs-builder/packages.yml:544] | EFI bootloader (amd64/arm64) |
 | bootc-installer | 3.0.0+git0290d4f+bootc7 [src: file: workflows/bootc-debs-builder/packages.yml:1221] | Installer for ISOs |
-| fisherman | 0.3.0+git4dc8f1c [src: file: workflows/bootc-debs-builder/packages.yml:1163] | Go tool packaged as `.deb` (requires Go ≥ 1.22) [src: file: workflows/bootc-debs-builder/packages.yml:1177] |
+| fisherman | 0.3.0+git4dc8f1c [src: file: workflows/bootc-debs-builder/packages.yml:1162] | Go tool packaged as `.deb` (requires Go ≥ 1.22) [src: file: workflows/bootc-debs-builder/packages.yml:1176] |
 | firstboot-user-setup | 1.0.2 [src: file: workflows/bootc-debs-builder/packages.yml:18] | First-boot user wizard |
 | Rust | rustup minimal profile, version unpinned [src: file: workflows/env.yml:101] | Builds bootc/bootupd |
 | Podman | unpinned [src: file: README.md:62] | Image build |
