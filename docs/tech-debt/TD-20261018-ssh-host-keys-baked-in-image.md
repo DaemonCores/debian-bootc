@@ -24,7 +24,7 @@ metadata:
 - **Blast radius**: local (1-2 files)
 
 ## Problem (fact)
-`Containerfile` and `Containerfile.minimal` install `openssh-server` during the image build. No Containerfile, overlay, or first-boot script deletes `/etc/ssh/ssh_host_*`, runs `ssh-keygen -A`, or ships a host-key generation unit (`grep -rnE 'ssh_host|ssh-keygen'` over the repo finds nothing). `sshd` is expected to be active on the main image (`workflows/tests.yml:189-196`).
+`Containerfile` and `Containerfile.minimal` install `openssh-server` during the image build. No Containerfile, overlay, or first-boot script deletes `/etc/ssh/ssh_host_*`, runs `ssh-keygen -A`, or ships a host-key generation unit (`grep -rnE 'ssh_host|ssh-keygen'` over the repo finds nothing). `sshd` is expected to be active on the main image (`workflows/tests.yml:253-260`).
 
 Verified: the cleanup step is missing from the repo. Hypothesis: Debian's `openssh-server` postinst generates host keys when the package is configured, which would put those keys in the published GHCR layer. Confirm with `podman run --rm ghcr.io/daemoncores/debian-bootc:latest-amd64 ls /etc/ssh/` before acting.
 
