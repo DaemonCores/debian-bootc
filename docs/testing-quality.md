@@ -15,7 +15,7 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 | bootc validation (lint) | Runs in the shared image workflow after the build [src: file: docs/architecture.md:60]; a second `/usr/lib/modules/<kver>/` fails it [src: file: Containerfile:48] | Every image | Yes |
 | Runtime boot tests | `workflows/tests.yml`, run over SSH on a QEMU/KVM boot of the installed image [src: file: workflows/tests.yml:1] | 48 tests, see [Test suites](#test-suites) | Yes: a failing test blocks the push [src: file: workflows/tests.yml:3] |
 | Test manifest integrity | The harness refuses to run if any test lacks `diag` [src: file: workflows/tests.yml:11] | `workflows/tests.yml` | Yes |
-| Format / lint of shell, YAML, Python | shellcheck (`.shellcheckrc`), hadolint (`.hadolint.yaml`), yamllint (`.yamllint.yml`), ruff (`pyproject.toml`) — run via `make lint` [src: file: Makefile:1] | All scripts, Containerfiles, YAML manifests, `scripts/gen-recipe.py` | Yes, via the `.github/workflows/lint.yml` caller of the shared DaemonCores-CI `lint.yml` (not yet run on GitHub) |
+| Format / lint of shell, YAML, Python | shellcheck (`.shellcheckrc`), hadolint (`.hadolint.yaml`), yamllint (`.yamllint.yml`), ruff (`pyproject.toml`) — run via `make lint` [src: file: Makefile:1] | All scripts, Containerfiles, YAML manifests, `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` | Yes, via the `.github/workflows/lint.yml` caller of the shared DaemonCores-CI `lint.yml` (not yet run on GitHub) |
 <!-- kronn:section:end -->
 
 <!-- kronn:section name="test-infrastructure" curated="ai" owner="audit" audit="2026-10-18" -->
@@ -23,7 +23,7 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 
 | Layer | Runner | Config file | Runtime / version |
 |-------|--------|-------------|-------------------|
-| Local smoke checks | `make test` — manifest integrity (name/diag count), Python syntax, ruff [src: file: Makefile:1] | `workflows/tests.yml`, `scripts/gen-recipe.py` | Local, no container needed |
+| Local smoke checks | `make test` — manifest integrity (name/diag count), Python syntax, ruff [src: file: Makefile:1] | `workflows/tests.yml`, `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` | Local, no container needed |
 | Unit tests (pytest) | `make test-unit`: `tests/unit/` covers `gen-recipe.py` and the `domain-set` / `ifupdown2-autoconf` boot scripts, the installer `mok-stage` (one import for all certificates, private keys refused) and `lib/kernel-signing.sh` (forces enforcement only when signing is active) (sandboxed root, stub binaries) [src: file: tests/unit/test_shell_scripts.py:1] | `pyproject.toml` | Local, no container, no privilege |
 | Integration tests (pytest) | `make test-unit` also runs `tests/integration/`: `gen-recipe.py` runs on the real Containerfiles and the kernel helper users hash their library [src: file: tests/integration/test_build_context.py:1] | `pyproject.toml` | Local, no container; does not run `podman build` |
 | Shared checks | `make check-shared` and `make docs-check` run the `DaemonCores-CI/scripts/` gates: docstring presence (`check_docstrings.py`), `workflows/tests.yml` manifest (`check_tests_manifest.py`), `COPY` sources, `.dockerignore` and `packages.yml` coherence (`check_build_context.py`), reference pages (`gen_docs.py --check`) and `[src: file: path:LINE]` citations plus relative links (`check_docs.py`) [src: file: Makefile:1] | `pyproject.toml` | Local and CI, no container; `CI_REPO` points at the DaemonCores-CI checkout |
@@ -83,7 +83,7 @@ Build-time suites: 13 labelled content checks across the `packages.yml` build sc
 grep -c '^  - name:' workflows/tests.yml; grep -c '^    diag:' workflows/tests.yml
 
 # 2. Syntax-check the installer recipe generator
-python3 -m py_compile scripts/gen-recipe.py
+python3 -m py_compile src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py
 
 # 3. Local full-image build (amd64 host)
 podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .

@@ -24,14 +24,14 @@ metadata:
 - **Blast radius**: local (1-2 files)
 
 ## Problem (fact)
-In `Containerfile.iso`, `COPY Containerfile* /tmp/recipe-gen/` and `COPY ./scripts/gen-recipe.py` (plus the generator `RUN`) come before the `apt install` of the installer stack (fisherman, bootc-installer, cage, mesa, NetworkManager, GTK/GNOME libs). The apt layer does not depend on the recipe output.
+In `Containerfile.iso`, `COPY Containerfile* /tmp/recipe-gen/` and `COPY ./src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` (plus the generator `RUN`) come before the `apt install` of the installer stack (fisherman, bootc-installer, cage, mesa, NetworkManager, GTK/GNOME libs). The apt layer does not depend on the recipe output.
 
 ## Impact
-Editing any `Containerfile*` or `scripts/gen-recipe.py` invalidates the cached apt layer, forcing a full re-download/install of the installer stack on every ISO build that follows a variant edit.
+Editing any `Containerfile*` or `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` invalidates the cached apt layer, forcing a full re-download/install of the installer stack on every ISO build that follows a variant edit.
 
 ## Where (pointers)
-- `Containerfile.iso:56-64` — recipe-gen COPY + RUN
-- `Containerfile.iso:65-82` — apt install of the installer stack
+- `Containerfile.iso:59-67` — recipe-gen COPY + RUN
+- `Containerfile.iso:68-86` — apt install of the installer stack
 
 ## Suggested direction
 Move the `RUN apt update && apt install ...` block above the `COPY Containerfile*` / `gen-recipe.py` steps (keep `COPY ./src/buildisopreinstall /` first only if the apt sources it ships are needed by the install).
@@ -40,4 +40,4 @@ Move the `RUN apt update && apt install ...` block above the `COPY Containerfile
 `create ticket`
 
 ## Resolution
-The recipe generation (`COPY Containerfile*`, `COPY gen-recipe.py`, generator `RUN`) now follows the installer-stack `apt install` in `Containerfile.iso`, so editing a Containerfile or the generator no longer invalidates the apt layer. `COPY ./src/buildisopreinstall /` stays first. Not yet verified by a real ISO build.
+The recipe generation (`COPY Containerfile*`, generator `RUN`) now follows the installer-stack `apt install` in `Containerfile.iso`. The generator lives in the `src/buildisopreinstall` overlay, so only `src/buildisopreinstall/sbin` (the `policy-rc.d` guard apt needs) is copied before the apt layer and the whole overlay after it: editing a Containerfile or the generator no longer invalidates the apt layer. Not yet verified by a real ISO build.
