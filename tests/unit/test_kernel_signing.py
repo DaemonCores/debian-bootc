@@ -93,17 +93,42 @@ def test_active_forces_enforcement_and_keyrings(tree: Path) -> None:
         assert f'--enable {option}' in logged(tree)
 
 
-def test_inactive_forces_nothing(tree: Path) -> None:
-    """Without the option nothing is forced and no key is written.
+def test_inactive_keeps_module_sig_without_enforcing(tree: Path) -> None:
+    """Without a key MODULE_SIG stays on, nothing is signed or enforced.
 
     Args:
         tree: Fake kernel tree.
     """
     result = call(tree, 'kernel_signing_setup', MODULE_SIGNING_ACTIVE='no')
     assert result.returncode == 0, result.stderr
-    assert 'FORCE' not in logged(tree)
-    assert '--enable' not in logged(tree)
+    log = logged(tree)
+    assert '--enable MODULE_SIG ' in log
+    assert '--disable MODULE_SIG_ALL' in log
+    assert '--disable MODULE_SIG_FORCE' in log
+    assert '--enable MODULE_SIG_FORCE' not in log
     assert not (tree / 'certs').exists()
+
+
+def test_unsigned_kernel_variant_signs_but_does_not_enforce(tree: Path) -> None:
+    """The nosign kernel keeps the key and keyrings but not the enforcement.
+
+    Args:
+        tree: Fake kernel tree.
+    """
+    result = call(
+        tree,
+        'kernel_signing_setup',
+        MODULE_SIGNING_ACTIVE='yes',
+        MODULE_SIGNING_KEY='KEY',
+        MODULE_SIGNING_CERT='CERT',
+        KERNEL_SIGNING_ENFORCE='no'
+    )
+    assert result.returncode == 0, result.stderr
+    log = logged(tree)
+    assert '--enable MODULE_SIG_ALL' in log
+    assert '--enable INTEGRITY_MACHINE_KEYRING' in log
+    assert '--disable MODULE_SIG_FORCE' in log
+    assert '--enable MODULE_SIG_FORCE' not in log
 
 
 def test_active_without_key_fails(tree: Path) -> None:
@@ -126,5 +151,33 @@ def test_verify_detects_a_dropped_option(tree: Path) -> None:
     failed = call(tree, 'kernel_signing_verify', MODULE_SIGNING_ACTIVE='yes')
     assert failed.returncode == 1
     assert 'CONFIG_MODULE_SIG_FORCE' in failed.stderr
+    assert 'CONFIG_SECONDARY_TRUSTED_KEYRING' in failed.stderr
     skipped = call(tree, 'kernel_signing_verify', MODULE_SIGNING_ACTIVE='no')
     assert skipped.returncode == 0
+
+
+def test_verify_requires_module_sig_and_matching_force(tree: Path) -> None:
+    """MODULE_SIG must be on everywhere, FORCE only where enforced.
+
+    Args:
+        tree: Fake kernel tree.
+    """
+    (tree / '.config').write_text('# CONFIG_MODULE_SIG is not set\n')
+    off = call(tree, 'kernel_signing_verify', MODULE_SIGNING_ACTIVE='no')
+    assert off.returncode == 1
+    assert 'CONFIG_MODULE_SIG is off' in off.stderr
+    (tree /
+     '.config').write_text('CONFIG_MODULE_SIG=y\nCONFIG_MODULE_SIG_FORCE=y\n')
+    forced = call(tree, 'kernel_signing_verify', MODULE_SIGNING_ACTIVE='no')
+    assert forced.returncode == 1
+    assert 'must not enforce' in forced.stderr
+    nosign = call(
+        tree,
+        'kernel_signing_verify',
+        MODULE_SIGNING_ACTIVE='yes',
+        KERNEL_SIGNING_ENFORCE='no'
+    )
+    assert nosign.returncode == 1
+    (tree / '.config').write_text('CONFIG_MODULE_SIG=y\n')
+    clean = call(tree, 'kernel_signing_verify', MODULE_SIGNING_ACTIVE='no')
+    assert clean.returncode == 0, clean.stderr

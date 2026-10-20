@@ -34,10 +34,10 @@ def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
         (tmp_path / name).write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
     assert [i["imgref"] for i in images] == [
-        "reg/x:latest-amd64-autoupdate",
-        "reg/x:latest-arm64-autoupdate",
-        "reg/x:minimal-amd64-autoupdate",
-        "reg/x:minimal-arm64-autoupdate",
+        "reg/x:latest_amd64",
+        "reg/x:latest_arm64",
+        "reg/x:minimal_amd64",
+        "reg/x:minimal_arm64",
     ]
     assert images[0]["name"] == "Deb Standard (amd64)"
     assert images[2]["name"] == "Deb Minimal (amd64)"
@@ -68,7 +68,7 @@ def test_main_updates_only_images_fields(tmp_path: Path) -> None:
     )
     data = json.loads(recipe.read_text(encoding="utf-8"))
     assert data["branding"] == "keep"
-    assert data["imgref"] == "reg/x:latest-amd64-autoupdate"
+    assert data["imgref"] == "reg/x:latest_amd64"
     assert len(data["images"]) == 2
 
 
@@ -88,4 +88,4 @@ def test_build_images_filters_on_arch(tmp_path: Path) -> None:
     """
     (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "arm64")
-    assert [i["imgref"] for i in images] == ["reg/x:latest-arm64-autoupdate"]
+    assert [i["imgref"] for i in images] == ["reg/x:latest_arm64"]

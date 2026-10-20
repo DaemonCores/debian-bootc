@@ -38,7 +38,7 @@ The repository is under active development. The amd64 path is the current instal
 | `Containerfile` | `latest` | General-purpose Debian bootc system with SSH, Podman, ifupdown2, firmware, troubleshooting tools, and the first-boot wizard. |
 | `Containerfile.minimal` | `minimal` | Reduced system using systemd-networkd, a smaller package set, non-persistent journald storage, and masked background services. |
 
-The minimal Containerfile declares both automatic-update and lock variants. The CI publishes architecture-specific tags and then creates manifest-list tags after successful builds.
+Each image is published once per tag, with automatic updates on by default (a symlink in `/etc` switches them off). The CI publishes architecture-specific tags and then creates manifest-list tags after successful builds.
 
 ## Pipeline
 
@@ -85,8 +85,6 @@ The installer is destructive to the selected disk. Review the prompt carefully a
 | `SB_SIGNING_KEY`, `SB_SIGNING_CERT` | Self-signed Secure Boot key and certificate for the custom EFI bootloader package. Generated automatically; firmware only trusts the certificate once it is enrolled (MOK or db). |
 | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY` | Image signing key of this repository. Generated automatically; a fork gets its own key and its own signed images. |
 | `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Generated automatically when module signing is enabled. When it is active the kernel build also enforces signatures (`MODULE_SIG_FORCE`) and builds the secondary and machine keyrings; when it is not, nothing is signed and nothing is forced. |
-
-In `both` mode (with the signing key present) the pipeline builds every package and image twice: the signed set under the suite `trixie` and the usual tags, the unsigned set under the suite `trixie-nosign` and tags suffixed `-nosign` (the build time of the packages and images roughly doubles; the ISO and disk images follow the signed variant).
 
 Without `PAT_SECRETS` nothing is generated: images are signed keyless and modules stay unsigned. The workflow needs `actions: write` so `prepare` can restart the pipeline.
 

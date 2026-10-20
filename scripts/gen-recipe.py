@@ -56,7 +56,7 @@ def _build_images(
         tag = "latest" if cf == "Containerfile" else cf[len("Containerfile."):]
         variant = "Standard" if tag == "latest" else tag.capitalize()
         for arch in arches:
-            imgref = f"{registry}:{tag}-{arch}-autoupdate"
+            imgref = f"{registry}:{tag}_{arch}"
             images.append({
                 "name": f"{distro_name} {variant} ({arch})",
                 "imgref": imgref,

@@ -24,7 +24,7 @@ metadata:
 - **Blast radius**: module (3-5 files)
 
 ## Problem (fact)
-CI signs published images with keyless cosign (`docs/justifications.md:55`). The image overlays (`src/`, `workflows/bootc-debs-builder/*postinstall/`) ship no `/etc/containers/policy.json` and no `/etc/containers/registries.d/*.yaml` with `use-sigstore-attachments` or a `sigstoreSigned` requirement for `ghcr.io/daemoncores`. The `bootc` package postinst enables `bootc-fetch-apply-updates.timer`, and the installer catalog points at `*-autoupdate` tags.
+CI signs published images with keyless cosign (`docs/justifications.md:55`). The image overlays (`src/`, `workflows/bootc-debs-builder/*postinstall/`) ship no `/etc/containers/policy.json` and no `/etc/containers/registries.d/*.yaml` with `use-sigstore-attachments` or a `sigstoreSigned` requirement for `ghcr.io/daemoncores`. The `bootc` package postinst enables `bootc-fetch-apply-updates.timer`, and the installer catalog points at the `latest_<arch>` tags.
 
 ## Impact
 An attacker who can push to the GHCR package (leaked token, compromised CI, or the moving `@main` shared workflow, see TD-20261018-reusable-workflow-main-ref) gets a malicious OS image installed and booted as root on every auto-updating host. The signature exists but nothing on the hosts checks it.
@@ -32,7 +32,7 @@ An attacker who can push to the GHCR package (leaked token, compromised CI, or t
 ## Where (pointers)
 - `docs/justifications.md:55` — cosign signing documented
 - `workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:6` — auto-update timer enabled
-- `src/buildisopreinstall/etc/bootc-installer/recipe.json:4-8` — installs `*-autoupdate` imgrefs
+- `src/buildisopreinstall/etc/bootc-installer/recipe.json:4-8` — installs `_<arch>` imgrefs
 - `src/buildisopreinstall/etc/containers/` — only `containers.conf` / `storage.conf`, no policy
 
 ## Suggested direction

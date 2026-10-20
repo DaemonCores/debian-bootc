@@ -40,8 +40,10 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     """The project kernel has its own name and Provides only the minimal one."""
     lines = _packages()['linux-image']['build'].splitlines()
     build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
-    assert 'Package: daemoncores-kernel-' in build
-    assert 'Provides: linux-image-minimal%s-%s' in build
+    assert 'PKG_NAME="${KERNEL_PKG}"' in build
+    assert 'KERNEL_PKG="daemoncores-kernel-' in build
+    provides = 'PROVIDES="linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}"'
+    assert provides in build
     assert 'linux-image-stock' not in build
     assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
 
@@ -104,7 +106,7 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
     """The kernel entry builds a 4 KB kernel and an arm64-only 16 KB one."""
     entry = _packages()['linux-image']
     variants = _variants('linux-image')
-    assert set(variants) == {'', '-16k'}
+    assert set(variants) == {'', '-16k', '-nosign', '-16k-nosign'}
     assert entry['env']['KERNEL_PAGES'] == '4k'
     assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
     assert variants['-16k']['when'] == {'arch': 'arm64'}
@@ -124,3 +126,23 @@ def test_each_arm_module_follows_its_kernel() -> None:
     for recent in ('rpi5', 'rk3588'):
         assert devices[recent]['deps'] == ['linux-image-16k'], recent
         assert devices[recent]['env'] == {'KERNEL_SUFFIX': '-16k'}, recent
+
+
+def test_only_the_generic_kernels_have_an_unsigned_twin() -> None:
+    """The unsigned kernel exists for amd64 and the 16 KB arm64 kernel only."""
+    variants = _variants('linux-image')
+    for key, arch, pages in (('-nosign', 'amd64', None),
+                             ('-16k-nosign', 'arm64', '16k')):
+        variant = variants[key]
+        assert variant['when'] == {'arch': arch, 'unsigned-kernel': True}, key
+        assert variant['env']['KERNEL_SIGNING_ENFORCE'] == 'no', key
+        assert variant['deb-glob'] == f'linux-image-common{key}_*', key
+        assert variant['env'].get('KERNEL_PAGES') == pages, key
+    assert 'KERNEL_SIGNING_ENFORCE' not in variants['-16k'].get('env', {})
+
+
+def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
+    """The twin Provides the signed name the device modules Depend on."""
+    build = _packages()['linux-image']['build']
+    assert 'PROVIDES="${PROVIDES}, ${KERNEL_PKG} (= ${BUILT_VER})"' in build
+    assert 'Conflicts: %s, %s, linux-image-%s' in build

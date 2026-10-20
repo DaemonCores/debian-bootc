@@ -1,7 +1,7 @@
 Types: deb
 Architectures: {{ ARCH }}
 URIs: {{ APT_URL }}/
-Suites: {{ APT_SUITE }}
-Components: {{ APT_COMPONENT }}
+Suites: trixie
+Components: main
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-bootc-keyring.gpg

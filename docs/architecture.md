@@ -70,10 +70,10 @@ Tests cover the bootc deployment, OSTree and composefs mounts, writable state, b
 Architecture-specific tags follow this shape:
 
 ```text
-<variant>_<arch>_<autoupdate|lock>
+<tag>_<arch>
 ```
 
-Examples include `latest_amd64_autoupdate`, `minimal_arm64_autoupdate`, and `minimal_amd64_lock`. After all architecture jobs succeed, the workflow publishes manifest-list aliases such as `latest`, `minimal`, `minimal_autoupdate`, and `minimal_lock` where applicable.
+Examples include `latest_amd64` and `minimal_arm64`. After all architecture jobs succeed, the workflow publishes the manifest-list tags `latest` and `minimal`. In `both` signing mode, Containerfiles that carry the `org.daemoncores.unsigned-kernel-image` label also get a `<tag>-nosign` twin that differs only by its unsigned kernel.
 
 ## Installation media
 
