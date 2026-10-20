@@ -26,17 +26,17 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 ### Conventions
 
 - Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:49] [src: file: Containerfile.minimal:123].
-- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:51] [src: file: Containerfile:68] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:141].
+- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:51] [src: file: Containerfile:72] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:145].
 - Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:55] [src: file: Containerfile.minimal:127] [src: file: Containerfile.iso:65].
 - Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:56] [src: file: Containerfile.minimal:128] [src: file: Containerfile.iso:66].
 - Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:21] [src: file: Containerfile:30].
-- Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:72] [src: file: Containerfile.minimal:149].
+- Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:76] [src: file: Containerfile.minimal:153].
 
 ### Common mistakes to avoid
 
 - In an `if/else/fi` inside `RUN`, ending the last package line with `\` and no `;` joins `else`/`fi` onto the `apt install` arguments. Terminate the command with `;` before `else`/`fi` [src: commit: c88288c].
 - Never start a `RUN` with `&&`. This mistake was hidden by layer caching until a no-cache build exposed it [src: commit: e4b073f].
-- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:94].
+- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:99].
 - Use the package names actually published in the APT repo. Debian names use hyphens, never underscores (the former `linux-modules-x86-64` package, not `linux-modules-x86_64`, was published under the hyphenated name) [src: commit: f35af91]. Do not install packages that have no `packages.yml` entry, e.g. `linux-headers` [src: commit: 7046317].
 
 ## Shell (bash / POSIX sh)
