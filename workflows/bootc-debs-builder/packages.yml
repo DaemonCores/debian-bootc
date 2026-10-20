@@ -106,6 +106,7 @@ packages:
       - kernel/patches.lock.json
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
+      - lib/kernel-signing.sh
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
     # whose series every patch source (CachyOS, ROCKNIX) already provides
     # (version and tarball sha256 resolved before each build, nothing pinned).
@@ -176,6 +177,10 @@ packages:
       # Merge the base config (filesystems, virtio, serial, disables — the
       # base for every device). merge_config.sh -m merges in place.
       scripts/kconfig/merge_config.sh -m .config "${CONFIG_FILES[@]}"
+      # Sign the in-tree modules with the CI key and trust it in the kernel
+      # keyring (lib/kernel-signing.sh); the device module packages use the same.
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
+      kernel_signing_setup
       make olddefconfig
 
       # olddefconfig silently ignores a symbol this kernel does not know, so
@@ -319,6 +324,7 @@ packages:
       - lib/kernel-prepare.sh
       - lib/kernel-source.sh
       - lib/kernel-patches.sh
+      - lib/kernel-signing.sh
       - kernel/patches.yml
       - kernel/patches.lock.json
     build: |
@@ -337,13 +343,10 @@ packages:
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
       kernel_prepare
       scripts/kconfig/merge_config.sh -m .config "${OVERLAY}"
-      # modules_install must not sign: the seeded .config carries
-      # MODULE_SIG_ALL with MODULE_SIG_KEY=certs/signing_key.pem, a key that
-      # only exists in the full kernel build tree, so sign-file fails with
-      # "No such file or directory" here. Signing is done explicitly below
-      # from the CI secrets (MODULE_SIGNING_ACTIVE); MODULE_SIG itself stays
-      # on so the modules keep their signature checks.
-      scripts/config --disable MODULE_SIG_ALL
+      # Sign the modules with the CI key at modules_install, or turn the
+      # automatic signing off when no key is configured (lib/kernel-signing.sh).
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
+      kernel_signing_setup
       make olddefconfig
 
       # Seed Module.symvers from the same deb, at
@@ -419,15 +422,6 @@ packages:
               rm -f "${target}"
             fi
           done
-
-      if [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ]; then
-        printf '%s' "${MODULE_SIGNING_KEY}" > /tmp/mod_sign.pem
-        printf '%s' "${MODULE_SIGNING_CERT}" > /tmp/mod_sign.x509
-        find "${DESTDIR}/lib/modules" -name "*.ko" | while IFS= read -r ko; do
-          scripts/sign-file sha512 /tmp/mod_sign.pem /tmp/mod_sign.x509 "${ko}"
-        done
-        rm -f /tmp/mod_sign.pem /tmp/mod_sign.x509
-      fi
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
