@@ -104,13 +104,9 @@ ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: empty on x86_64 (downstream adds microcode); arm64 ships
 # firmware-linux-free firmware-misc-nonfree for SBC peripherals.
 ARG FIRMWARE_PKGS=""
-RUN for _r in 1 2 3 4 5; do \
-        rm -rf /var/lib/apt/lists/* && apt update && break; \
-        [ "$_r" -lt 5 ] && sleep 30; \
-    done \
+RUN apt update \
     && apt install -y --no-install-recommends \
         bootc \
-        bootupd \
         podman \
         skopeo \
         openssh-server \
@@ -121,6 +117,10 @@ RUN for _r in 1 2 3 4 5; do \
         iproute2 \
         systemd-timesyncd \
         ca-certificates \
+    && if [ "${BOOT_PROFILE}" = generic ]; then \
+        apt update \
+        && apt install -y --no-install-recommends bootupd; \
+    fi \
     && apt-get purge -y --autoremove wget \
     && rm -rf \
         /tmp/* \
