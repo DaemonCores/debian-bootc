@@ -9,7 +9,6 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / 'src'
 SCRIPT = SRC / 'debianpostinstall' / 'usr' / 'bin' / 'autoupdate'
-MINIMAL_SCRIPT = SRC / 'minimalpostinstall' / 'usr' / 'bin' / 'autoupdate'
 MASK = 'etc/systemd/system/bootc-fetch-apply-updates.timer'
 
 
@@ -82,6 +81,13 @@ def test_bad_usage_is_rejected(tmp_path: Path) -> None:
     assert _run(tmp_path, 'bogus').returncode == 2
 
 
-def test_both_images_ship_the_same_command() -> None:
-    """The standard and the minimal image carry an identical script."""
-    assert SCRIPT.read_bytes() == MINIMAL_SCRIPT.read_bytes()
+def test_both_images_ship_the_same_scripts() -> None:
+    """The standard and the minimal image carry identical shared scripts."""
+    libexec = Path('usr/libexec/debian-bootc')
+    for name in (
+        Path('usr/bin/autoupdate'), libexec / 'ostree-layout',
+        libexec / 'install-signature-policy'
+    ):
+        assert (SRC / 'debianpostinstall' /
+                name).read_bytes() == (SRC / 'minimalpostinstall' /
+                                       name).read_bytes()

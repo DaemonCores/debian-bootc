@@ -37,8 +37,8 @@ Key rotation or a layout fix must be applied twice, and `docs/AGENTS.md` already
 - `Containerfile:43` — BOOTC_GPG_SHA256
 - `Containerfile.minimal:115` — duplicate BOOTC_GPG_SHA256
 - `Containerfile:172-199` — ostree migration
-- `Containerfile.minimal:261-285` — duplicate ostree migration
-- `Containerfile.minimal:259` — 'Mirrors the main Containerfile exactly; do NOT change'
+- `Containerfile.minimal:259-283` — duplicate ostree migration
+- `Containerfile.minimal:257` — 'Mirrors the main Containerfile exactly; do NOT change'
 
 ## Suggested direction
 Move the shared phases into a script shipped in an overlay (e.g. `/usr/libexec/debian-bootc/ostree-layout`) or a shared build stage, and call it from both files.
@@ -47,4 +47,4 @@ Move the shared phases into a script shipped in an overlay (e.g. `/usr/libexec/d
 `create ticket`
 
 ## Resolution
-The ostree filesystem migration now lives in `src/ostreelayout/usr/libexec/debian-bootc/ostree-layout`, copied and run by `Containerfile` and `Containerfile.minimal`. It is covered by shellcheck and shfmt (POSIX) in `make check`. Not executed: it rewrites `/home`, `/root` and `/usr/lib/locale`, so only the CI build and boot test can exercise it. Phase 1 (SSL prerequisites) and Phase 2 (bootc APT key) remain duplicated: the minimal image installs fewer tools, so they are not identical, and sharing them needs a build stage rather than a script.
+The ostree filesystem migration now lives in `src/debianpostinstall/usr/libexec/debian-bootc/ostree-layout` (and the copy in `src/minimalpostinstall`), copied and run by `Containerfile` and `Containerfile.minimal`. It is covered by shellcheck and shfmt (POSIX) in `make check`. Not executed: it rewrites `/home`, `/root` and `/usr/lib/locale`, so only the CI build and boot test can exercise it. Phase 1 (SSL prerequisites) and Phase 2 (bootc APT key) remain duplicated: the minimal image installs fewer tools, so they are not identical, and sharing them needs a build stage rather than a script.
