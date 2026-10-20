@@ -9,6 +9,11 @@
 # key at that default path makes the kernel image and the device module
 # packages sign with ONE key, so every module verifies against the kernel.
 #
+# When signing is active the kernel also ENFORCES it: unsigned or foreign
+# modules are refused, and the secondary and machine keyrings are built in so
+# a certificate enrolled through MOK (see mok-stage) is trusted for modules.
+# When signing is inactive nothing is signed and nothing is forced.
+#
 # Inputs (environment): MODULE_SIGNING_ACTIVE ("yes" to sign), and when active
 # MODULE_SIGNING_KEY and MODULE_SIGNING_CERT (PEM secrets of the CI).
 
@@ -41,9 +46,46 @@ kernel_signing_setup() {
   (
     umask 077
     printf '%s\n%s\n' "${MODULE_SIGNING_KEY}" "${MODULE_SIGNING_CERT}" \
-      > certs/signing_key.pem
+      >certs/signing_key.pem
   )
-  printf '%s\n' "${MODULE_SIGNING_CERT}" > certs/signing_key.x509
+  printf '%s\n' "${MODULE_SIGNING_CERT}" >certs/signing_key.x509
   scripts/config --enable MODULE_SIG --enable MODULE_SIG_ALL \
     --set-str MODULE_SIG_KEY certs/signing_key.pem
+  # Enforcement and the keyrings a MOK-enrolled certificate lands in.
+  # LOAD_UEFI_KEYS follows from INTEGRITY_PLATFORM_KEYRING on EFI.
+  local opt
+  for opt in "${KERNEL_SIGNING_FORCED[@]}"; do
+    scripts/config --enable "${opt}"
+  done
+}
+
+# Options forced when signing is active, checked after `make olddefconfig`.
+KERNEL_SIGNING_FORCED=(
+  MODULE_SIG MODULE_SIG_ALL MODULE_SIG_FORCE
+  SYSTEM_BLACKLIST_KEYRING SECONDARY_TRUSTED_KEYRING
+  INTEGRITY INTEGRITY_SIGNATURE INTEGRITY_ASYMMETRIC_KEYS
+  INTEGRITY_PLATFORM_KEYRING INTEGRITY_MACHINE_KEYRING
+)
+
+#######################################
+# Fail when `make olddefconfig` dropped an option forced by
+# kernel_signing_setup (an unmet dependency would silently weaken the
+# enforcement). Does nothing when signing is inactive.
+# Must run from the kernel source tree, after `make olddefconfig`.
+# Globals:
+#   MODULE_SIGNING_ACTIVE: read
+#   KERNEL_SIGNING_FORCED: read
+# Returns:
+#   Exits 1 when a forced option is not set to y in .config.
+#######################################
+kernel_signing_verify() {
+  [ "${MODULE_SIGNING_ACTIVE:-}" = "yes" ] || return 0
+  local opt missing=0
+  for opt in "${KERNEL_SIGNING_FORCED[@]}"; do
+    if ! grep -qx "CONFIG_${opt}=y" .config; then
+      echo "ERROR: CONFIG_${opt} was dropped by olddefconfig while signing is active" >&2
+      missing=1
+    fi
+  done
+  [ "${missing}" -eq 0 ] || exit 1
 }

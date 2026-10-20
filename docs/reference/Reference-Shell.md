@@ -14,7 +14,8 @@ only on the real first boot).
 
 ## `src/buildisopreinstall/usr/libexec/debian-bootc/mok-stage`
 
-Queue the DaemonCores Secure Boot certificate for MOK enrollment.
+Queue the DaemonCores Secure Boot certificate and every public certificate
+dropped in MOK_DIR for MOK enrollment, in ONE request (one password).
 
 Runs as root (through pkexec) from the live installer session once the
 install succeeded. The one-time MokManager password is read from stdin so it
@@ -100,6 +101,26 @@ Outputs (globals): COMMON_DEB, BUILT_VER, KVER, SRCDIR, ARCH (kernel arch).
 BUILT_VER and KVER are consumed by the sourcing build: blocks.
 Leaves the shell inside the kernel source tree with .config seeded from the
 published linux-image-common deb; the caller merges its overlays and builds.
+
+## `workflows/bootc-debs-builder/lib/kernel-signing.sh`
+
+Kernel module signing setup, sourced by the kernel and kernel module build:
+blocks of packages.yml. Listed in their sources: so a change invalidates the
+cached debs.
+
+The kernel signs every module at modules_install time with
+CONFIG_MODULE_SIG_KEY (certs/signing_key.pem by default) and trusts the
+matching certificate through its built-in keyring. Giving the build the CI
+key at that default path makes the kernel image and the device module
+packages sign with ONE key, so every module verifies against the kernel.
+
+When signing is active the kernel also ENFORCES it: unsigned or foreign
+modules are refused, and the secondary and machine keyrings are built in so
+a certificate enrolled through MOK (see mok-stage) is trusted for modules.
+When signing is inactive nothing is signed and nothing is forced.
+
+Inputs (environment): MODULE_SIGNING_ACTIVE ("yes" to sign), and when active
+MODULE_SIGNING_KEY and MODULE_SIGNING_CERT (PEM secrets of the CI).
 
 ## `workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst`
 
