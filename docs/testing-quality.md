@@ -10,10 +10,10 @@ How debian-bootc is validated: build-time checks run inside each `.deb` build sc
 | Package build (compile) | `build:` script per package in `workflows/bootc-debs-builder/packages.yml`, run in the `-buildenv` image [src: file: workflows/bootc-debs-builder/packages.yml:11] [src: file: workflows/env.yml:5] | 16 custom `.deb` packages [src: file: workflows/bootc-debs-builder/packages.yml:12] | Yes: the script runs under `set -euo pipefail` [src: file: workflows/bootc-debs-builder/packages.yml:20] |
 | Per-package content checks | Inline `test -x` / `test -s` / `bash -n` assertions labelled `# Content check` [src: file: workflows/bootc-debs-builder/packages.yml:34] | 13 labelled checks (output deb non-empty, helpers executable, versions rewritten, shared objects built) | Yes: on failure CI keeps the last-good deb and opens an issue [src: file: workflows/bootc-debs-builder/packages.yml:1141] |
 | Unit test (bootupd dpkg patch) | `cargo test --release --manifest-path /build/bootupd/Cargo.toml query_files_dpkg`, which must report at least 1 passed test [src: file: workflows/bootc-debs-builder/packages.yml:914] | bootupd only | Yes [src: file: workflows/bootc-debs-builder/packages.yml:914] |
-| Signing key integrity | `sha256sum -c` against `BOOTC_GPG_SHA256` (derived from the `APT_GPG_KEY` secret) [src: file: Containerfile:78] [src: file: Containerfile.minimal:155] | Full and minimal images | Yes (image build fails) |
+| Signing key integrity | `sha256sum -c` against `BOOTC_GPG_SHA256` (derived from the `APT_GPG_KEY` secret) [src: file: Containerfile:82] [src: file: Containerfile.minimal:159] | Full and minimal images | Yes (image build fails) |
 | Image build | `podman build --format docker ... -f Containerfile` [src: file: README.md:62] | Every root `Containerfile*` (architecture × update-variant matrix) [src: file: docs/architecture.md:54] | Yes |
 | bootc validation (lint) | Runs in the shared image workflow after the build [src: file: docs/architecture.md:60]; a second `/usr/lib/modules/<kver>/` fails it [src: file: Containerfile:21] | Every image | Yes |
-| Runtime boot tests | `workflows/tests.yml`, run over SSH on a QEMU/KVM boot of the installed image [src: file: workflows/tests.yml:1] | 45 tests, see [Test suites](#test-suites) | Yes: a failing test blocks the push [src: file: workflows/tests.yml:3] |
+| Runtime boot tests | `workflows/tests.yml`, run over SSH on a QEMU/KVM boot of the installed image [src: file: workflows/tests.yml:1] | 46 tests, see [Test suites](#test-suites) | Yes: a failing test blocks the push [src: file: workflows/tests.yml:3] |
 | Test manifest integrity | The harness refuses to run if any test lacks `diag` [src: file: workflows/tests.yml:11] | `workflows/tests.yml` | Yes |
 | Format / lint of shell, YAML, Python | shellcheck (`.shellcheckrc`), hadolint (`.hadolint.yaml`), yamllint (`.yamllint.yml`), ruff (`pyproject.toml`) — run via `make lint` [src: file: Makefile:1] | All scripts, Containerfiles, YAML manifests, `scripts/gen-recipe.py` | Yes, via the `.github/workflows/lint.yml` caller of the shared DaemonCores-CI `lint.yml` (not yet run on GitHub) |
 <!-- kronn:section:end -->
@@ -38,7 +38,7 @@ Test-entry fields: `name`, `run` (pass on exit 0), `expect` (optional output mat
 <!-- kronn:section name="test-suites" curated="ai" owner="audit" audit="2026-10-18" -->
 ## Test suites
 
-All runtime suites are section groups in `workflows/tests.yml` (45 tests, each with a `diag`).
+All runtime suites are section groups in `workflows/tests.yml` (46 tests, each with a `diag`).
 
 | Suite (section in `workflows/tests.yml`) | Tests | Gating |
 |-------|-------|--------|
@@ -46,12 +46,12 @@ All runtime suites are section groups in `workflows/tests.yml` (45 tests, each w
 | bootloader / secure boot [src: file: workflows/tests.yml:72] | 6 | 5 × `arch: amd64` (bootupd, GRUB, shim, SB cert); 1 × `arch: arm64` (u-boot-tools) [src: file: workflows/tests.yml:105] |
 | kernel / initramfs / dracut [src: file: workflows/tests.yml:112] | 4 | all targets |
 | module signing (derived from the modules, adapts to the CI option) [src: file: workflows/tests.yml:128] | 3 | all targets; an unsigned module must be refused only when the build is signed |
-| filesystems (btrfs) [src: file: workflows/tests.yml:199] | 2 | `arch: amd64` |
-| podman [src: file: workflows/tests.yml:218] | 2 | `arch: amd64` |
-| networking / repacked packages [src: file: workflows/tests.yml:233] | 9 | ifupdown2 / autoconf / IP: `variant: main`; sshd: `arch: amd64`; SSH host keys: all targets; networkd active / IP: `variant: minimal` |
-| first-boot tooling [src: file: workflows/tests.yml:262] | 2 | firstboot wizard `variant: main` |
-| rollback preparation, pre-reboot [src: file: workflows/tests.yml:275] | 3 | all targets |
-| post-rollback verification, after reboot [src: file: workflows/tests.yml:297] | 4 | all targets |
+| filesystems (btrfs) [src: file: workflows/tests.yml:214] | 2 | `arch: amd64` |
+| podman [src: file: workflows/tests.yml:233] | 2 | `arch: amd64` |
+| networking / repacked packages [src: file: workflows/tests.yml:248] | 9 | ifupdown2 / autoconf / IP: `variant: main`; sshd: `arch: amd64`; SSH host keys: all targets; networkd active / IP: `variant: minimal` |
+| first-boot tooling [src: file: workflows/tests.yml:277] | 2 | firstboot wizard `variant: main` |
+| rollback preparation, pre-reboot [src: file: workflows/tests.yml:290] | 3 | all targets |
+| post-rollback verification, after reboot [src: file: workflows/tests.yml:312] | 4 | all targets |
 
 Build-time suites: 13 labelled content checks across the `packages.yml` build scripts, plus one `cargo test` (bootupd `query_files_dpkg`, at least 1 passing test) [src: file: workflows/bootc-debs-builder/packages.yml:914].
 <!-- kronn:section:end -->
@@ -70,7 +70,7 @@ Build-time suites: 13 labelled content checks across the `packages.yml` build sc
 - `make e2e` has only been exercised up to its prerequisite check (no `/dev/kvm` in the dev container); the full boot path is validated by CI only.
 - Installer ISOs (`Containerfile.iso`, `bootc-installer`): `workflows/tests.yml` has no installer/ISO test; the build only checks that the launcher and GResource bundle exist [src: file: workflows/bootc-debs-builder/packages.yml:1309].
 - `fisherman`: no runtime test in `workflows/tests.yml` [src: file: workflows/bootc-debs-builder/packages.yml:1038].
-- Minimal image autoupdate behaviour (`/usr/lib/bootc/autoupdate`, `AUTOUPDATE` arg): no runtime test [src: file: Containerfile.minimal:158].
+- Minimal image autoupdate behaviour (`/usr/lib/bootc/autoupdate`, `AUTOUPDATE` arg): no runtime test [src: file: Containerfile.minimal:162].
 - arm64 image: only the u-boot-tools test is arm64-specific [src: file: workflows/tests.yml:105]; bootloader, btrfs, podman and sshd tests are amd64-only. The 5 networking tests added in the stabilization pass are split: SSH host keys is all-targets; ifupdown2-autoconf, main-IP are variant:main; networkd-active, minimal-IP are variant:minimal.
 - Raspberry Pi `.img` artifacts (`run_img_rpi`): no boot test in this repo [src: file: .github/workflows/pipeline.yml:44].
 - Linux kernel and module `.deb`s: build-time existence checks only (`test -s` on the output deb) [src: file: workflows/bootc-debs-builder/packages.yml:455]; runtime checks cover only the modules tree and btrfs loading [src: file: workflows/tests.yml:113].

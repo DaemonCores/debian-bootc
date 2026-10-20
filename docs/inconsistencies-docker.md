@@ -4,10 +4,10 @@ Scope: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`, `.dockerig
 
 The images are bootc/ostree **bootable OS images** (`LABEL containers.bootc=1` [src: file: Containerfile:14]), not long-running app containers. Therefore:
 - No `USER <non-root>`: N/A. The image is a root filesystem booted by systemd as PID 1 (`STOPSIGNAL SIGRTMIN+3` [src: file: Containerfile:6]).
-- `HEALTHCHECK NONE` is set explicitly with a rationale in all three files [src: file: Containerfile:242-243] [src: file: Containerfile.minimal:289-290] [src: file: Containerfile.iso:106-107].
+- `HEALTHCHECK NONE` is set explicitly with a rationale in all three files [src: file: Containerfile:247-248] [src: file: Containerfile.minimal:294-295] [src: file: Containerfile.iso:106-107].
 - Multi-stage and `COPY --chown`: N/A. There is no build toolchain stage, and every `COPY` writes OS files that root must own.
 - Apt list cleanup is global via `DPkg::Post-Invoke` [src: file: src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean:1].
-- No secrets in `ARG`. The only remote fetch (bootc GPG key) is checked with `sha256sum -c` [src: file: Containerfile:74-78] [src: file: Containerfile.minimal:151-155]. No `ADD <url>`.
+- No secrets in `ARG`. The only remote fetch (bootc GPG key) is checked with `sha256sum -c` [src: file: Containerfile:78-82] [src: file: Containerfile.minimal:155-159]. No `ADD <url>`.
 - Image tag derivation and push live in the external shared workflow [src: file: .github/workflows/pipeline.yml:71] <!-- TODO: verify — DaemonCores-CI is outside this repo -->.
 
 | ID | Problem | Area | Severity |

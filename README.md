@@ -86,6 +86,8 @@ The installer is destructive to the selected disk. Review the prompt carefully a
 | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, `COSIGN_PUBLIC_KEY` | Image signing key of this repository. Generated automatically; a fork gets its own key and its own signed images. |
 | `MODULE_SIGNING_KEY`, `MODULE_SIGNING_CERT` | Kernel module signing key. Generated automatically when module signing is enabled. When it is active the kernel build also enforces signatures (`MODULE_SIG_FORCE`) and builds the secondary and machine keyrings; when it is not, nothing is signed and nothing is forced. |
 
+In `both` mode (with the signing key present) the pipeline builds every package and image twice: the signed set under the suite `trixie` and the usual tags, the unsigned set under the suite `trixie-nosign` and tags suffixed `-nosign` (the build time of the packages and images roughly doubles; the ISO and disk images follow the signed variant).
+
 Without `PAT_SECRETS` nothing is generated: images are signed keyless and modules stay unsigned. The workflow needs `actions: write` so `prepare` can restart the pipeline.
 
 ### Secure Boot enrollment during install
