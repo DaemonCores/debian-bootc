@@ -38,8 +38,8 @@ Full grammar and cascade: [agents-md-format v1](https://github.com/DocRoms/Kronn
 
 | Task | Files |
 |------|-------|
-| Change the full image (packages, config overlays) — `Containerfile`, `src/debianpreinstall/`, `src/bootcpreinstall/`, `src/debianpostinstall/` [src: file: CONTRIBUTING.md:30] | [architecture](architecture.md), [justifications](justifications.md) |
-| Change the minimal image — `Containerfile.minimal`, `src/minimalpostinstall/` [src: file: Containerfile.base:10] | [minimal](minimal.md), [architecture](architecture.md) |
+| Change the full image (packages, config overlays) — `Containerfile`, `src/debianpreinstall/`, `src/bootcpreinstall/`, `src/debianpostinstall/`, `src/basepostinstall/` [src: file: CONTRIBUTING.md:30] | [architecture](architecture.md), [justifications](justifications.md) |
+| Change the minimal image — `Containerfile.minimal`, `src/minimalpostinstall/`, `src/basepostinstall/` [src: file: Containerfile.base:10] | [minimal](minimal.md), [architecture](architecture.md) |
 | Add/modify a custom `.deb` — `workflows/bootc-debs-builder/packages.yml` + its overlay dirs [src: file: workflows/bootc-debs-builder/packages.yml:1] | [architecture](architecture.md) |
 | Add/fix a runtime boot test — `workflows/tests.yml` [src: file: workflows/tests.yml:1] | [architecture](architecture.md) |
 | Installer ISO — `Containerfile.iso`, `src/buildisopreinstall/`, `scripts/gen-recipe.py` [src: file: Containerfile.iso:28] | [architecture](architecture.md) |

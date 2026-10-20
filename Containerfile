@@ -194,15 +194,16 @@ RUN apt update \
 # -----------------------------------------------------------------------------
 # bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
 # read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# The layout script ships in src/debianpostinstall (and src/minimalpostinstall).
+# The scripts shared with Containerfile.minimal ship in src/basepostinstall.
 COPY ./src/debianpostinstall /
+COPY ./src/basepostinstall /
 RUN /usr/libexec/debian-bootc/ostree-layout \
     && systemctl enable ssh-host-keygen.service \
     && rm -f /etc/ssh/ssh_host_*
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
 # public key and the image reference; both are empty until the key exists, in
-# which case no policy is shipped (see src/debianpostinstall).
+# which case no policy is shipped (see src/basepostinstall).
 ARG IMAGE_REF=""
 ARG COSIGN_PUBKEY_B64=""
 RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_PUBKEY_B64}"
