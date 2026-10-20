@@ -15,8 +15,8 @@
 #
 # Architecture-specific package selection:
 #   x86_64 (amd64):  linux-image-${KERNEL_VARIANT}-amd64, grub-efi-amd64-signed (+ signed hold)
-#   arm64   (arm64): linux-image-${KERNEL_VARIANT}-arm64, u-boot-tools, firmware-linux-free,
-#                    firmware-misc-nonfree
+#   arm64   (arm64): linux-image-${KERNEL_VARIANT}-arm64, firmware-linux-free, firmware-misc-nonfree,
+#                    grub-efi-arm64-signed (generic) or u-boot-tools (embedded: no GRUB, no bootupd)
 #
 # Both architectures share:
 #   - Containerfile.base (debian:trixie, no -slim variant published for trixie as of 2025)
