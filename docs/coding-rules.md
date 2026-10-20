@@ -56,7 +56,7 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 - Bash scripts start with `set -euo pipefail` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:7] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:5] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:6] [src: file: workflows/bootc-debs-builder/packages.yml:20]. `DEBIAN/postinst` files use `set -e` [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst:2].
 - Each standalone script opens with a header comment that names it and says what it does [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:3].
 - In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:114] [src: file: workflows/bootc-debs-builder/packages.yml:133].
-- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:491] [src: file: workflows/bootc-debs-builder/packages.yml:645].
+- Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:497] [src: file: workflows/bootc-debs-builder/packages.yml:651].
 - Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:113].
 - A `# shellcheck disable=` directive comes with a comment saying why [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:9] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:133].
 
@@ -83,7 +83,7 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 ### Common mistakes to avoid
 
-- When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:652].
+- When republishing a fixed deb, bump its version suffix (`+bootcN`). Reusing a filename can serve a corrupt CDN-cached deb [src: commit: d3498a5] [src: file: workflows/bootc-debs-builder/packages.yml:658].
 - Artifacts that downstream builds need (kernel `.config`, `Module.symvers`) must ship inside the `.deb`. A cache hit restores only the `.deb` from the APT repo [src: commit: 6c75748] [src: file: workflows/bootc-debs-builder/packages.yml:214].
 
 ## Python
