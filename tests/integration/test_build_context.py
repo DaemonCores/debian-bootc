@@ -83,8 +83,7 @@ def test_kernel_signing_users_hash_the_library() -> None:
         entry for entry in _packages()
         if 'kernel_signing_setup' in str(entry.get('build', ''))
     ]
-    assert {e['name'] for e in users} == {
-        'linux-image', 'linux-modules-arm-device'
-    }
+    assert {e['name']
+            for e in users} == {'linux-image', 'linux-modules-arm-device'}
     for entry in users:
         assert library in entry['sources'], entry['name']
