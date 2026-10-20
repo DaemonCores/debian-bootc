@@ -61,16 +61,12 @@ ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-
 # Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
 # the arm64 embedded profile (no GRUB).
 ARG APT_HOLD_PKG=grub-efi-amd64-signed
-RUN for _r in 1 2 3 4 5; do \
-        rm -rf /var/lib/apt/lists/* && apt update && break; \
-        [ "$_r" -lt 5 ] && sleep 30; \
-    done \
+RUN apt update \
     && apt install -y --no-install-recommends \
         git \
         curl \
         ${FIRMWARE_PKGS} \
         bootc \
-        bootupd \
         skopeo \
         podman \
         adduser \
@@ -156,6 +152,10 @@ RUN for _r in 1 2 3 4 5; do \
             efibootmgr \
             libubootenv-tool \
             device-tree-compiler; \
+    fi \
+    && if [ "${BOOT_PROFILE}" = generic ]; then \
+        apt update \
+        && apt install -y --no-install-recommends bootupd; \
     fi
 
 # -----------------------------------------------------------------------------
