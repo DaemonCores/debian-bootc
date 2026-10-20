@@ -18,25 +18,26 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 
 ### Tools
 
-- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:25].
+- Linter: hadolint, config at `.hadolint.yaml` [src: file: .hadolint.yaml:1]. Run: `make lint-containerfile`. At build time the image is also checked by bootc lint; a second `/usr/lib/modules/<kver>/` directory fails it [src: file: Containerfile:48].
 - Formatter: Not configured.
 - Type checker: N/A — not used in this project.
 - Build / check command: `make build` or directly `podman build --format docker --build-arg PRODUCT_NAME="debian bootc" -f Containerfile -t debian-bootc:local .` [src: file: README.md:62].
 
 ### Conventions
 
-- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:53] [src: file: Containerfile.minimal:127].
-- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile:55] [src: file: Containerfile:72] [src: file: Containerfile.minimal:130] [src: file: Containerfile.minimal:145].
-- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile:59] [src: file: Containerfile.minimal:131] [src: file: Containerfile.iso:65].
-- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile:60] [src: file: Containerfile.minimal:132] [src: file: Containerfile.iso:66].
-- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:17] [src: file: Containerfile:25] [src: file: Containerfile:34].
-- Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile:76] [src: file: Containerfile.minimal:153].
+- Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:62] [src: file: Containerfile.minimal:69].
+- Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile.base:25] [src: file: Containerfile.base:40] [src: file: Containerfile:23] [src: file: Containerfile.minimal:85].
+- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile.base:53] [src: file: Containerfile.minimal:131] [src: file: Containerfile.iso:65].
+- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile.base:54] [src: file: Containerfile.base:27] [src: file: Containerfile.iso:66].
+- Declare each `ARG` right before the first instruction that uses it (an `ARG` invalidates the cache of every later layer, so the signed and `-nosign` images only diverge at `KERNEL_SUFFIX`).
+- Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:171] [src: file: Containerfile:180] [src: file: Containerfile.base:54].
+- Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile.base:30] [src: file: Containerfile.base:59].
 
 ### Common mistakes to avoid
 
 - In an `if/else/fi` inside `RUN`, ending the last package line with `\` and no `;` joins `else`/`fi` onto the `apt install` arguments. Terminate the command with `;` before `else`/`fi` [src: commit: c88288c].
 - Never start a `RUN` with `&&`. This mistake was hidden by layer caching until a no-cache build exposed it [src: commit: e4b073f].
-- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile:98].
+- The first `apt update` against the project repo must keep its retry loop. The GitHub Pages CDN can serve a new `InRelease` with a stale `Packages.gz`, which gives "Hash Sum mismatch" [src: commit: b24d611] [src: file: Containerfile.base:66].
 - Use the package names actually published in the APT repo. Debian names use hyphens, never underscores (the former `linux-modules-x86-64` package, not `linux-modules-x86_64`, was published under the hyphenated name) [src: commit: f35af91]. Do not install packages that have no `packages.yml` entry, e.g. `linux-headers` [src: commit: 7046317].
 
 ## Shell (bash / POSIX sh)
