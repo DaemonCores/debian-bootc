@@ -125,6 +125,70 @@ tests:
     run: test -d /usr/lib/modules
     diag: |
       ls -la /usr/lib/modules/ 2>&1
+  # ── module signing (an optional CI feature: all signed or nothing) ─────
+  # The VM cannot know whether the CI signed this build, so each test derives
+  # it from the modules themselves and checks the matching behaviour.
+  - name: kernel modules are all signed or none is
+    run: |
+      signed=0; unsigned=0
+      for m in $(find /usr/lib/modules -name '*.ko*'); do
+        if [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
+          signed=$((signed + 1))
+        else
+          unsigned=$((unsigned + 1))
+        fi
+      done
+      echo "signed=${signed} unsigned=${unsigned}"
+      [ $((signed + unsigned)) -gt 0 ] && { [ "${signed}" -eq 0 ] || [ "${unsigned}" -eq 0 ]; }
+    diag: |
+      modinfo -F signer "$(find /usr/lib/modules -name '*.ko*' | head -1)" 2>&1
+      find /usr/lib/modules -name '*.ko*' | wc -l
+  - name: signature enforcement follows the signing option
+    run: |
+      m=$(find /usr/lib/modules -name '*.ko*' | head -1)
+      enforce=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null || echo absent)
+      if [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
+        echo "signed build, sig_enforce=${enforce}"
+        [ "${enforce}" = Y ] && grep -q '\.machine' /proc/keys
+      else
+        echo "unsigned build, sig_enforce=${enforce}"
+        [ "${enforce}" != Y ]
+      fi
+    diag: |
+      cat /sys/module/module/parameters/sig_enforce 2>&1
+      cat /proc/keys 2>&1 | head -n 20
+      cat /proc/cmdline 2>&1
+  - name: an unsigned module is refused when signing is active
+    run: |
+      m=$(find /usr/lib/modules -name 'dummy.ko*' | head -1)
+      [ -n "${m}" ] || m=$(find /usr/lib/modules -name '*.ko*' -size -20k | head -1)
+      if [ -z "$(modinfo -F signer "${m}" 2>/dev/null)" ]; then
+        echo "signing inactive: nothing is enforced, nothing to refuse"
+        exit 0
+      fi
+      case "${m}" in
+        *.zst) dec="zstd -dc" ;;
+        *.xz) dec="xz -dc" ;;
+        *.gz) dec="gzip -dc" ;;
+        *) dec=cat ;;
+      esac
+      ${dec} "${m}" >/tmp/signed.ko
+      perl -e 'local $/; open F, "<", $ARGV[0]; binmode F; $d = <F>;
+        $t = "~Module signature appended~\n";
+        die "no signature\n" unless substr($d, -length $t) eq $t;
+        $d = substr($d, 0, -length $t);
+        $l = unpack("N", substr($d, -4));
+        open O, ">", $ARGV[1]; binmode O;
+        print O substr($d, 0, length($d) - 12 - $l)' /tmp/signed.ko /tmp/unsigned.ko
+      if insmod /tmp/unsigned.ko 2>/tmp/insmod.err; then
+        rmmod "$(basename "${m}" | sed 's/\.ko.*//')" 2>/dev/null
+        echo "unsigned module was LOADED"
+        exit 1
+      fi
+      dmesg | grep -qi 'unsigned module is rejected'
+    diag: |
+      cat /tmp/insmod.err 2>&1
+      dmesg 2>&1 | tail -n 15
   - name: initramfs generated (bootc-finalize ran)
     run: test -e /usr/lib/modules/*/initramfs.img
     diag: |
