@@ -829,17 +829,16 @@ packages:
         /output/grub-efi-arm64-signed/usr/share/debian-bootc/sb_signing.crt
 
       # Stage where bootupd reads EFI components: EFI/debian (NVRAM vendor path)
-      # and EFI/BOOT (removable-media fallback). BOOTAA64.EFI is the arm64
-      # fallback name (analogous to BOOTX64.EFI on amd64).
+      # and EFI/BOOT (removable-media fallback, next to the shim).
       for _sub in debian BOOT; do
         install -Dm0644 \
           /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
           "/output/grub-efi-arm64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/${_sub}/grubaa64.efi"
       done
-      # Provide the standard fallback name for firmware that looks for BOOTAA64.EFI.
-      install -Dm0644 \
-        /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
-        "/output/grub-efi-arm64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/BOOT/BOOTAA64.EFI"
+      # EFI/BOOT/BOOTAA64.EFI is NOT staged here: it is the shim (staged by the
+      # bootupd postinst), which loads grubaa64.efi from its own directory.
+      # Putting grub there too would make the two components own the same path
+      # and boot grub without the shim.
 
       rm -f /tmp/sb.key /tmp/sb.crt
 
