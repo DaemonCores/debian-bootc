@@ -449,17 +449,23 @@ packages:
             # package does not build), and set -e + pipefail then kill the
             # whole script right after modules_install with no error.
             #
-            # The test must also accept symlinks. modules_install leaves
-            # /lib/modules/<ver>/{build,source} behind as symlinks, and -f is
-            # false for those, so they would survive here while the kernel
-            # deb ships them too — dpkg then refuses to unpack two packages
-            # that both own /lib/modules/<ver>/build.
+            # The test must also accept symlinks, for any link the kernel deb
+            # ships too.
             # Directories must stay excluded: rm -f on one would fail and
             # abort the script under set -e.
             if [ -f "${target}" ] || [ -L "${target}" ]; then
               rm -f "${target}"
             fi
           done
+
+      # modules_install leaves /lib/modules/<ver>/{build,source} behind as
+      # symlinks into this CI build tree. The kernel deb (bindeb-pkg) does not
+      # ship them, so the loop above never removes them, and every device
+      # package would then own the same path: dpkg refuses to unpack two of
+      # them ("trying to overwrite '/lib/modules/<ver>/build', which is also in
+      # package linux-modules-<other>"). They are dangling in the image anyway.
+      rm -f "${DESTDIR}/lib/modules/${KVER}/build" \
+        "${DESTDIR}/lib/modules/${KVER}/source"
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-arm-device/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
