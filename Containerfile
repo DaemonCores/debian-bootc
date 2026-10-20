@@ -209,5 +209,9 @@ ARG COSIGN_PUBKEY_B64=""
 COPY ./src/signaturepolicy /
 RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_PUBKEY_B64}"
 
+# `autoupdate enable|disable|status`: the opt-out of automatic updates for
+# devices installed without the bootc-installer (see src/autoupdate).
+COPY ./src/autoupdate /
+
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE

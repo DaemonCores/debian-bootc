@@ -1,0 +1,63 @@
+#!/bin/sh
+# Switch the automatic bootc updates on or off.
+#
+# Usage: autoupdate enable|disable|status
+#
+# Automatic updates are driven by bootc-fetch-apply-updates.timer, enabled by
+# the bootc package. Masking it (a symlink to /dev/null in /etc/systemd/system)
+# is the opt-out the bootc-installer writes at install time; this command does
+# the same on devices that were not installed with the bootc-installer, such
+# as embedded boards flashed from a disk image. Shared by Containerfile and
+# Containerfile.minimal.
+set -eu
+
+# Prefix for every path used; empty in the image, set by the unit tests.
+root=${INSTALL_ROOT:-}
+mask=${root}/etc/systemd/system/bootc-fetch-apply-updates.timer
+
+usage() {
+  echo "Usage: autoupdate enable|disable|status" >&2
+  exit 2
+}
+
+reload() {
+  # Nothing to reload outside a running systemd (image build, unit tests).
+  if [ -z "${root}" ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+  fi
+}
+
+is_disabled() {
+  [ -L "${mask}" ] && [ "$(readlink "${mask}")" = /dev/null ]
+}
+
+[ "$#" -eq 1 ] || usage
+
+case $1 in
+  disable)
+    mkdir -p "$(dirname "${mask}")"
+    ln -sf /dev/null "${mask}"
+    reload
+    echo "automatic updates: disabled"
+    ;;
+  enable)
+    # Only remove the mask, never a unit file an administrator put there.
+    if [ -e "${mask}" ] || [ -L "${mask}" ]; then
+      is_disabled || {
+        echo "autoupdate: ${mask} is not a mask, left untouched" >&2
+        exit 1
+      }
+      rm -f "${mask}"
+    fi
+    reload
+    echo "automatic updates: enabled"
+    ;;
+  status)
+    if is_disabled; then
+      echo "automatic updates: disabled"
+    else
+      echo "automatic updates: enabled"
+    fi
+    ;;
+  *) usage ;;
+esac
