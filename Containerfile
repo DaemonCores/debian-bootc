@@ -181,10 +181,7 @@ ARG KERNEL_SUFFIX=""
 # The apt lists are wiped after every dpkg run (src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean),
 # so this layer refreshes them itself, then installs the kernel and the device modules in one
 # transaction.
-RUN for _r in 1 2 3 4 5; do \
-        apt update && break; \
-        [ "$_r" -lt 5 ] && sleep 30; \
-    done \
+RUN apt update \
     && set -- \
     && if [ "${ARCH}" != "amd64" ]; then \
         for _d in ${ARM_DEVICES}; do set -- "$@" "linux-modules-${_d}"; done; \

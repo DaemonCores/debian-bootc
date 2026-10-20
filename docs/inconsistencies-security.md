@@ -4,7 +4,7 @@ Focused security audit (0.8.2), 2026-10-18. Scope: OS image build (Containerfile
 
 | ID | Problem | Area | Severity |
 |---|---|---|---|
-| [TD-20261018-ssh-host-keys-baked-in-image](tech-debt/TD-20261018-ssh-host-keys-baked-in-image.md) | openssh-server is installed at build time and nothing removes or regenerates host keys, so all deployments may share a public host key (`Containerfile:136`, `Containerfile.minimal:192`) | Security | High |
+| [TD-20261018-ssh-host-keys-baked-in-image](tech-debt/TD-20261018-ssh-host-keys-baked-in-image.md) | openssh-server is installed at build time and nothing removes or regenerates host keys, so all deployments may share a public host key (`Containerfile:136`, `Containerfile.minimal:189`) | Security | High |
 | [TD-20261018-no-image-signature-policy](tech-debt/TD-20261018-no-image-signature-policy.md) | cosign-signed images, but no host-side `policy.json`/sigstore requirement while the auto-update timer is enabled (`workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:6`) | Security | Medium |
 | [TD-20261018-reusable-workflow-main-ref](tech-debt/TD-20261018-reusable-workflow-main-ref.md) | Shared workflows called at `@main` with `secrets: inherit` + write/id-token permissions (`.github/workflows/pipeline.yml:57-71`) | CI | Medium |
 | [TD-20261018-unverified-build-downloads](tech-debt/TD-20261018-unverified-build-downloads.md) | yq/gh/rustup/ostree fetched without checksum or version pin (`workflows/env.yml:99-102`, `workflows/bootc-debs-builder/packages.yml:1247-1123`) | Security | Medium |
