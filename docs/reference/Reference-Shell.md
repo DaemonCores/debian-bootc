@@ -117,10 +117,17 @@ packages sign with ONE key, so every module verifies against the kernel.
 When signing is active the kernel also ENFORCES it: unsigned or foreign
 modules are refused, and the secondary and machine keyrings are built in so
 a certificate enrolled through MOK (see mok-stage) is trusted for modules.
-When signing is inactive nothing is signed and nothing is forced.
+KERNEL_SIGNING_ENFORCE=no builds the unsigned-kernel variant: same key, same
+keyrings, but MODULE_SIG_FORCE off, so a signed module still loads there.
+
+CONFIG_MODULE_SIG is on in EVERY kernel, enforcing or not: it changes the
+layout of struct module, so the modules (always signed, one package shared by
+both kernel variants) only load on a kernel that has it. Without a key
+nothing is signed and nothing is forced.
 
 Inputs (environment): MODULE_SIGNING_ACTIVE ("yes" to sign), and when active
-MODULE_SIGNING_KEY and MODULE_SIGNING_CERT (PEM secrets of the CI).
+MODULE_SIGNING_KEY and MODULE_SIGNING_CERT (PEM secrets of the CI);
+KERNEL_SIGNING_ENFORCE ("no" to leave MODULE_SIG_FORCE off, default "yes").
 
 ## `workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst`
 

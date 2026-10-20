@@ -2,11 +2,11 @@
     "log_file": "/var/log/bootc-installer.log",
     "distro_name": "DaemonCores",
     "distro_logo": "resource:///org/bootcinstaller/Installer/assets/welcome.png",
-    "imgref": "ghcr.io/daemoncores/debian-bootc:latest-amd64-autoupdate",
+    "imgref": "ghcr.io/daemoncores/debian-bootc:latest_amd64",
     "images": [
         {
             "name": "DaemonCores Standard (amd64)",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:latest-amd64-autoupdate",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:latest_amd64",
             "bootloader": "grub2",
             "filesystem": "btrfs",
             "composefs": false,
@@ -18,7 +18,7 @@
         },
         {
             "name": "DaemonCores Standard (arm64)",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:latest-arm64-autoupdate",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:latest_arm64",
             "bootloader": "grub2",
             "filesystem": "btrfs",
             "composefs": false,
@@ -30,7 +30,7 @@
         },
         {
             "name": "DaemonCores Minimal (amd64) — net install",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:minimal-amd64-autoupdate",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:minimal_amd64",
             "bootloader": "grub2",
             "filesystem": "btrfs",
             "composefs": false,
@@ -42,7 +42,7 @@
         },
         {
             "name": "DaemonCores Minimal (arm64) — net install",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:minimal-arm64-autoupdate",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:minimal_arm64",
             "bootloader": "grub2",
             "filesystem": "btrfs",
             "composefs": false,

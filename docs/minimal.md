@@ -60,7 +60,6 @@ Unmask only the services needed by the deployed role.
 | `FIRMWARE_PKGS` | empty | Additional firmware packages. |
 | `KERNEL_CMDLINE_SERIAL` | empty | Extra serial-console kernel arguments. |
 | `KERNEL_VARIANT` | `minimal` | Selects `linux-image-<variant>-<arch>`. |
-| `AUTOUPDATE` | `1` | Writes the bootc automatic-update mode into the image. |
 | `PRODUCT_NAME` | empty | Display name consumed by the boot finalization tooling. |
 
 The expected kernel and module packages must already exist in the project's APT repository.
@@ -74,7 +73,6 @@ podman build --format docker \
   --build-arg ARCH=amd64 \
   --build-arg BOOT_PKG=grub-efi-amd64-signed \
   --build-arg KERNEL_VARIANT=minimal \
-  --build-arg AUTOUPDATE=1 \
   -f Containerfile.minimal \
   -t debian-bootc:minimal-amd64 .
 ```
@@ -89,19 +87,16 @@ podman build --format docker \
   --build-arg FIRMWARE_PKGS="firmware-linux-free firmware-misc-nonfree" \
   --build-arg KERNEL_CMDLINE_SERIAL="console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200" \
   --build-arg KERNEL_VARIANT=minimal \
-  --build-arg AUTOUPDATE=1 \
   -f Containerfile.minimal \
   -t debian-bootc:minimal-arm64 .
 ```
-
-Use `AUTOUPDATE=0` for a lock variant.
 
 ## Kernel and auto-update
 
 - The kernel is not built by the Containerfile: `linux-image-${KERNEL_VARIANT}-${ARCH}` is installed from the project APT repository and resolves to the custom `daemoncores-kernel-<kver>` package (published as `linux-image-common_*.deb`) through its `Provides: linux-image-minimal-<arch>`. On arm64 a second kernel with 16 KB pages is published as `linux-image-common-16k_*.deb` and provides `linux-image-minimal-16k-arm64`; the plain arm64 image installs it through `KERNEL_SUFFIX=-16k`, and the `<tag>-4k` image installs the 4 KB kernel (see [kernel-patches.md](kernel-patches.md)). The package Conflicts with and Replaces the Debian `linux-image-<kver>` it overlaps, following the ostree package model. Until the kernel build has published its first `.deb`, the install fails because the package exists in no repository (expected).
 - The kernel config fragments and per-device module lists live in `workflows/bootc-debs-builder/kernel/`; `KERNEL_VARIANT=minimal` is the default and installs the kernel built from them. The standard image installs the same kernel and the same module packages.
 - Memory: the minimal kernel keeps every driver (as modules, loaded by udev only when the device exists) and drops kernel machinery instead: BTF, the function tracer, profiling hooks, scheduler statistics, kexec and crash dump, the embedded config, and on x86_64 `NR_CPUS` 8192 → 512 [src: file: workflows/bootc-debs-builder/kernel/config:333-361] [src: file: workflows/bootc-debs-builder/kernel/modules/x86_64:115-118]. The 10-15 MB idle target is a direction, not a measured result: the options are applied but no boot has been measured, and the distribution userspace (systemd, dbus, sshd) already uses more than that on its own.
-- `AUTOUPDATE=1` writes `1` to `/usr/lib/bootc/autoupdate`; `AUTOUPDATE=0` writes `0`, which bootc reads as disabled (the file's presence alone is not enough). The lock variant uses it to avoid background upgrades on minimal RAM.
+- Auto-update: there is one image per tag. The bootc package enables `bootc-fetch-apply-updates.timer`, so updates are on by default. To opt out, create a symlink in `/etc`: `ln -s /dev/null /etc/systemd/system/bootc-fetch-apply-updates.timer` (the unit is then masked). bootc-installer exposes this as a checkbox. The VM tests cover both states. Nothing in this repository reads `/usr/lib/bootc/autoupdate` any more.
 
 ## Architecture boundary
 
@@ -146,5 +141,5 @@ Before publishing a minimal variant, verify at least:
 - the initramfs contains the bootc and OSTree integration;
 - the target firmware can load the selected kernel and DTB;
 - the default interface matches the networkd rule or has an override;
-- the intended `AUTOUPDATE` value is present;
+- the bootc update timer is enabled (updates on by default);
 - recovery remains possible without SSH and without persistent logs.

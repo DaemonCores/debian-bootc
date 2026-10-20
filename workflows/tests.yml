@@ -39,6 +39,28 @@ tests:
     run: bootc --version
     diag: |
       bootc --version 2>&1; ldd "$(command -v bootc)" 2>&1 | head -n 15
+  # One image per tag: automatic updates are on by default and switched off
+  # at run time by a symlink to /dev/null in /etc (what the installer writes
+  # when the user unticks them).
+  - name: automatic updates are on by default
+    run: test "$(systemctl is-enabled bootc-fetch-apply-updates.timer)" = enabled
+    diag: |
+      systemctl status bootc-fetch-apply-updates.timer --no-pager 2>&1 | head -n 15
+      ls -la /etc/systemd/system/bootc-fetch-apply-updates.timer 2>&1
+  - name: a symlink in /etc switches automatic updates off
+    run: |
+      unit=/etc/systemd/system/bootc-fetch-apply-updates.timer
+      cleanup() { rm -f "${unit}"; systemctl daemon-reload; }
+      trap cleanup EXIT
+      ln -s /dev/null "${unit}"
+      systemctl daemon-reload
+      [ "$(systemctl is-enabled bootc-fetch-apply-updates.timer 2>&1)" = masked ]
+      rm -f "${unit}"
+      systemctl daemon-reload
+      [ "$(systemctl is-enabled bootc-fetch-apply-updates.timer)" = enabled ]
+    diag: |
+      ls -la /etc/systemd/system/bootc-fetch-apply-updates.timer 2>&1
+      systemctl is-enabled bootc-fetch-apply-updates.timer 2>&1
   - name: ostree deployment present
     run: test -d /ostree/deploy
     diag: |
@@ -143,42 +165,50 @@ tests:
     diag: |
       modinfo -F signer "$(find /usr/lib/modules -name '*.ko*' | head -1)" 2>&1
       find /usr/lib/modules -name '*.ko*' | wc -l
-  - name: APT suite matches the signing of the installed modules
-    run: |
-      m=$(find /usr/lib/modules -name '*.ko*' | head -1)
-      suite=$(awk '/^Suites:/ {print $2}' /etc/apt/sources.list.d/debian-bootc.sources)
-      if [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
-        echo "signed modules, suite=${suite}"
-        [ "${suite}" != trixie-nosign ]
-      else
-        echo "unsigned modules, suite=${suite}"
-        # An image built without signing may still follow the primary suite
-        # (signing off); the -nosign suite must only ever carry unsigned modules.
-        [ "${suite}" = trixie ] || [ "${suite}" = trixie-nosign ]
-      fi
-    diag: |
-      cat /etc/apt/sources.list.d/debian-bootc.sources 2>&1
-  - name: signature enforcement follows the signing option
+  # The kernel exists in a signed (enforcing) and an unsigned twin, both
+  # installed from the same APT suite; the modules are the same signed package.
+  # The installed kernel package tells which one this image carries.
+  - name: signature enforcement follows the installed kernel
     run: |
       m=$(find /usr/lib/modules -name '*.ko*' | head -1)
       enforce=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null || echo absent)
-      if [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
-        echo "signed build, sig_enforce=${enforce}"
+      if dpkg-query -W -f '${Package}\n' 'daemoncores-kernel-*' | grep -q -- '-nosign$'; then
+        echo "unsigned kernel, sig_enforce=${enforce}"
+        [ "${enforce}" = N ]
+      elif [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
+        echo "signed kernel, sig_enforce=${enforce}"
         [ "${enforce}" = Y ] && grep -q '\.machine' /proc/keys
       else
-        echo "unsigned build, sig_enforce=${enforce}"
+        echo "no signing key in this build, sig_enforce=${enforce}"
         [ "${enforce}" != Y ]
       fi
     diag: |
+      dpkg-query -W 'daemoncores-kernel-*' 2>&1
       cat /sys/module/module/parameters/sig_enforce 2>&1
       cat /proc/keys 2>&1 | head -n 20
       cat /proc/cmdline 2>&1
-  - name: an unsigned module is refused when signing is active
+  - name: a signed module loads on either kernel
     run: |
       m=$(find /usr/lib/modules -name 'dummy.ko*' | head -1)
       [ -n "${m}" ] || m=$(find /usr/lib/modules -name '*.ko*' -size -20k | head -1)
       if [ -z "$(modinfo -F signer "${m}" 2>/dev/null)" ]; then
-        echo "signing inactive: nothing is enforced, nothing to refuse"
+        echo "no signing key in this build: no signed module to load"
+        exit 0
+      fi
+      name=$(basename "${m}" | sed 's/\.ko.*//')
+      insmod "${m}"
+      lsmod | grep -q "^${name} "
+      rmmod "${name}"
+    diag: |
+      dmesg 2>&1 | tail -n 15
+      modinfo "$(find /usr/lib/modules -name 'dummy.ko*' | head -1)" 2>&1
+      cat /sys/module/module/parameters/sig_enforce 2>&1
+  - name: an unsigned module is refused when signing is enforced
+    run: |
+      m=$(find /usr/lib/modules -name 'dummy.ko*' | head -1)
+      [ -n "${m}" ] || m=$(find /usr/lib/modules -name '*.ko*' -size -20k | head -1)
+      if [ "$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null)" != Y ]; then
+        echo "signature enforcement is off on this kernel: nothing to refuse"
         exit 0
       fi
       case "${m}" in

@@ -17,6 +17,10 @@ LABEL ostree.bootable=1
 # plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
 # `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
 LABEL org.daemoncores.arm64-4k-image="true"
+# Asks the CI (both signing mode) for the unsigned-kernel twin of this image,
+# tagged `<tag>-nosign`: the same image on the -nosign kernel package, for amd64
+# and the plain-tag arm64 kernel only. The 4 KB image has no twin.
+LABEL org.daemoncores.unsigned-kernel-image="true"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name linux-image-${KERNEL_VARIANT}-${ARCH} and the
@@ -54,10 +58,6 @@ ARG APT_HOLD_PKG=grub-efi-amd64-signed
 # repository and must be overridden for any other APT repository.
 ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
-# APT suite and component of the image: the unsigned image of a both signing
-# run installs its kernel and modules from trixie-nosign / nosign.
-ARG BOOTC_APT_SUITE=trixie
-ARG BOOTC_APT_COMPONENT=main
 # Product display name, injected by the CI from the repo name (dashes -> spaces).
 # bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
 # /etc/os-release NAME.
@@ -89,7 +89,6 @@ RUN apt update \
 # -----------------------------------------------------------------------------
 COPY ./src/bootcpreinstall /
 RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
-        -e "s|{{ APT_SUITE }}|${BOOTC_APT_SUITE}|g" -e "s|{{ APT_COMPONENT }}|${BOOTC_APT_COMPONENT}|g" \
         /etc/apt/sources.list.d/debian-bootc.sources \
     && wget \
         --progress=dot:giga \

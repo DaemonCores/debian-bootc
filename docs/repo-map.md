@@ -10,7 +10,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 .
 ├── Containerfile                  # full image (debian:trixie → bootc stack, kernel, SSH, Podman, ifupdown2)
 ├── Containerfile.minimal          # reduced multi-arch image, see docs/minimal.md
-├── Containerfile.iso              # installer ISO, FROM ghcr.io/daemoncores/debian-bootc:latest-${ARCH}-autoupdate
+├── Containerfile.iso              # installer ISO, FROM ghcr.io/daemoncores/debian-bootc:latest_${ARCH}
 ├── config.yml                     # distribution settings: module signing default (nosign|sign|both)
 ├── .github/
 │   ├── workflows/
@@ -46,7 +46,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 └── docs/                          # agent/human docs, routed from docs/AGENTS.md (see docs/Home.md)
 ```
 
-Sources: [src: file: Containerfile:54] [src: file: Containerfile:75] [src: file: Containerfile:173] [src: file: Containerfile.minimal:126] [src: file: Containerfile.minimal:227] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
+Sources: [src: file: Containerfile:58] [src: file: Containerfile:75] [src: file: Containerfile:172] [src: file: Containerfile.minimal:130] [src: file: Containerfile.minimal:226] [src: file: Containerfile.iso:53] [src: file: workflows/bootc-debs-builder/packages.yml:3] [src: file: workflows/bootc-debs-builder/kernel/config:3] [src: file: workflows/bootc-debs-builder/kernel/modules/rpi5:3] [src: file: config.yml:2] [src: file: .github/workflows/docs-wiki-sync.yml:11].
 
 Local, untracked tool state (not part of the project): `lancedb/` (empty index directories) and `.kronn/` (ignored via the user's global gitignore).
 

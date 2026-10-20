@@ -50,10 +50,10 @@
 #   The modules are optional — the kernel (linux-image-common) works
 #   without them.
 #
-# Auto-update variant:
-#   ARG AUTOUPDATE=1 writes `1` to /usr/lib/bootc/autoupdate. Set AUTOUPDATE=0 to
-#   write `0` (bootc treats content `0` as disabled) for the `_lock` tag variant
-#   (auto-update disabled for minimal RAM). See docs/minimal.md ("Kernel and auto-update").
+# Auto-update:
+#   One image per tag. The bootc package enables bootc-fetch-apply-updates.timer;
+#   opting out is a run-time choice, a symlink to /dev/null in /etc (see
+#   docs/minimal.md, "Kernel and auto-update").
 #
 # Trade-offs (documented in docs/minimal.md):
 #   - No man pages, no nano, no bash-completion
@@ -73,17 +73,14 @@ LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-boo
 LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
-# Declares that this Containerfile produces both autoupdate (1) and lock (0)
-# variants. The CI discover job reads this LABEL and emits two matrix entries
-# (autoupdate=1 and autoupdate=0) for each arch, producing both the _autoupdate
-# and _lock tag families plus a :<tag>_lock multi-arch manifest list.
-# Containerfile (the main one) does NOT carry this LABEL, so it only builds the
-# autoupdate variant (no _lock manifest list).
-LABEL org.daemoncores.autoupdate-variants="lock,autoupdate"
 # Asks the CI for two arm64 kernels (docs/decisions.md, "Two arm64 kernels"): the
 # plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
 # `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
 LABEL org.daemoncores.arm64-4k-image="true"
+# Asks the CI (both signing mode) for the unsigned-kernel twin of this image,
+# tagged `<tag>-nosign`: the same image on the -nosign kernel package, for amd64
+# and the plain-tag arm64 kernel only. The 4 KB image has no twin.
+LABEL org.daemoncores.unsigned-kernel-image="true"
 
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 # Drives the kernel package name (linux-image-${ARCH}) and the boot stack:
@@ -118,21 +115,11 @@ ARG KERNEL_VARIANT=minimal
 # build the 4 KB one.
 ARG KERNEL_SUFFIX=""
 ARG ARM_DEVICES="rpi3 rpi4"
-# `1` (default) writes /usr/lib/bootc/autoupdate so bootc performs automated ostree
-# upgrades (the `_autoupdate` tag variant); `0` writes `0` to that file, disabling
-# auto-update for the `_lock` tag variant (minimal RAM, no background upgrade
-# overhead). bootc reads the file content (0 = disabled); presence alone is not
-# sufficient. See docs/minimal.md ("Kernel and auto-update").
-ARG AUTOUPDATE=1
 # SHA-256 of the bootc APT repo signing key and the repository URL. The CI
 # derives both at build time from the APT_GPG_KEY secret; the defaults only
 # serve local builds of the upstream repository.
 ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
-# APT suite and component of the image: the unsigned image of a both signing
-# run installs its kernel and modules from trixie-nosign / nosign.
-ARG BOOTC_APT_SUITE=trixie
-ARG BOOTC_APT_COMPONENT=main
 # Product display name (dashes -> spaces); empty falls back to /etc/os-release NAME.
 ARG PRODUCT_NAME=""
 
@@ -164,7 +151,6 @@ RUN apt update \
 # Containerfile (COPY then sed, same order).
 COPY ./src/bootcpreinstall /
 RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
-        -e "s|{{ APT_SUITE }}|${BOOTC_APT_SUITE}|g" -e "s|{{ APT_COMPONENT }}|${BOOTC_APT_COMPONENT}|g" \
         /etc/apt/sources.list.d/debian-bootc.sources \
     && wget \
         --progress=dot:giga \
@@ -174,7 +160,6 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
         | sha256sum -c - \
     && mkdir -p /usr/lib/bootc \
     && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name \
-    && printf '%s' "${AUTOUPDATE}" > /usr/lib/bootc/autoupdate \
     && apt-get purge -y --autoremove wget
 
 # -----------------------------------------------------------------------------
