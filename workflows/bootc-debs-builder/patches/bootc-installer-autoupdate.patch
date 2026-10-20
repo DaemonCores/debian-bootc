@@ -1,0 +1,183 @@
+diff --git a/bootc_installer/bootc-installer.gresource.xml b/bootc_installer/bootc-installer.gresource.xml
+index c56efb2a..a3976a9d 100644
+--- a/bootc_installer/bootc-installer.gresource.xml
++++ b/bootc_installer/bootc-installer.gresource.xml
+@@ -27,6 +27,7 @@
+     <file>gtk/default-disk.ui</file>
+     <file>gtk/default-slurp.ui</file>
+     <file>gtk/default-encryption.ui</file>
++    <file>gtk/default-autoupdate.ui</file>
+     <file>gtk/default-hardware.ui</file>
+     <file>gtk/default-conn-check.ui</file>
+     <file>gtk/default-network.ui</file>
+diff --git a/bootc_installer/defaults/autoupdate.py b/bootc_installer/defaults/autoupdate.py
+new file mode 100644
+index 00000000..27dbab80
+--- /dev/null
++++ b/bootc_installer/defaults/autoupdate.py
+@@ -0,0 +1,43 @@
++# autoupdate.py
++#
++# This program is free software: you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, version 3 of the License.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++from gi.repository import Adw, Gtk
++
++
++@Gtk.Template(resource_path="/org/bootcinstaller/Installer/gtk/default-autoupdate.ui")
++class BootcDefaultAutoupdate(Adw.Bin):
++    __gtype_name__ = "BootcDefaultAutoupdate"
++
++    btn_next = Gtk.Template.Child()
++    page_header = Gtk.Template.Child()
++    autoupdate_switch = Gtk.Template.Child()
++
++    def __init__(self, window, distro_info, key, step, **kwargs):
++        super().__init__(**kwargs)
++        self.__window = window
++        self.__distro_info = distro_info
++        self.__key = key
++        self.__step = step
++        self.delta = False
++
++        self.btn_next.connect("clicked", self.__window.next)
++
++    def should_show(self, context: dict) -> bool:
++        return True
++
++    def test_auto_advance(self):
++        self.btn_next.emit("clicked")
++
++    def get_finals(self):
++        return {"autoupdate": {"enabled": self.autoupdate_switch.get_active()}}
+diff --git a/bootc_installer/defaults/meson.build b/bootc_installer/defaults/meson.build
+index d7f3d3eb..c6831150 100644
+--- a/bootc_installer/defaults/meson.build
++++ b/bootc_installer/defaults/meson.build
+@@ -10,6 +10,7 @@ sources = [
+   'disk.py',
+   'slurp.py',
+   'encryption.py',
++  'autoupdate.py',
+   'image.py',
+   'nvidia.py',
+   'vm.py',
+diff --git a/bootc_installer/gtk/default-autoupdate.blp b/bootc_installer/gtk/default-autoupdate.blp
+new file mode 100644
+index 00000000..d84f2b44
+--- /dev/null
++++ b/bootc_installer/gtk/default-autoupdate.blp
+@@ -0,0 +1,59 @@
++using Gtk 4.0;
++using Adw 1;
++
++template $BootcDefaultAutoupdate: Adw.Bin {
++  halign: fill;
++  valign: fill;
++  hexpand: true;
++
++  Overlay {
++    vexpand: true;
++    hexpand: true;
++
++    [overlay]
++    Button btn_next {
++      margin-end: 12;
++      margin-start: 12;
++      icon-name: "go-next-symbolic";
++      halign: end;
++      valign: center;
++      tooltip-text: _("Next");
++
++      styles [
++        "suggested-action",
++      ]
++    }
++
++    ScrolledWindow {
++      hscrollbar-policy: never;
++      vexpand: true;
++      hexpand: true;
++
++      Adw.PreferencesPage {
++        Adw.PreferencesGroup {
++          $BootcPageHeader page_header {
++            margin-top: 24;
++            icon-name: "software-update-available-symbolic";
++            title: _("Automatic Updates");
++            subtitle: _("Choose whether the system updates itself.");
++          }
++        }
++
++        Adw.PreferencesGroup {
++          Adw.ActionRow {
++            title: _("Install updates automatically");
++            subtitle: _("The system downloads and applies new images in the background. Turn this off to update by hand.");
++
++            [suffix]
++            Switch autoupdate_switch {
++              valign: center;
++              active: true;
++            }
++
++            activatable-widget: autoupdate_switch;
++          }
++        }
++      }
++    }
++  }
++}
+diff --git a/bootc_installer/meson.build b/bootc_installer/meson.build
+index 6c76a2e6..ab74212a 100644
+--- a/bootc_installer/meson.build
++++ b/bootc_installer/meson.build
+@@ -9,6 +9,7 @@ if blueprint_compiler.found()
+     'blueprints',
+     input: files(
+       'gtk/confirm.blp',
++      'gtk/default-autoupdate.blp',
+       'gtk/default-conn-check.blp',
+       'gtk/default-disk.blp',
+       'gtk/default-encryption.blp',
+diff --git a/bootc_installer/utils/builder.py b/bootc_installer/utils/builder.py
+index 8a3e1ac3..c43c01a4 100644
+--- a/bootc_installer/utils/builder.py
++++ b/bootc_installer/utils/builder.py
+@@ -20,6 +20,7 @@ import subprocess
+ import sys
+ from gettext import gettext as _
+ 
++from bootc_installer.defaults.autoupdate import BootcDefaultAutoupdate
+ from bootc_installer.defaults.conn_check import BootcDefaultConnCheck
+ from bootc_installer.defaults.disk import BootcDefaultDisk
+ from bootc_installer.defaults.encryption import BootcDefaultEncryption
+@@ -40,6 +41,7 @@ templates = {
+     "disk": BootcDefaultDisk,
+     "slurp": BootcDefaultSlurp,
+     "encryption": BootcDefaultEncryption,
++    "autoupdate": BootcDefaultAutoupdate,
+     "image": BootcDefaultImage,
+     "user": BootcDefaultUsers,
+     "qr_companion": BootcDefaultQrCompanion,
+diff --git a/bootc_installer/utils/processor.py b/bootc_installer/utils/processor.py
+index 094aaf13..73f9413b 100644
+--- a/bootc_installer/utils/processor.py
++++ b/bootc_installer/utils/processor.py
+@@ -312,6 +312,8 @@ class Processor:
+                 "groups": user_groups,
+             },
+         }
++        if not merged.get("autoupdate", {}).get("enabled", True):
++            recipe["autoUpdate"] = False
+         if custom_mounts:
+             recipe["customMounts"] = custom_mounts
+         if image_type and image_type != "bootc":
