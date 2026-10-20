@@ -27,8 +27,8 @@ Files: `Containerfile`, `Containerfile.minimal`, `Containerfile.iso`.
 
 - Set the `RUN` shell to strict bash with `SHELL ["/bin/bash", "-euo", "pipefail", "-c"]` [src: file: Containerfile:62] [src: file: Containerfile.minimal:69].
 - Split the file into numbered phases, each with a `# ----` banner and a `# Phase N: …` title [src: file: Containerfile.base:25] [src: file: Containerfile.base:40] [src: file: Containerfile:23] [src: file: Containerfile.minimal:85].
-- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile.base:53] [src: file: Containerfile.minimal:131] [src: file: Containerfile.iso:65].
-- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile.base:54] [src: file: Containerfile.base:27] [src: file: Containerfile.iso:66].
+- Put the `&&` / `\` chain at the start of each continuation line, and indent package lists one package per line [src: file: Containerfile.base:53] [src: file: Containerfile.minimal:131] [src: file: Containerfile.iso:68].
+- Install prerequisite and module packages with `apt install -y --no-install-recommends` [src: file: Containerfile.base:54] [src: file: Containerfile.base:27] [src: file: Containerfile.iso:69].
 - Declare each `ARG` right before the first instruction that uses it (an `ARG` invalidates the cache of every later layer, so the signed and `-nosign` images only diverge at `KERNEL_SUFFIX`).
 - Each `ARG` has a comment above it explaining its values and why it exists [src: file: Containerfile:171] [src: file: Containerfile:180] [src: file: Containerfile.base:54].
 - Templated overlay files carry `{{ ARCH }}` placeholders, which a `RUN sed -i` replaces after `COPY` [src: file: Containerfile.base:30] [src: file: Containerfile.base:59].
@@ -88,7 +88,7 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 
 ## Python
 
-File: `scripts/gen-recipe.py`, the repo's only Python file [src: file: scripts/gen-recipe.py:1].
+File: `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py`, the repo's only Python file [src: file: src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py:1].
 
 ### Tools
 

@@ -24,7 +24,7 @@ metadata:
 - **Blast radius**: local (1-2 files)
 
 ## Problem (fact)
-`.dockerignore` lists `.git/`, `.github/`, `workflows/`, `*.iso`, `out/`, `README.md`, `LICENSE`, `tmp/`, `.env`, `.secrets`. It has no `.env*` glob, and does not exclude `.kronn/`, `.claude/`, `.codex/`, `.gemini/`, `.copilot/`, `.mcp.json`, `docs/`, `todo/`, or `scripts/__pycache__/`. `.gitignore` already treats `.kronn/` and `.mcp.json` as local-only. No Containerfile does `COPY .`; all COPYs target `./src/*`, `./scripts/gen-recipe.py` or `Containerfile*`, so nothing from these dirs is baked into an image.
+`.dockerignore` lists `.git/`, `.github/`, `workflows/`, `*.iso`, `out/`, `README.md`, `LICENSE`, `tmp/`, `.env`, `.secrets`. It has no `.env*` glob, and does not exclude `.kronn/`, `.claude/`, `.codex/`, `.gemini/`, `.copilot/`, `.mcp.json`, `docs/`, `todo/`, or `scripts/__pycache__/`. `.gitignore` already treats `.kronn/` and `.mcp.json` as local-only. No Containerfile does `COPY .`; all COPYs target `./src/*`, `./src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` or `Containerfile*`, so nothing from these dirs is baked into an image.
 
 ## Impact
 Local or remote builds ship agent state, MCP config and any `.env.<suffix>` file to the build daemon/remote builder as part of the context. Context size and upload time grow with docs/agent churn.
@@ -33,10 +33,10 @@ Local or remote builds ship agent state, MCP config and any `.env.<suffix>` file
 - `.dockerignore:1-10` — full exclusion list
 - `.gitignore:13-17` — `.env`, `.secrets`, `.kronn/`, `.mcp.json` treated as local secrets/state
 - `Containerfile:56`, `Containerfile:73`, `Containerfile:171` — only `./src/*` copied
-- `Containerfile.iso:56-57` — `Containerfile*` and `scripts/gen-recipe.py` copied
+- `Containerfile.iso:59-60` — `Containerfile*` and `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` copied
 
 ## Suggested direction
-Invert to an allow-list (`*` then `!src/`, `!scripts/gen-recipe.py`, `!Containerfile*`) or at least add `.env*`, `.secrets*`, `.kronn/`, `.claude/`, `.codex/`, `.gemini/`, `.copilot/`, `.mcp.json*`, `docs/`, `todo/`, `**/__pycache__/`.
+Invert to an allow-list (`*` then `!src/`, `!src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py`, `!Containerfile*`) or at least add `.env*`, `.secrets*`, `.kronn/`, `.claude/`, `.codex/`, `.gemini/`, `.copilot/`, `.mcp.json*`, `docs/`, `todo/`, `**/__pycache__/`.
 
 ## Resolution
 Added `.env*`, `.secrets*`, agent state dirs, `.mcp.json*`, `docs/`, `todo/`, `tests/`, `.venv/`, cache dirs and `**/__pycache__/` to `.dockerignore`. The allow-list variant was not chosen: the shared CI may add files to the build context, which cannot be checked from this repo. `tests/integration/test_build_context.py` asserts that no `COPY` source is excluded.

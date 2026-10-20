@@ -1323,7 +1323,7 @@ packages:
       TEMPLATE="${SAVE_PWD}/src/buildisopreinstall/etc/bootc-installer/recipe.json"
       cp "${TEMPLATE}" /tmp/gen-recipe-work.json
       IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
-        python3 "${SAVE_PWD}/scripts/gen-recipe.py" \
+        python3 "${SAVE_PWD}/src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py" \
           "${SAVE_PWD}" /tmp/gen-recipe-work.json
       cp /tmp/gen-recipe-work.json \
         /build/bootc-installer-src/fisherman/data/images.json

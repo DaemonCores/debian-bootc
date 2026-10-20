@@ -1,4 +1,4 @@
-"""Unit tests for scripts/gen-recipe.py."""
+"""Unit tests for gen-recipe.py."""
 
 import importlib.util
 import json
@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "gen-recipe.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2] / "src" / "buildisopreinstall" / "usr" /
+    "libexec" / "debian-bootc" / "gen-recipe.py"
+)
 
 
 def _load() -> ModuleType:

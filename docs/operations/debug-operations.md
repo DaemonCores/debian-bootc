@@ -13,7 +13,7 @@ Operational commands and troubleshooting for debian-bootc. The repo has no Makef
 | Inspect a built image (shell, no boot) | `podman run --rm -it debian-bootc:local bash` [src: inferred: standard podman usage; the image is Debian-based, `Containerfile:5`] |
 | Start / stop | N/A — no long-running service in this repo. The image is booted only by the CI harness (`bootc install` to a virtual disk, QEMU/KVM + UEFI, SSH) [src: file: workflows/tests.yml:1] |
 | Test (runtime) | Runs in CI on every image build from `workflows/tests.yml`; no local runner script in the repo [src: file: workflows/tests.yml:3] |
-| Test (pre-commit smoke) | `grep -c '^  - name:' workflows/tests.yml; grep -c '^    diag:' workflows/tests.yml` (counts must match) and `python3 -m py_compile scripts/gen-recipe.py` [src: file: docs/testing-quality.md:79] |
+| Test (pre-commit smoke) | `grep -c '^  - name:' workflows/tests.yml; grep -c '^    diag:' workflows/tests.yml` (counts must match) and `python3 -m py_compile src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` [src: file: docs/testing-quality.md:79] |
 | Deploy (push to `main`) | Triggers the full pipeline; untouched stages auto-skip; `docs/**` / `**.md`-only pushes do not trigger it [src: file: .github/workflows/pipeline.yml:18] |
 | Deploy (manual, stage selection) | `gh workflow run pipeline.yml -f run_debs=true -f run_image=true -f run_iso=true` (also `rebuild_env`, `run_img_rpi`, `sign_modules`) [src: file: .github/workflows/pipeline.yml:26] |
 | Rebuild package toolchain image | `gh workflow run pipeline.yml -f rebuild_env=true` — needed once to seed it or after editing `workflows/env.yml` [src: file: .github/workflows/pipeline.yml:29] |

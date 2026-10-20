@@ -1,5 +1,5 @@
 # pyproject.toml — debian-bootc
-# Lint/format/type config for scripts/gen-recipe.py (the repo's only Python
+# Lint/format/type config for gen-recipe.py (the repo's only Python
 # file).  Config sections copied as-is from cunegonde-ai/agentic-backend
 # (the reference repo); path- and version-specific values adapted.
 # See docs/conventions/quality-targets.md § Reference configuration.
@@ -61,19 +61,19 @@ allow-init-docstring = true
 exclude = '\.git|\.tox'
 
 [tool.mypy]
-# scripts/ is the import root for the one Python file in this repo.
-mypy_path = "scripts"
+# The generator directory is the import root for the one Python file in this repo.
+mypy_path = "src/buildisopreinstall/usr/libexec/debian-bootc"
 explicit_package_bases = true
 namespace_packages = true
 exclude = ["^docs/", "^\\.kronn/"]
 
 [tool.basedpyright]
 # Copied from reference (strict explicit typing); adapted paths for the
-# single-file scripts/ surface.
+# single-file generator surface.
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
-extraPaths = ["scripts"]
+extraPaths = ["src/buildisopreinstall/usr/libexec/debian-bootc"]
 typeCheckingMode = "strict"
 reportAny = "error"
 reportExplicitAny = "error"

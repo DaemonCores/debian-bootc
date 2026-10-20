@@ -24,15 +24,15 @@ Focused security audit (0.8.2), 2026-10-18. Scope: OS image build (Containerfile
 - Password storage: passwords are set through `chpasswd` (`firstboot-user-setup:241,244`), which uses the system PAM/`ENCRYPT_METHOD` hash (Debian default yescrypt, hypothesis). There is no custom hashing.
 - JWT secret sourcing / hardcoded Bearer: Not evaluated safely (requires Kronn's local secret scanner). No JWT library in the repo.
 - Password reset tokens: N/A.
-- Live ISO: the `live` user has an empty password (`Containerfile.iso:97`), autologs in on tty1 and gets polkit `YES` only for `org.tunaos.Installer` (`src/buildisopreinstall/etc/polkit-1/rules.d/50-bootc-installer-live.rules:2-4`). This is by design for installer media; the user is not in `sudo`. Not a finding.
+- Live ISO: the `live` user has an empty password (`Containerfile.iso:101`), autologs in on tty1 and gets polkit `YES` only for `org.tunaos.Installer` (`src/buildisopreinstall/etc/polkit-1/rules.d/50-bootc-installer-live.rules:2-4`). This is by design for installer media; the user is not in `sudo`. Not a finding.
 - First boot: root SSH password login is opt-in (`firstboot-user-setup:256-262`). Verified present.
 
 **Input validation & injection**
 - SQL: N/A, no database.
 - Shell: no `eval`/`sh -c` on external input in shipped scripts. The only external-input-into-root-command path is the DHCP domain → sed (TD-20261018-dhcp-domain-unsanitized-sed). The first-boot username is regex-validated (`firstboot-user-setup:160`).
-- File paths: `scripts/gen-recipe.py` reads only build-context paths passed by `Containerfile.iso:60-64`. Not user-controlled.
+- File paths: `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` reads only build-context paths passed by `Containerfile.iso:63-67`. Not user-controlled.
 - Templates (XSS): N/A, no HTML templates.
-- Deserialization: `scripts/gen-recipe.py` uses `json.load` only. Verified: no pickle/yaml.load.
+- Deserialization: `src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py` uses `json.load` only. Verified: no pickle/yaml.load.
 
 **Transport & headers**
 - HTTPS / HSTS / CSP / X-Frame-Options / nosniff / CORS: N/A, no HTTP server.
