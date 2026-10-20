@@ -337,6 +337,13 @@ packages:
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
       kernel_prepare
       scripts/kconfig/merge_config.sh -m .config "${OVERLAY}"
+      # modules_install must not sign: the seeded .config carries
+      # MODULE_SIG_ALL with MODULE_SIG_KEY=certs/signing_key.pem, a key that
+      # only exists in the full kernel build tree, so sign-file fails with
+      # "No such file or directory" here. Signing is done explicitly below
+      # from the CI secrets (MODULE_SIGNING_ACTIVE); MODULE_SIG itself stays
+      # on so the modules keep their signature checks.
+      scripts/config --disable MODULE_SIG_ALL
       make olddefconfig
 
       # Seed Module.symvers from the same deb, at

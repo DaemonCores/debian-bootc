@@ -30,7 +30,7 @@ metadata:
 If nothing consumes it, a full GRUB compile and signing run on every cache miss is dead build code, and its pins must still be kept in sync (see [TD-20261018-grub-efi-entries-duplicated-pins](TD-20261018-grub-efi-entries-duplicated-pins.md)).
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/packages.yml:969` — entry
+- `workflows/bootc-debs-builder/packages.yml:977` — entry
 - `Containerfile:28-30` — arm64 uses u-boot-tools via BOOT_PKG
 - `Containerfile.minimal:13-14` — 'arm64 uses u-boot-tools instead of grub-efi-arm64'
 - `workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:50` — only grub-efi-amd64-signed queried
