@@ -7,8 +7,8 @@
 # the bootc package. Masking it (a symlink to /dev/null in /etc/systemd/system)
 # is the opt-out the bootc-installer writes at install time; this command does
 # the same on devices that were not installed with the bootc-installer, such
-# as embedded boards flashed from a disk image. The same file sits in
-# src/debianpostinstall and src/minimalpostinstall (one per image).
+# as embedded boards flashed from a disk image. Shared by Containerfile and
+# Containerfile.minimal.
 set -eu
 
 # Prefix for every path used; empty in the image, set by the unit tests.

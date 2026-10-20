@@ -21,6 +21,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 ├── src/                           # filesystem overlays COPY'd into images (paths mirror /)
 │   ├── debianpreinstall/          # before package install (apt config, usr/sbin) — full + minimal
 │   ├── bootcpreinstall/           # bootc APT repo sources — full + minimal
+│   ├── basepostinstall/           # full + minimal: autoupdate, ostree-layout, install-signature-policy
 │   ├── debianpostinstall/         # full image only: issue, motd, hostname, hosts, network, systemd
 │   ├── minimalpostinstall/        # minimal image only: systemd units/drop-ins
 │   └── buildisopreinstall/        # ISO only: bootc-installer recipe.json, polkit, containers, getty, var/home
