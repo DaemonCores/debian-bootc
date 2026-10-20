@@ -97,3 +97,23 @@ def test_kernel_signing_forces_only_when_active() -> None:
     assert 'kernel_signing_verify' in text
     kernel = next(e for e in _packages() if e['name'] == 'linux-image')
     assert 'kernel_signing_verify' in kernel['build']
+
+
+def test_apt_source_placeholders_are_all_substituted() -> None:
+    """Both Containerfiles fill every token of the APT source, suite included.
+
+    The unsigned image of the ``both`` signing mode differs from the signed one
+    only by the suite and component it receives as build arguments.
+    """
+    source = (
+        ROOT / 'src' / 'bootcpreinstall' / 'etc' / 'apt' / 'sources.list.d' /
+        'debian-bootc.sources'
+    ).read_text()
+    tokens = {'ARCH', 'APT_URL', 'APT_SUITE', 'APT_COMPONENT'}
+    assert {t for t in tokens if '{{ ' + t + ' }}' in source} == tokens
+    for name in ('Containerfile', 'Containerfile.minimal'):
+        text = (ROOT / name).read_text()
+        for token in tokens:
+            assert '{{ ' + token + ' }}' in text, f'{name}: {token}'
+        assert 'ARG BOOTC_APT_SUITE=trixie\n' in text
+        assert 'ARG BOOTC_APT_COMPONENT=main\n' in text

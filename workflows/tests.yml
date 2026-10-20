@@ -143,6 +143,21 @@ tests:
     diag: |
       modinfo -F signer "$(find /usr/lib/modules -name '*.ko*' | head -1)" 2>&1
       find /usr/lib/modules -name '*.ko*' | wc -l
+  - name: APT suite matches the signing of the installed modules
+    run: |
+      m=$(find /usr/lib/modules -name '*.ko*' | head -1)
+      suite=$(awk '/^Suites:/ {print $2}' /etc/apt/sources.list.d/debian-bootc.sources)
+      if [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
+        echo "signed modules, suite=${suite}"
+        [ "${suite}" != trixie-nosign ]
+      else
+        echo "unsigned modules, suite=${suite}"
+        # An image built without signing may still follow the primary suite
+        # (signing off); the -nosign suite must only ever carry unsigned modules.
+        [ "${suite}" = trixie ] || [ "${suite}" = trixie-nosign ]
+      fi
+    diag: |
+      cat /etc/apt/sources.list.d/debian-bootc.sources 2>&1
   - name: signature enforcement follows the signing option
     run: |
       m=$(find /usr/lib/modules -name '*.ko*' | head -1)
