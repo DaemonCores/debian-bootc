@@ -73,3 +73,18 @@ def test_kernel_prepare_users_hash_the_library() -> None:
     for entry in users:
         assert library in entry['sources'], entry['name']
         assert 'lib/kernel-prepare.sh' in entry['build']
+
+
+def test_kernel_signing_users_hash_the_library() -> None:
+    """The kernel and the module entries sign with the same key helper."""
+    library = 'lib/kernel-signing.sh'
+    assert (PACKAGES / library).is_file()
+    users = [
+        entry for entry in _packages()
+        if 'kernel_signing_setup' in str(entry.get('build', ''))
+    ]
+    assert {e['name'] for e in users} == {
+        'linux-image', 'linux-modules-arm-device'
+    }
+    for entry in users:
+        assert library in entry['sources'], entry['name']
