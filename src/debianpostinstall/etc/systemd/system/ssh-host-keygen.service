@@ -1,6 +1,7 @@
 [Unit]
 Description=Generate SSH host keys on first boot
 ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+After=ostree-remount.service
 Before=ssh.service sshd.service
 
 [Service]
