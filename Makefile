@@ -237,9 +237,14 @@ e2e: ci-repo
 
 # ---- help ----------------------------------------------------------------- #
 
-.PHONY: help all
+.PHONY: help all hooks
 
 all: check test
+
+# Point core.hooksPath at the committed hooks so `make hooks` is the one-time
+# setup after a clone; .githooks/pre-commit runs the same docs gate as CI.
+hooks:
+	git config core.hooksPath .githooks
 
 help:
 	@echo "Targets:"
@@ -257,3 +262,4 @@ help:
 	@echo "  make e2e IMAGE=<ref>      — boot-test a local image like CI (needs /dev/kvm)"
 	@echo "  make build                — podman build (amd64 host, full image)"
 	@echo "  make docs                 — doc generation (KT-2, not yet implemented)"
+	@echo "  make hooks                — enable the committed git hooks (.githooks)"

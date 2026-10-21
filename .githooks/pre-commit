@@ -1,0 +1,11 @@
+#!/bin/bash
+# Local pre-commit: same gate as CI (docs-check). Runs from Makefile so the
+# venv bootstrap (.ci fetch included) is shared with local runs.
+set -euo pipefail
+
+if ! make -C "$(git rev-parse --show-toplevel)" docs-check; then
+  echo "" >&2
+  echo "pre-commit: docs-check failed — fix the citations or links above." >&2
+  echo "Escalate with 'git commit --no-verify' if really needed (CI will still fail)." >&2
+  exit 1
+fi
