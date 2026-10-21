@@ -184,7 +184,6 @@ RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
     && systemctl enable systemd-networkd.service \
     && systemctl enable systemd-networkd.socket \
     && systemctl enable systemd-timesyncd.service \
-    && systemctl enable ssh-host-keygen.service \
     && systemctl mask -- \
         cron.service \
         getty@tty2.service \
