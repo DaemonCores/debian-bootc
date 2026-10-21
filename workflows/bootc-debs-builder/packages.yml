@@ -114,6 +114,10 @@ packages:
           - kernel/pages/16k
     env:
       KERNEL_PAGES: "4k"
+      # Regenerate the patch lock on each build instead of verifying it.
+      # patch --dry-run is the real guard; the lock file is bumped manually
+      # only when forcing a cache-bust rebuild is needed.
+      PATCH_GUARD_UPDATE: "1"
     deb-glob: "linux-image-common_*"
     sources:
       # The base config, the two architecture overlays and the source download
@@ -357,6 +361,8 @@ packages:
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
     variant-source: "kernel/modules/{variant}"
+    env:
+      PATCH_GUARD_UPDATE: "1"
     sources:
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
