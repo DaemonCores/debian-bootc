@@ -21,10 +21,10 @@
 #                  such as ifupdown2 or firstboot-user-setup. The harness skips
 #                  a test whose variant does not match (reports SKIP, not FAIL).
 
-boot_timeout: 900
+boot_timeout: 60
 # Timeout for the VM to come back after the rollback reboot (shorter than
 # boot_timeout since the image is already installed — no dracut rebuild).
-reboot_timeout: 300
+reboot_timeout: 60
 
 tests:
   # ── bootc / ostree / immutability ──────────────────────────────────────
