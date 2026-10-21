@@ -363,6 +363,17 @@ packages:
     variant-source: "kernel/modules/{variant}"
     env:
       PATCH_GUARD_UPDATE: "1"
+    # Track the stable kernel version so KERNEL_VER enters the content hash.
+    # The modules build derives their actual version from the kernel dep deb
+    # (kernel-prepare.sh), not from KERNEL_VER directly, but the track entry
+    # ensures the cache is invalidated whenever the kernel bumps: without it
+    # the module content hash is constant, the modules are never rebuilt, and
+    # they keep a pinned `Depends: daemoncores-kernel-<old_ver>` that breaks
+    # once the APT repo only carries the newer kernel.
+    track:
+      KERNEL_VER:
+        kernel-org: stable
+        require-patches: kernel/patches.yml
     sources:
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
