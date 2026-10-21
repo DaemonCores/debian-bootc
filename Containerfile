@@ -198,7 +198,6 @@ RUN apt update \
 COPY ./src/debianpostinstall /
 COPY ./src/basepostinstall /
 RUN /usr/libexec/debian-bootc/ostree-layout \
-    && systemctl enable ssh-host-keygen.service \
     && rm -f /etc/ssh/ssh_host_*
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
