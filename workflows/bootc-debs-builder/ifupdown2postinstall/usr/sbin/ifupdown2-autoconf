@@ -20,9 +20,19 @@ ip link set "$IFACE" up 2>/dev/null || true
 # timeout we fall back to "inet manual" (interface up, no IP) which lets
 # networking.service succeed and leaves the door open for a later static
 # configuration.
+# Create a minimal executable no-op script for the probe.  dhclient forks and
+# calls execve(script_name, ...) for each hook (PREINIT, BOUND, …).  execve(2)
+# rejects /dev/null with EACCES (not a regular file), so the child exits 127,
+# dhclient treats the BOUND hook as failed, and exits non-zero — making the
+# probe always report "no DHCP server" and configure the interface as
+# "inet manual" with no IP address.  A tmpfs-backed executable shell script
+# that simply exits 0 is the correct fix.
+_probe_script=$(mktemp /run/dhcp4-probe-script.XXXXXX)
+printf '#!/bin/sh\nexit 0\n' > "${_probe_script}"
+chmod +x "${_probe_script}"
 IPV4_STANZA="iface ${IFACE} inet manual"
 if timeout 8 dhclient -4 -1 -timeout 6 -q \
-  -sf /dev/null \
+  -sf "${_probe_script}" \
   -pf /run/dhcp4-probe.pid \
   -lf /run/dhcp4-probe.leases \
   "$IFACE" >/dev/null 2>&1; then
@@ -35,7 +45,7 @@ fi
 # is the only reliable way to hand it to domain-set.
 sed -n 's/.*option domain-name "\([^"]*\)".*/\1/p' \
   /run/dhcp4-probe.leases 2>/dev/null | head -1 >/run/ifupdown2-dhcp-domain || true
-rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases
+rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases "${_probe_script}"
 
 # Probe for a DHCPv6 server before writing the config. The "inet6 auto" stanza
 # is added only when a server actually answers; otherwise ifup would spawn a
