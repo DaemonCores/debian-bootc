@@ -537,7 +537,8 @@ packages:
       sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc6/" \
         /output/ifupdown2/DEBIAN/control
       chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf \
-        /output/ifupdown2/usr/sbin/domain-set
+        /output/ifupdown2/usr/sbin/domain-set \
+        /output/ifupdown2/usr/sbin/ifupdown2-dhcp4-probe-hook
 
       # Content check: version bumped and our helpers present + executable.
       grep -qF "Version: 1:${ORIG_VER}+bootc6" \
