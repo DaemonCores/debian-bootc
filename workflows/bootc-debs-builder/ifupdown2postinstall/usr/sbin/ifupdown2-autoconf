@@ -15,28 +15,26 @@ ip link set "$IFACE" up 2>/dev/null || true
 # Probe for a DHCPv4 server before writing the config.  ifupdown2 has no
 # built-in fallback: if the interface is configured "inet dhcp" and no server
 # answers, ifup blocks and networking.service fails.  We probe first using
-# dhclient with -sf /dev/null (no lease script → no interface configuration)
-# so the probe has zero side-effects.  If no server answers within the
-# timeout we fall back to "inet manual" (interface up, no IP) which lets
+# dhclient with a no-op hook script (no lease actions → no interface
+# configuration side-effects).  If no server answers within the timeout we
+# fall back to "inet manual" (interface up, no IP) which lets
 # networking.service succeed and leaves the door open for a later static
 # configuration.
-# Create a minimal executable no-op script for the probe.  dhclient forks and
-# calls execve(script_name, ...) for each hook (PREINIT, BOUND, …).  execve(2)
-# rejects /dev/null with EACCES (not a regular file), so the child exits 127,
-# dhclient treats the BOUND hook as failed, and exits non-zero — making the
-# probe always report "no DHCP server" and configure the interface as
-# "inet manual" with no IP address.  A tmpfs-backed executable shell script
-# that simply exits 0 is the correct fix.
-_probe_script=$(mktemp /run/dhcp4-probe-script.XXXXXX)
-printf '#!/bin/sh\nexit 0\n' > "${_probe_script}"
-chmod +x "${_probe_script}"
+# The hook script lives in /usr (installed by this package, always executable,
+# never in a potentially-noexec tmpfs).  dhclient forks and calls
+# execve(script, ...) for each hook (PREINIT, BOUND, …); a script that is not
+# executable causes the child to exit non-zero and dhclient to treat the lease
+# as failed.  Having the script in /usr avoids any noexec or permission issues.
 IPV4_STANZA="iface ${IFACE} inet manual"
-if timeout 8 dhclient -4 -1 -timeout 6 -q \
-  -sf "${_probe_script}" \
+if timeout 8 dhclient -4 -1 -timeout 6 \
+  -sf /usr/lib/ifupdown2/dhcp4-probe-hook \
   -pf /run/dhcp4-probe.pid \
   -lf /run/dhcp4-probe.leases \
-  "$IFACE" >/dev/null 2>&1; then
+  "$IFACE" >/run/dhcp4-probe.log 2>&1; then
   IPV4_STANZA="iface ${IFACE} inet dhcp"
+else
+  echo "ifupdown2-autoconf: DHCPv4 probe exit $? on ${IFACE} (inet manual):" >&2
+  cat /run/dhcp4-probe.log >&2 || true
 fi
 # Capture the DHCP-advertised domain from the probe lease before deleting it.
 # domain-set runs as ExecStartPost, after ifup has launched dhclient in the
@@ -45,7 +43,7 @@ fi
 # is the only reliable way to hand it to domain-set.
 sed -n 's/.*option domain-name "\([^"]*\)".*/\1/p' \
   /run/dhcp4-probe.leases 2>/dev/null | head -1 >/run/ifupdown2-dhcp-domain || true
-rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases "${_probe_script}"
+rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases /run/dhcp4-probe.log
 
 # Probe for a DHCPv6 server before writing the config. The "inet6 auto" stanza
 # is added only when a server actually answers; otherwise ifup would spawn a
