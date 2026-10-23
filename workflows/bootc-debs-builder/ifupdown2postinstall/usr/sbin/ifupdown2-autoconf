@@ -27,7 +27,7 @@ ip link set "$IFACE" up 2>/dev/null || true
 # as failed.  Having the script in /usr avoids any noexec or permission issues.
 IPV4_STANZA="iface ${IFACE} inet manual"
 if timeout 8 dhclient -4 -1 -timeout 6 \
-  -sf /usr/lib/ifupdown2/dhcp4-probe-hook \
+  -sf /usr/sbin/ifupdown2-dhcp4-probe-hook \
   -pf /run/dhcp4-probe.pid \
   -lf /run/dhcp4-probe.leases \
   "$IFACE" >/run/dhcp4-probe.log 2>&1; then
