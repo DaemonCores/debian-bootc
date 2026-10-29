@@ -545,7 +545,7 @@ packages:
     variant-env: PKG
     variant-source: "{variant}"
     env:
-      HELPERS_VER: 1
+      HELPERS_VER: 2
     build: |
       deb_overlay_tree "${PKG}" "${VER_SUFFIX}" "${PKG}" ${EXTRA_EXEC:-}
     deb-glob: "{variant}_*"
