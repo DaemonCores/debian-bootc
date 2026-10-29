@@ -5,6 +5,10 @@
 # when a server answers. Runs only while the marker line at the top is present.
 set -euo pipefail
 
+# Write to both stderr (journal) and ttyS0 (serial capture) so diagnostics
+# appear in CI serial logs regardless of journald forwarding.
+tty_log() { echo "ifupdown2-autoconf: $*" | tee /dev/ttyS0 >&2 || true; }
+
 grep -q "^# ifupdown2-autoconf" /etc/network/interfaces || exit 0
 
 IFACE=$(ip -o link show | awk -F': ' '/ether/{print $2; exit}')
@@ -25,16 +29,20 @@ ip link set "$IFACE" up 2>/dev/null || true
 # execve(script, ...) for each hook (PREINIT, BOUND, …); a script that is not
 # executable causes the child to exit non-zero and dhclient to treat the lease
 # as failed.  Having the script in /usr avoids any noexec or permission issues.
+HOOK=/usr/sbin/ifupdown2-dhcp4-probe-hook
+tty_log "DHCPv4 probe: iface=${IFACE} hook_exists=$(test -e ${HOOK} && echo yes || echo NO) hook_exec=$(test -x ${HOOK} && echo yes || echo NO)"
+tty_log "iface link: $(ip link show "${IFACE}" 2>&1 | tr '\n' ' ')"
 IPV4_STANZA="iface ${IFACE} inet manual"
-if timeout 8 dhclient -4 -1 -timeout 6 \
-  -sf /usr/sbin/ifupdown2-dhcp4-probe-hook \
+if timeout 8 dhclient -4 -1 \
+  -sf "${HOOK}" \
   -pf /run/dhcp4-probe.pid \
   -lf /run/dhcp4-probe.leases \
   "$IFACE" >/run/dhcp4-probe.log 2>&1; then
   IPV4_STANZA="iface ${IFACE} inet dhcp"
 else
-  echo "ifupdown2-autoconf: DHCPv4 probe exit $? on ${IFACE} (inet manual):" >&2
-  cat /run/dhcp4-probe.log >&2 || true
+  _rc=$?
+  tty_log "DHCPv4 probe exit ${_rc} on ${IFACE} (inet manual):"
+  while IFS= read -r _line; do tty_log "  dhclient: ${_line}"; done </run/dhcp4-probe.log || true
 fi
 # Capture the DHCP-advertised domain from the probe lease before deleting it.
 # domain-set runs as ExecStartPost, after ifup has launched dhclient in the
