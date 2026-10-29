@@ -1,0 +1,22 @@
+# DaemonCores doc-sync post-commit. Marks docs-sync-pending when HEAD
+# touched source paths without a docs/wiki change, and prints the
+# reminder. No-ops outside the DaemonCores namespace or when the repo
+# exposes no docs/*.wiki symlink.
+url=$(git config --get remote.origin.url 2>/dev/null || true)
+case "$url" in *DaemonCores*) ;; *) exit 0 ;; esac
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+wiki=
+for w in "$root"/docs/*.wiki; do
+	[ -e "$w" ] && wiki=$w && break
+done
+[ -n "$wiki" ] || exit 0
+changed=$(git show --name-only --format= HEAD)
+[ -n "$changed" ] || exit 0
+if printf '%s\n' "$changed" | grep -qvE '(^docs/|\.md$|\.wiki$|^_Sidebar|^\.githooks/|^hooks/)'; then
+	touch "$(git rev-parse --git-dir)/docs-sync-pending"
+	echo "✗ post-commit: source paths changed without a docs/wiki change." >&2
+	echo "  Update the wiki handoff pages (Handoff-Changes/Current-State at" >&2
+	echo "  minimum), commit the wiki, remove the pending marker, then push." >&2
+	echo "  Marker: $(git rev-parse --git-dir)/docs-sync-pending" >&2
+fi
+exit 0

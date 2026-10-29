@@ -1,0 +1,43 @@
+# DaemonCores doc-sync pre-push. Refuses a default-branch push when the
+# post-commit marker is set, when the wiki is dirty, or when the newest
+# pushed commit is fresher than the last dated entry of the wiki
+# Handoff-Changes.md. No-ops outside the DaemonCores namespace.
+url=$(git config --get remote.origin.url 2>/dev/null || true)
+case "$url" in *DaemonCores*) ;; *) exit 0 ;; esac
+set -e
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+wiki=
+for w in "$root"/docs/*.wiki; do
+	[ -e "$w" ] && wiki=$w && break
+done
+[ -n "$wiki" ] || exit 0
+wiki_dir=$(cd "$root/docs" && readlink -f -- "$(basename "$wiki")")
+gitdir=$(git rev-parse --git-dir)
+marker="$gitdir/docs-sync-pending"
+fail() {
+	echo "✗ pre-push: $1" >&2
+	exit 1
+}
+[ -e "$marker" ] && fail "docs-sync-pending is set (a source change lacked its docs update). Update the wiki handoff pages under $wiki_dir, commit the wiki, then: rm $marker — and push again."
+if git -C "$wiki_dir" status --porcelain --untracked-files=no | grep -q .; then
+	fail "the handoff wiki clone has uncommitted edits. Commit them (on main) before pushing the repository."
+fi
+[ -f "$wiki_dir/Handoff-Changes.md" ] || fail "Handoff-Changes.md missing in the wiki."
+last_doc=$(grep -m1 -E '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$wiki_dir/Handoff-Changes.md" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
+[ -n "$last_doc" ] || fail "Handoff-Changes.md carries no dated '## YYYY-MM-DD' entry."
+main=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)
+main=${main#origin/}
+: "${main:=main}"
+zero=0000000000000000000000000000000000000000
+while read -r lref lsha rref rsha; do
+	case "$rref" in
+	"refs/heads/$main") ;;
+	*) continue ;;
+	esac
+	[ "$lsha" = "$zero" ] && continue
+	cdate=$(git log -1 --date=short --format=%cd "$lsha")
+	if [ "$cdate" \> "$last_doc" ]; then
+		fail "the pushed commit is dated $cdate — fresher than the last wiki Handoff-Changes.md entry ($last_doc). Add the dated entry to the wiki (same effort as the change), commit the wiki, push again."
+	fi
+done
+exit 0
