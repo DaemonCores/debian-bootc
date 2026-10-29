@@ -147,7 +147,7 @@ See the Test policy parameter above (§ Project parameters). Test manifest: `wor
 | Debian | 13 Trixie (`debian:trixie`, unpinned) [src: file: Containerfile.base:10] | Base OS for images and build env |
 | bootc | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1120] | Bootable container tooling (built from source) |
 | OSTree | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1044] | Immutable OS deployment |
-| composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:1001] | Root filesystem integrity |
+| composefs (libcomposefs) | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:972] | Root filesystem integrity |
 | bootupd | latest upstream release, resolved by CI [src: file: workflows/bootc-debs-builder/packages.yml:909] | Bootloader updates |
 | GRUB (BLS-capable, signed) | 1+2.12+9+fedora44 [src: file: workflows/bootc-debs-builder/packages.yml:588] | EFI bootloader (amd64/arm64) |
 | bootc-installer | 3.0.0+git0290d4f+bootc8 [src: file: workflows/bootc-debs-builder/packages.yml:1275] | Installer for ISOs |

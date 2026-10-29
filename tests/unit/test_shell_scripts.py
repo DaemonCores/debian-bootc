@@ -16,7 +16,7 @@ import pytest
 
 SBIN = (
     Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
-    'ifupdown2postinstall' / 'usr' / 'sbin'
+    'ifupdown2' / 'usr' / 'sbin'
 )
 
 STUBS = {

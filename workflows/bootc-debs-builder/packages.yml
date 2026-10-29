@@ -9,6 +9,20 @@
 #   env        non-secret KEY: VALUE exported for the build (also hashed)
 #   secret-env ENV_VAR: SECRET_NAME injected from secrets (never hashed)
 #   build      the exact build script, verbatim
+#
+# Package CLASSES (format of DaemonCores-VE f88ad30): entries with a
+# `variants:` block (same mechanism as the kernel entries) expand one build
+# script across every package of the class — zero duplicated YAML. The
+# manifest-expand action (DaemonCores-CI) resolves each variant into a plain
+# package entry named <class-name>-<variant> (name = prefix + key).
+#
+# Shared deb logic: DaemonCores-CI scripts/deb_helpers.sh, imported
+# implicitly once per build by build-deb.sh (build-deb/build-deb.sh sources
+# it and exports CI_SCRIPTS) — no helper import appears in the build blocks;
+# strict mode (-euo pipefail) is enforced by the builder. The overlay model:
+# package dirs mirror the deb tree (variant-source: "{variant}" hashes each
+# mirror). HELPERS_VER is hashed per class entry; bump it whenever
+# deb_helpers.sh changes (other repository, invisible to the content hash).
 packages:
   - name: firstboot-user-setup
     sources:
@@ -507,89 +521,46 @@ packages:
       test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
-  - name: ifupdown2
-    upstream: ifupdown2
-    sources:
-      - ifupdown2postinstall
+  # ===========================================================================
+  # overlay-tree class — apt-repacked packages whose modifications are a whole
+  # extra file overlay (ifupdown2 autoconf suite, timesyncd network-online
+  # drop-in). One deb_overlay_tree call per package (deb_helpers.sh).
+  #
+  # PENDING (accepted deviation from the old verbatim builds): deb_overlay_tree
+  # regenerates md5sums and rewrites the version line but does NOT re-verify
+  # (a) the rewritten Version in control and (b) the presence/exec bit of the
+  # EXTRA_EXEC scripts — it only chmods them. The old ifupdown2 build had
+  # grep/test checks for both. If that regression matters, add the checks to
+  # deb_overlay_tree in DaemonCores-CI (bump HELPERS_VER there when done).
+  #
+  # PENDING — the other classes: the from-source packages below
+  # (firstboot-user-setup, bootupd, libcomposefs, ostree, bootc, fisherman,
+  # bootc-installer, grub-efi-{amd64,arm64}-signed) keep their verbatim builds.
+  # None maps cleanly onto deb_custom/deb_overlay_tree (they clone upstream and
+  # compile via meson/cargo/go, install their deps, or gate on when.arch with
+  # per-body divergences) — auditing them into a from-source class entry is
+  # deferred, not dropped.
+  # ===========================================================================
+  - name: overlay-tree
+    variant-env: PKG
+    variant-source: "{variant}"
+    env:
+      HELPERS_VER: 1
     build: |
-      set -euo pipefail
-      SAVE_PWD=$(pwd)
-
-      apt update
-      cd /tmp
-      apt-get download ifupdown2
-
-      mkdir -p /output/ifupdown2
-      dpkg-deb -R /tmp/ifupdown2_*.deb /output/ifupdown2
-
-      ORIG_VER=$(dpkg-deb -f /tmp/ifupdown2_*.deb Version)
-
-      cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/ifupdown2postinstall/* \
-        /output/ifupdown2/
-
-      # Regenerate md5sums after content modification
-      find /output/ifupdown2 -not -path '*/DEBIAN/*' -type f \
-        | xargs md5sum \
-        | sed "s|/output/ifupdown2/||" \
-        > /output/ifupdown2/DEBIAN/md5sums
-
-      # Preserve +pmx suffix for pve-manager version check
-      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc8/" \
-        /output/ifupdown2/DEBIAN/control
-      chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf \
-        /output/ifupdown2/usr/sbin/domain-set \
-        /output/ifupdown2/usr/sbin/ifupdown2-dhcp4-probe-hook
-
-      # Content check: version bumped and our helpers present + executable.
-      grep -qF "Version: 1:${ORIG_VER}+bootc8" \
-        /output/ifupdown2/DEBIAN/control \
-        || { echo "ERROR: ifupdown2 version not rewritten" >&2; exit 1; }
-      for s in ifupdown2-autoconf domain-set ifupdown2-dhcp4-probe-hook; do
-        test -s "/output/ifupdown2/usr/sbin/${s}" \
-          && test -x "/output/ifupdown2/usr/sbin/${s}" \
-          || { echo "ERROR: ifupdown2 ${s} missing/not exec" >&2; exit 1; }
-      done
-
-      dpkg-deb --build /output/ifupdown2 \
-        /debs/ifupdown2_${ORIG_VER}+bootc8_all.deb
-
-  - name: systemd-timesyncd
-    upstream: systemd-timesyncd
-    sources:
-      - timesyncpostinstall
-    build: |
-      set -euo pipefail
-      SAVE_PWD=$(pwd)
-
-      apt update
-      cd /tmp
-      apt-get download systemd-timesyncd
-
-      mkdir -p /output/systemd-timesyncd
-      dpkg-deb -R systemd-timesyncd_*.deb /output/systemd-timesyncd
-
-      ORIG_VER=$(dpkg-deb -f systemd-timesyncd_*.deb Version)
-      ARCH=$(dpkg-deb -f systemd-timesyncd_*.deb Architecture)
-
-      cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/timesyncpostinstall/* \
-        /output/systemd-timesyncd/
-
-      # Regenerate md5sums after content modification
-      find /output/systemd-timesyncd -not -path '*/DEBIAN/*' -type f \
-        | xargs md5sum \
-        | sed "s|/output/systemd-timesyncd/||" \
-        > /output/systemd-timesyncd/DEBIAN/md5sums
-
-      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc1/" \
-        /output/systemd-timesyncd/DEBIAN/control
-
-      # Content check: version rewritten in control.
-      grep -qF "Version: 1:${ORIG_VER}+bootc1" \
-        /output/systemd-timesyncd/DEBIAN/control \
-        || { echo "ERROR: systemd-timesyncd version not rewritten" >&2; exit 1; }
-
-      dpkg-deb --build /output/systemd-timesyncd \
-        /debs/systemd-timesyncd_${ORIG_VER}+bootc1_${ARCH}.deb
+      deb_overlay_tree "${PKG}" "${VER_SUFFIX}" "${PKG}" ${EXTRA_EXEC:-}
+    deb-glob: "{variant}_*"
+    variants:
+      ifupdown2:
+        env:
+          PKG: ifupdown2
+          VER_SUFFIX: +bootc8
+          EXTRA_EXEC: usr/sbin/ifupdown2-autoconf usr/sbin/domain-set usr/sbin/ifupdown2-dhcp4-probe-hook
+        upstream: ifupdown2
+      systemd-timesyncd:
+        env:
+          PKG: systemd-timesyncd
+          VER_SUFFIX: +bootc1
+        upstream: systemd-timesyncd
 
   # grub-efi-amd64-signed is x86_64-only by nature (it builds the amd64 EFI
   # GRUB binary signed for Secure Boot). On an arm64 runner the package is

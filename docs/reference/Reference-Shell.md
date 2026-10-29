@@ -37,12 +37,12 @@ returning 101 tells the invoke-rc.d helper "forbidden", so no daemon runs
 inside the build container (there is no init there and services must start
 only on the real first boot).
 
-## `workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set`
+## `workflows/bootc-debs-builder/ifupdown2/usr/sbin/domain-set`
 
 domain-set - render /etc/hosts and /etc/issue from their templates using the
 host's current global IPv4 address, short hostname and DHCP-advertised domain.
 
-## `workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf`
+## `workflows/bootc-debs-builder/ifupdown2/usr/sbin/ifupdown2-autoconf`
 
 ifupdown2-autoconf - generate /etc/network/interfaces on boot: a DHCP WAN on
 the first ethernet NIC, with a DHCPv6 probe that only adds the inet6 stanza
