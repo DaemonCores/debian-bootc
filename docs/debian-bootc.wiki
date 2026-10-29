@@ -1,1 +1,1 @@
-../debian-bootc.wiki
+../../debian-bootc.wiki
