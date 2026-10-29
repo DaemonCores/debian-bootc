@@ -534,24 +534,24 @@ packages:
         > /output/ifupdown2/DEBIAN/md5sums
 
       # Preserve +pmx suffix for pve-manager version check
-      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc7/" \
+      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc8/" \
         /output/ifupdown2/DEBIAN/control
       chmod +x /output/ifupdown2/usr/sbin/ifupdown2-autoconf \
         /output/ifupdown2/usr/sbin/domain-set \
         /output/ifupdown2/usr/sbin/ifupdown2-dhcp4-probe-hook
 
       # Content check: version bumped and our helpers present + executable.
-      grep -qF "Version: 1:${ORIG_VER}+bootc7" \
+      grep -qF "Version: 1:${ORIG_VER}+bootc8" \
         /output/ifupdown2/DEBIAN/control \
         || { echo "ERROR: ifupdown2 version not rewritten" >&2; exit 1; }
-      for s in ifupdown2-autoconf domain-set; do
+      for s in ifupdown2-autoconf domain-set ifupdown2-dhcp4-probe-hook; do
         test -s "/output/ifupdown2/usr/sbin/${s}" \
           && test -x "/output/ifupdown2/usr/sbin/${s}" \
           || { echo "ERROR: ifupdown2 ${s} missing/not exec" >&2; exit 1; }
       done
 
       dpkg-deb --build /output/ifupdown2 \
-        /debs/ifupdown2_${ORIG_VER}+bootc7_all.deb
+        /debs/ifupdown2_${ORIG_VER}+bootc8_all.deb
 
   - name: systemd-timesyncd
     upstream: systemd-timesyncd
