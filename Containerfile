@@ -18,6 +18,9 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # tagged `<tag>-nosign`: the same image on the -nosign kernel package, for amd64
 # and the plain-tag arm64 kernel only. The 4 KB image has no twin.
 LABEL org.daemoncores.unsigned-kernel-image="true"
+# The -nvidia twin (opt-in, gpu_driver_images input): the same layers plus
+# the NVIDIA proprietary user-space, accepted at install time (EULA).
+LABEL org.daemoncores.nvidia-image="true"
 
 
 # -----------------------------------------------------------------------------
@@ -209,3 +212,22 @@ RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE
+
+#####################################################################################
+# NVIDIA proprietary layer — opt-in `-nvidia` twin only
+#####################################################################################
+# The public image never carries the NVIDIA proprietary user-space: the EULA
+# requires an acceptance step, which happens at install time (bootc-installer
+# offers the NVIDIA variant after an explicit consent, see the debian-bootc
+# wiki). The image declares `LABEL org.daemoncores.nvidia-image` so the CI
+# plans the `<tag>-nvidia` twin ONLY when its gpu_driver_images input is set:
+# the same layers, one extra RUN. The twin is otherwise identical — bootc
+# upgrade follows the same suite.
+ARG GPU_EXTRA_PKGS=""
+RUN if [ -n "${GPU_EXTRA_PKGS}" ]; then \
+      # Headers must match the kernel IN THE IMAGE: nvidia-kernel-dkms builds
+      # against /lib/modules/<kver>/build. The pairing is verified on the
+      # first real twin build — PENDING.
+      apt-get install -y dkms ${GPU_EXTRA_PKGS} \
+      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
+    fi
