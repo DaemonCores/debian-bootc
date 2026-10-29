@@ -1,6 +1,9 @@
-"""Unit tests for ``lib/kernel-patches.sh``.
+"""Unit tests for the ``kernel_apply_patches`` CI helper.
 
-Upstream is replaced by ``file://`` URLs, so no network is needed.
+Upstream is replaced by ``file://`` URLs, so no network is needed. The
+primitives live in DaemonCores-CI ``scripts/kernel_helpers.sh`` (the
+standard kernel helper, commit fb5b1a8); the debian-bootc manifests stay
+the declarative patches.yml consumed through ``kernel_patch_list``.
 """
 
 import hashlib
@@ -12,8 +15,8 @@ from pathlib import Path
 import pytest
 
 LIB = (
-    Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
-    'lib' / 'kernel-patches.sh'
+    Path(__file__).resolve().parents[3] / 'DaemonCores-CI' / 'scripts' /
+    'kernel_helpers.sh'
 )
 GUARD = Path(
     os.environ.get('CI_SCRIPTS')
@@ -99,7 +102,7 @@ def _apply(root: Path,
     """
     script = (
         f'set -euo pipefail; export CI_SCRIPTS={GUARD}; . {LIB}; '
-        f'kernel_apply_patches {manifest} kernel {arch} 7.2.11 {root}/tree'
+        f'kernel_apply_patches {manifest} {arch} 7.2.11 {root}/tree kernel'
     )
     return subprocess.run(['bash', '-c', script],
                           check=False,
@@ -115,12 +118,23 @@ def test_common_then_architecture_in_order(setup: Path) -> None:
         setup: Source tree and patch files.
     """
     manifest = _manifest(
-        setup, [('second', 'two.patch', 'amd64', 'kernel'),
-                ('first', 'one.patch', 'common', 'kernel')]
+        setup, [('first', 'one.patch', 'common', 'kernel'),
+                ('second', 'indep.patch', 'amd64', 'kernel')]
     )
+    # The second patch is independent (another file), so the whole-set
+    # dry-run sees a pristine, coherent tree; the applied order is
+    # stage-staged (common first), whatever the manifest order is.
+    (setup / 'tree' / 'file2').write_text('upstream other\n')
+    (setup / 'indep.patch').write_text(
+        '--- a/file2\n+++ b/file2\n@@ -1 +1 @@\n-upstream other\n+patched other\n'
+    )
+    lock = json.loads((setup / 'patches.lock.json').read_text())
+    lock['file2'] = hashlib.sha256(b'upstream other\n').hexdigest()
+    (setup / 'patches.lock.json').write_text(json.dumps(lock) + '\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
-    assert (setup / 'tree' / 'file').read_text() == 'two\n'
+    out = result.stdout.splitlines()
+    assert out.index('applied patch first') < out.index('applied patch second')
 
 
 def test_other_architecture_and_module_class_are_skipped(setup: Path) -> None:
