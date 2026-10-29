@@ -32,7 +32,7 @@ Use the repository issue forms for bugs and feature proposals. Report vulnerabil
 | Build environment | `workflows/env.yml` |
 | Runtime tests | `workflows/tests.yml` |
 | Pipeline triggers | `.github/workflows/pipeline.yml` |
-| Documentation | `README.md`, `docs/` |
+| Documentation | `README.md`, `docs/` (wiki symlink) |
 
 ## Local image build
 
@@ -48,7 +48,7 @@ This consumes the project's published APT repository. Package changes should be 
 - Add a runtime test and diagnostic command when changing boot, filesystem, networking, or service behaviour.
 - Preserve architecture gates for architecture-specific tests.
 - Keep secrets out of build logs, fixtures, and issue attachments.
-- Update the relevant README and `docs/` page in the same pull request.
+- Update the relevant README and wiki page (`docs/` is the wiki) in the same pull request.
 - State which architectures and installation paths were actually tested.
 
 Use concise imperative commits; Conventional Commit prefixes are encouraged.

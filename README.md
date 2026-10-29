@@ -111,8 +111,8 @@ GitHub Pages must be configured for Actions deployment so the APT repository can
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Design decisions and security trade-offs](docs/justifications.md)
+- [Architecture](docs/Handoff-Architecture.md)
+- [Design decisions and security trade-offs](docs/Handoff-Decisions.md)
 - [Minimal image](docs/minimal.md)
 - [Support](SUPPORT.md)
 - [Security policy](SECURITY.md)

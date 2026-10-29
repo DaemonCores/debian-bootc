@@ -5,7 +5,7 @@
 # every arm64 core implements, so this kernel boots the older devices that lack
 # the 16 KB granule: Raspberry Pi 3 (Cortex-A53, TGran16 = not supported per the
 # Cortex-A53 TRM, DDI 0500J) and Raspberry Pi 4 (Cortex-A72). See
-# docs/decisions.md ("Two arm64 kernels").
+# docs/Handoff-Decisions.md ("Two arm64 kernels").
 #
 # The page size is a compile-time choice (ARM64_4K_PAGES / ARM64_16K_PAGES /
 # ARM64_64K_PAGES are a Kconfig choice), so it cannot be a module: a second

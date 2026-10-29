@@ -10,7 +10,7 @@ SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.title="Debian Trixie bootc"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootable bootc/ostree container image, signed with cosign."
-# Asks the CI for two arm64 kernels (docs/decisions.md, "Two arm64 kernels"): the
+# Asks the CI for two arm64 kernels (docs/Handoff-Decisions.md, "Two arm64 kernels"): the
 # plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
 # `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
 LABEL org.daemoncores.arm64-4k-image="true"
@@ -170,7 +170,7 @@ RUN apt update \
 # Kernel variant: `minimal` (default) is the project kernel, the same as Containerfile.minimal.
 ARG KERNEL_VARIANT=minimal
 # arm64 only. The arm64 distribution ships two kernels because the page size is a
-# compile-time choice (docs/decisions.md, "Two arm64 kernels"): the 4 KB kernel
+# compile-time choice (docs/Handoff-Decisions.md, "Two arm64 kernels"): the 4 KB kernel
 # (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
 # `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name
 # (`-nosign` selects the unsigned-kernel twin) and ARM_DEVICES lists the device

@@ -43,7 +43,6 @@ htmlcov/
 # Local agent and Kronn state (never project content)
 /.claude/
 /lancedb/
-/docs/.kronn-citation-originals/
 
 # Editors and OS
 .idea/

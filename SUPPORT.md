@@ -19,7 +19,7 @@ Support is provided through GitHub issues on a best-effort basis.
 
 ## Before opening an issue
 
-Read the [README](README.md) and [architecture documentation](docs/architecture.md), then search existing issues.
+Read the [README](README.md) and [architecture documentation](docs/Handoff-Architecture.md), then search existing issues.
 
 Provide:
 

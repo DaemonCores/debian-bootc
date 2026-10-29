@@ -82,7 +82,7 @@ packages:
   # config and both architecture overlays, but no per-device overlay, so
   # changing a device overlay does NOT invalidate this package's cache.
   #
-  # Two kernels on arm64 (docs/decisions.md, "Two arm64 kernels"): the page size
+  # Two kernels on arm64 (docs/Handoff-Decisions.md, "Two arm64 kernels"): the page size
   # is a compile-time choice, so the 4 KB kernel (older devices: Raspberry Pi 3
   # and 4) and the 16 KB kernel (recent hardware: Raspberry Pi 5, RK3588) are two
   # builds of this same script. The variant key is a name suffix: "" keeps the
@@ -351,7 +351,7 @@ packages:
   - name: linux-modules-arm-device
     when:
       arch: arm64
-    # The kernel a device runs follows its hardware generation (docs/decisions.md,
+    # The kernel a device runs follows its hardware generation (docs/Handoff-Decisions.md,
     # "Two arm64 kernels"): the older devices need the 4 KB kernel, the recent ones
     # run the 16 KB kernel. KERNEL_SUFFIX names the kernel this device's modules
     # are built against.
