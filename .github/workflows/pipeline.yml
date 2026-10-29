@@ -18,9 +18,8 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'docs/**'
+      - 'docs'
       - '**.md'
-      - '.github/workflows/docs-wiki-sync.yml'
   schedule:
     - cron: '0 4 1 * *'
   workflow_dispatch:
