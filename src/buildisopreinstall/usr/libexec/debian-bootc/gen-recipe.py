@@ -56,6 +56,9 @@ def _build_images(
     for cf in containerfiles:
         tag = "latest" if cf == "Containerfile" else cf[len("Containerfile."):]
         variant = "Standard" if tag == "latest" else tag.capitalize()
+        with open(cf_path(ctx_dir, cf), encoding="utf-8") as fh:
+            content = fh.read()
+        nvidia = "org.daemoncores.nvidia-image" in content
         for arch in arches:
             imgref = f"{registry}:{tag}_{arch}"
             images.append({
@@ -67,8 +70,35 @@ def _build_images(
                 "needs_user_creation": True,
                 "filesystems": ["btrfs", "xfs"],
             })
+            if nvidia:
+                # The EULA-restricted twin (wiki: GPU-Support.md). Listed
+                # AFTER the public entries; deployed only when the installer
+                # detects the GPU AND the EULA was accepted at install.
+                images.append({
+                    "name": f"{distro_name} {variant} NVIDIA ({arch})",
+                    "imgref": f"{registry}:{tag}-nvidia_{arch}",
+                    "bootloader": "grub2",
+                    "filesystem": "btrfs",
+                    "composefs": False,
+                    "needs_user_creation": True,
+                    "filesystems": ["btrfs", "xfs"],
+                    "nvidia": True,
+                })
 
     return images
+
+
+def cf_path(ctx_dir: str, cf: str) -> str:
+    """Join the context directory with a Containerfile name.
+
+    Args:
+        ctx_dir: Directory containing the Containerfile* files.
+        cf: The Containerfile name.
+
+    Returns:
+        The joined path.
+    """
+    return os.path.join(ctx_dir, cf)
 
 
 def main() -> None:

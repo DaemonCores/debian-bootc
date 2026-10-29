@@ -17,6 +17,19 @@
             ]
         },
         {
+            "name": "DaemonCores Standard NVIDIA (amd64)",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:latest-nvidia_amd64",
+            "bootloader": "grub2",
+            "filesystem": "btrfs",
+            "composefs": false,
+            "needs_user_creation": true,
+            "filesystems": [
+                "btrfs",
+                "xfs"
+            ],
+            "nvidia": true
+        },
+        {
             "name": "DaemonCores Standard (arm64)",
             "imgref": "ghcr.io/daemoncores/debian-bootc:latest_arm64",
             "bootloader": "grub2",
@@ -29,7 +42,20 @@
             ]
         },
         {
-            "name": "DaemonCores Minimal (amd64) — net install",
+            "name": "DaemonCores Standard NVIDIA (arm64)",
+            "imgref": "ghcr.io/daemoncores/debian-bootc:latest-nvidia_arm64",
+            "bootloader": "grub2",
+            "filesystem": "btrfs",
+            "composefs": false,
+            "needs_user_creation": true,
+            "filesystems": [
+                "btrfs",
+                "xfs"
+            ],
+            "nvidia": true
+        },
+        {
+            "name": "DaemonCores Minimal (amd64)",
             "imgref": "ghcr.io/daemoncores/debian-bootc:minimal_amd64",
             "bootloader": "grub2",
             "filesystem": "btrfs",
@@ -41,7 +67,7 @@
             ]
         },
         {
-            "name": "DaemonCores Minimal (arm64) — net install",
+            "name": "DaemonCores Minimal (arm64)",
             "imgref": "ghcr.io/daemoncores/debian-bootc:minimal_arm64",
             "bootloader": "grub2",
             "filesystem": "btrfs",
@@ -54,7 +80,7 @@
         }
     ],
     "welcome_title": "Install DaemonCores",
-    "welcome_subtitle": "A minimal Debian 13 Trixie bootc system — atomic updates, rollback on failure, managed as a container image.",
+    "welcome_subtitle": "A minimal Debian 13 Trixie bootc system \u2014 atomic updates, rollback on failure, managed as a container image.",
     "credits_data": "/org/bootcinstaller/Installer/data/credits.json",
     "tour": {
         "welcome": {

@@ -1,0 +1,10 @@
+**NVIDIA driver acceptance (NVIDIA Software License Agreement, CUDA and
+driver user-space).** By installing the `-nvidia` image you accept the
+NVIDIA Software License Agreement for the proprietary kernel module
+(NVRM/DKMS) and the NVIDIA driver user-space libraries shipped in this
+image. Redistributing the image without the acceptance step at
+installation is not permitted. The complete agreement is reproduced at
+first install and by `nvidia-smi --license` on the installed host; the
+authoritative text: <https://www.nvidia.com/en-us/drivers/nvidia-license/>.
+(Full verbatim text to be pinned in this page before the first public
+`-nvidia` build — PENDING, installer lane.)

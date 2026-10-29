@@ -73,7 +73,8 @@ RUN apt update \
         xdg-utils \
         adwaita-icon-theme \
         mokutil \
-        openssl
+        openssl \
+        pciutils
 
 # Placed after the apt layer: editing a Containerfile* or the generator must not
 # invalidate the cached installer-stack install.
