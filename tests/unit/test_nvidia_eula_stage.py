@@ -41,7 +41,8 @@ RECIPE = {
     'imgref': 'reg/x:latest_amd64',
     'images': [
         {'imgref': 'reg/x:latest_amd64'},
-        {'imgref': 'reg/x:latest-nvidia_amd64', 'nvidia': True},
+        {'imgref': 'reg/x:latest-gaming_amd64', 'gpu': 'gaming'},
+        {'imgref': 'reg/x:latest-ia_amd64', 'gpu': 'ia'},
     ],
 }
 
@@ -220,20 +221,20 @@ def test_consent_explicit_flag(eula_sandbox: Path) -> None:
 
 
 def test_select_twin_requires_consent_and_gpu(tmp_path: Path) -> None:
-    """Selecting the -nvidia twin without prior consent is refused.
+    """Selecting the -ia twin without prior consent is refused.
 
     Args:
         tmp_path: Scratch directory.
     """
     target = recipe(tmp_path, imgref='reg/x:minimal_amd64')
-    result = run(tmp_path, 'select', str(target), 'reg/x:latest-nvidia_amd64')
+    result = run(tmp_path, 'select', str(target), 'reg/x:latest-ia_amd64')
     assert result.returncode == 1
     data = json.loads(target.read_text(encoding='utf-8'))
     assert data['imgref'] == 'reg/x:minimal_amd64'
 
 
 def test_select_twin_requires_gpu(tmp_path: Path) -> None:
-    """Selecting the twin with consent but no NVIDIA GPU is refused.
+    """Selecting the ia twin with consent but no NVIDIA GPU is refused.
 
     Args:
         tmp_path: Scratch directory.
@@ -243,7 +244,7 @@ def test_select_twin_requires_gpu(tmp_path: Path) -> None:
     target = recipe(root)
     assert run(root, 'consent', '--accept').returncode == 0
     result = run(
-        root, 'select', str(target), 'reg/x:latest-nvidia_amd64',
+        root, 'select', str(target), 'reg/x:latest-ia_amd64',
         lspci=LSPCI_NONE,
     )
     assert result.returncode == 1
@@ -261,10 +262,10 @@ def test_select_twin_with_consent_rewrites_imgref(tmp_path: Path) -> None:
     (root / 'nvidia-eula.txt').write_text('EULA\n', encoding='utf-8')
     target = recipe(root)
     assert run(root, 'consent', '--accept').returncode == 0
-    result = run(root, 'select', str(target), 'reg/x:latest-nvidia_amd64')
+    result = run(root, 'select', str(target), 'reg/x:latest-ia_amd64')
     assert result.returncode == 0, result.stderr
     data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest-nvidia_amd64'
+    assert data['imgref'] == 'reg/x:latest-ia_amd64'
 
 
 def test_select_public_never_needs_consent(tmp_path: Path) -> None:
@@ -276,7 +277,7 @@ def test_select_public_never_needs_consent(tmp_path: Path) -> None:
     target = recipe(
         tmp_path,
         images=[{'imgref': 'reg/x:latest_amd64'}],
-        imgref='reg/x:latest-nvidia_amd64',
+        imgref='reg/x:latest-ia_amd64',
     )
     result = run(
         tmp_path, 'select', str(target), 'reg/x:latest_amd64',
@@ -285,6 +286,35 @@ def test_select_public_never_needs_consent(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     data = json.loads(target.read_text(encoding='utf-8'))
     assert data['imgref'] == 'reg/x:latest_amd64'
+
+
+def test_select_gaming_requires_gpu(tmp_path: Path) -> None:
+    """Selecting the gaming twin with no GPU at all is refused.
+
+    Args:
+        tmp_path: Scratch directory.
+    """
+    target = recipe(tmp_path, imgref='reg/x:latest_amd64')
+    result = run(
+        tmp_path, 'select', str(target), 'reg/x:latest-gaming_amd64',
+        lspci=LSPCI_NONE,
+    )
+    assert result.returncode == 1
+    data = json.loads(target.read_text(encoding='utf-8'))
+    assert data['imgref'] == 'reg/x:latest_amd64'
+
+
+def test_select_gaming_public_no_consent(tmp_path: Path) -> None:
+    """The gaming twin is a public variant: a detected GPU is enough, no EULA.
+
+    Args:
+        tmp_path: Scratch directory.
+    """
+    target = recipe(tmp_path, imgref='reg/x:latest_amd64')
+    result = run(tmp_path, 'select', str(target), 'reg/x:latest-gaming_amd64')
+    assert result.returncode == 0, result.stderr
+    data = json.loads(target.read_text(encoding='utf-8'))
+    assert data['imgref'] == 'reg/x:latest-gaming_amd64'
 
 
 def test_select_unknown_imgref_refused(tmp_path: Path) -> None:

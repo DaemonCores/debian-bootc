@@ -72,7 +72,9 @@ def test_kernel_prepare_users_hash_the_library() -> None:
         entry for entry in _packages()
         if 'kernel_prepare' in str(entry.get('build', ''))
     ]
-    assert {e['name'] for e in users} == {'linux-modules-arm-device'}
+    assert {e['name'] for e in users} == {
+        'linux-modules-arm-device', 'linux-modules-nvidia'
+    }
     for entry in users:
         assert library in entry['sources'], entry['name']
         assert 'lib/kernel-prepare.sh' in entry['build']
@@ -87,7 +89,9 @@ def test_kernel_signing_users_hash_the_library() -> None:
         if 'kernel_signing_setup' in str(entry.get('build', ''))
     ]
     assert {e['name']
-            for e in users} == {'linux-image', 'linux-modules-arm-device'}
+            for e in users} == {
+        'linux-image', 'linux-modules-arm-device', 'linux-modules-nvidia'
+    }
     for entry in users:
         assert library in entry['sources'], entry['name']
 

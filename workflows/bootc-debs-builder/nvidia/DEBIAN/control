@@ -1,0 +1,13 @@
+Package: linux-modules-nvidia
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+Section: kernel
+Priority: optional
+Depends: daemoncores-kernel-{{ KVER }} (= {{ VER }})
+Description: NVIDIA open kernel modules (ia image variant)
+ The NVIDIA open kernel modules (nvidia.ko, nvidia-uvm, nvidia-drm,
+ nvidia-modeset, nvidia-peermem) built in CI against the project kernel
+ (daemoncores-kernel) — the deps/waves module pattern of the
+ linux-modules entries, NOT DKMS: nothing compiles on the target. The
+ deb-glob of this entry is installed by the <tag>-ia image twin only.

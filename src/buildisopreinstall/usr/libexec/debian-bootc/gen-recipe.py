@@ -58,7 +58,10 @@ def _build_images(
         variant = "Standard" if tag == "latest" else tag.capitalize()
         with open(cf_path(ctx_dir, cf), encoding="utf-8") as fh:
             content = fh.read()
-        nvidia = "org.daemoncores.nvidia-image" in content
+        gpu_twins = (
+            "org.daemoncores.gpu-ia-image" in content
+            or "org.daemoncores.gpu-gaming-image" in content
+        )
         for arch in arches:
             imgref = f"{registry}:{tag}_{arch}"
             images.append({
@@ -70,20 +73,31 @@ def _build_images(
                 "needs_user_creation": True,
                 "filesystems": ["btrfs", "xfs"],
             })
-            if nvidia:
-                # The EULA-restricted twin (wiki: GPU-Support.md). Listed
-                # AFTER the public entries; deployed only when the installer
-                # detects the GPU AND the EULA was accepted at install.
-                images.append({
-                    "name": f"{distro_name} {variant} NVIDIA ({arch})",
-                    "imgref": f"{registry}:{tag}-nvidia_{arch}",
-                    "bootloader": "grub2",
-                    "filesystem": "btrfs",
-                    "composefs": False,
-                    "needs_user_creation": True,
-                    "filesystems": ["btrfs", "xfs"],
-                    "nvidia": True,
-                })
+            if gpu_twins:
+                # GPU usage twins (wiki: GPU-Support.md). Listed AFTER the
+                # public entries; the ia twin is deployed only when the
+                # installer detects the GPU AND the EULA was accepted at
+                # install, the gaming twin whenever a GPU is detected.
+                # linux-modules-nvidia is an amd64-only plan deb (arm64 has
+                # no shipped NVIDIA compute target): the ia twin exists
+                # for amd64 only.
+                for gpu_key, name_suffix, twin_tag, twin_arches in (
+                    ("gaming", "Gaming", "-gaming", ("amd64", "arm64")),
+                    ("ia", "IA", "-ia", ("amd64",)),
+                ):
+                    if arch not in twin_arches:
+                        continue
+                    entry: JsonObject = {
+                        "name": f"{distro_name} {variant} {name_suffix} ({arch})",
+                        "imgref": f"{registry}:{tag}{twin_tag}_{arch}",
+                        "bootloader": "grub2",
+                        "filesystem": "btrfs",
+                        "composefs": False,
+                        "needs_user_creation": True,
+                        "filesystems": ["btrfs", "xfs"],
+                        "gpu": gpu_key,
+                    }
+                    images.append(entry)
 
     return images
 
