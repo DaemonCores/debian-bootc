@@ -34,8 +34,8 @@ metadata:
 Today: none at runtime, because the branch never runs. The script's own comment (lines 50-51) misstates the behaviour, and anyone who 'fixes' the line-count check would activate the corrupted `/etc/hosts` writer.
 
 ## Where (pointers)
-- `workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:44-48` — resetdomaine uses ${HOSTS} instead of ${HOST}; unanchored deletes
-- `workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:50-58` — line-count check that is always 1
+- `workflows/bootc-debs-builder/ifupdown2/usr/sbin/domain-set:44-48` — resetdomaine uses ${HOSTS} instead of ${HOST}; unanchored deletes
+- `workflows/bootc-debs-builder/ifupdown2/usr/sbin/domain-set:50-58` — line-count check that is always 1
 
 ## Suggested direction
 Delete `resetdomaine` and the line-count check, and always render from `/etc/hosts.tpl`. Otherwise fix the variable to `${HOST}`, anchor the deletes and quote `"${HOSTS}"`.

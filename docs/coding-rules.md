@@ -47,17 +47,17 @@ Files: overlay scripts under `src/` and `workflows/bootc-debs-builder/*postinsta
 ### Tools
 
 - Linter: shellcheck, global config at `.shellcheckrc` [src: file: .shellcheckrc:1]. Run: `make lint-shell`. Inline `# shellcheck disable=` directives appear in scripts [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:10] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60].
-- Syntax check: package builds run `bash -n` on shipped scripts as a content check [src: file: workflows/bootc-debs-builder/packages.yml:36].
+- Syntax check: package builds run `bash -n` on shipped scripts as a content check [src: file: workflows/bootc-debs-builder/packages.yml:37].
 - Formatter: shfmt. Run: `make format-shell`.
 - Type checker: N/A — not used in this project.
 
 ### Conventions
 
-- Bash scripts start with `set -euo pipefail` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:7] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:5] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:6] [src: file: workflows/bootc-debs-builder/packages.yml:20]. `DEBIAN/postinst` files use `set -e` [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst:2].
-- Each standalone script opens with a header comment that names it and says what it does [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:3] [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:3].
+- Bash scripts start with `set -euo pipefail` [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:7] [src: file: workflows/bootc-debs-builder/ifupdown2/usr/sbin/domain-set:5] [src: file: workflows/bootc-debs-builder/ifupdown2/usr/sbin/ifupdown2-autoconf:6] [src: file: workflows/bootc-debs-builder/packages.yml:20]. `DEBIAN/postinst` files use `set -e` [src: file: workflows/bootc-debs-builder/preinstall/output/bootc/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/ostree/DEBIAN/postinst:2] [src: file: workflows/bootc-debs-builder/preinstall/output/bootupd/DEBIAN/postinst:2].
+- Each standalone script opens with a header comment that names it and says what it does [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:3] [src: file: workflows/bootc-debs-builder/ifupdown2/usr/sbin/domain-set:3] [src: file: workflows/bootc-debs-builder/ifupdown2/usr/sbin/ifupdown2-autoconf:3].
 - In build scripts, fatal checks use `test … || { echo "ERROR: …" >&2; exit 1; }` [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:114] [src: file: workflows/bootc-debs-builder/packages.yml:133].
 - Every package build ends with a `# Content check:` on its output [src: file: workflows/bootc-debs-builder/packages.yml:34] [src: file: workflows/bootc-debs-builder/packages.yml:497] [src: file: workflows/bootc-debs-builder/packages.yml:652].
-- Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:36] [src: file: workflows/bootc-debs-builder/packages.yml:113].
+- Expand variables with braces and quote them: `"${VAR}"` [src: file: workflows/bootc-debs-builder/packages.yml:23] [src: file: workflows/bootc-debs-builder/packages.yml:37] [src: file: workflows/bootc-debs-builder/packages.yml:113].
 - A `# shellcheck disable=` directive comes with a comment saying why [src: file: workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize:9] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:60] [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:133].
 
 ### Common mistakes to avoid

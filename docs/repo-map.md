@@ -33,7 +33,7 @@ debian-bootc builds Debian 13 (Trixie) bootc/OSTree OS images from root-level Co
 │   │   ├── bootcpostinstall/      # files shipped in the bootc deb (bootc-finalize, dracut conf, tmpfiles)
 │   │   ├── ostreepostinstall/     # ostree prepare-root.conf
 │   │   ├── firstbootpostinstall/  # firstboot-user-setup script + getty@tty1 drop-in
-│   │   ├── ifupdown2postinstall/  # bootc-aware ifupdown2 repack (interfaces, autoconf, domain-set)
+│   │   ├── ifupdown2/  # bootc-aware ifupdown2 repack (interfaces, autoconf, domain-set)
 │   │   ├── timesyncpostinstall/   # bootc-aware systemd-timesyncd repack
 │   │   └── kernel/                # inputs of the linux-* packages
 │   │       ├── config             # base kernel config fragment shared by all devices (linux-image-common)

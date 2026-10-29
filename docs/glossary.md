@@ -47,8 +47,8 @@ Terms used across `debian-bootc` code, CI and docs. One line per term; follow th
 | Term | Definition |
 |------|------------|
 | firstboot-user-setup | First-boot TUI on tty1 that creates the user account and sets the root password [src: file: workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup:3]. See [justifications § First-boot credential provisioning](justifications.md#first-boot-credential-provisioning). |
-| `ifupdown2-autoconf` | Boot-time generator for `/etc/network/interfaces` (DHCP on first ethernet NIC, DHCPv6 probe); runs only while its marker line is present [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/ifupdown2-autoconf:3]. |
-| `domain-set` | Renders `/etc/hosts` and `/etc/issue` from templates using the global IPv4, short hostname and DHCP domain [src: file: workflows/bootc-debs-builder/ifupdown2postinstall/usr/sbin/domain-set:3]. |
+| `ifupdown2-autoconf` | Boot-time generator for `/etc/network/interfaces` (DHCP on first ethernet NIC, DHCPv6 probe); runs only while its marker line is present [src: file: workflows/bootc-debs-builder/ifupdown2/usr/sbin/ifupdown2-autoconf:3]. |
+| `domain-set` | Renders `/etc/hosts` and `/etc/issue` from templates using the global IPv4, short hostname and DHCP domain [src: file: workflows/bootc-debs-builder/ifupdown2/usr/sbin/domain-set:3]. |
 | Networking profiles | Full image uses ifupdown2; minimal image uses systemd-networkd [src: file: docs/justifications.md:31]. |
 | Installer ISO | Live image from `Containerfile.iso` (cage + bootc-installer + fisherman) converted to ISO by bootc-image-builder [src: file: Containerfile.iso:5]. See [architecture § Installation media](architecture.md#installation-media). |
 | Online / offline ISO | Online ISO pulls the registry image during install; offline ISO embeds an OCI archive [src: file: docs/architecture.md:97]. |
