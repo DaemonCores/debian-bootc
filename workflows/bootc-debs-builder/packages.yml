@@ -529,6 +529,118 @@ packages:
       test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
+  # linux-modules-nvidia — the NVIDIA open kernel modules as a plan deb, the
+  # same deps/waves module pattern as the device entries: built in CI against
+  # the kernel of the SAME build (linux-image dep), .config + Module.symvers
+  # seeded from the published kernel deb. NOT DKMS: nothing compiles on the
+  # target, the module is an artefact of the image commit via the <tag>-ia
+  # twin (wiki: GPU-Support.md). Opt-in: when.gpu-driver, like the other
+  # EULA-bound GPU packages (the ia user-space is EULA-restricted; the module
+  # itself is the MIT open-gpu-kernel-modules). amd64 only — arm64 has no
+  # shipped NVIDIA compute target.
+  - name: linux-modules-nvidia
+    when:
+      arch: amd64
+      gpu-driver: true
+    deps:
+      - linux-image
+    deb-glob: "linux-modules-nvidia_*"
+    sources:
+      - nvidia
+      - lib/kernel-prepare.sh
+      - lib/kernel-signing.sh
+      - kernel/patches.yml
+      - kernel/patches.lock.json
+    env:
+      HELPERS_VER: 3
+    # Rolling: the latest NVIDIA/open-gpu-kernel-modules release (the MIT
+    # out-of-tree kernel modules). PENDING (first real build): confirm the
+    # tags upstream are non-prerelease releases so the repo: resolver wins,
+    # and the SYSSRC/SYSOUT interface of the nvidia-open Makefile.
+    track:
+      NVIDIAOPEN_VER:
+        repo: NVIDIA/open-gpu-kernel-modules
+    build: |
+      set -euo pipefail
+      SAVE_PWD=$(pwd)
+      DEB_ARCH=$(dpkg --print-architecture)
+
+      # Bootstrap shared by the kernel module entries: locate the kernel deb,
+      # download the kernel source, seed .config (lib/kernel-prepare.sh).
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
+      kernel_prepare
+      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
+      kernel_signing_setup
+
+      # Module.symvers of the SAME kernel, at
+      # /usr/lib/linux-kernel-build/Module.symvers in the kernel deb: an
+      # out-of-tree modules-only build has no vmlinux.o, so modpost needs the
+      # vmlinux-only symbol table (the device-entries comment explains why).
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+        || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
+      awk -F'\t' '$3 == "vmlinux"' \
+        "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+        > /tmp/nvidia-vmlinux-only.symvers
+
+      # Upstream NVIDIA open kernel modules, pinned to the release `track:`
+      # resolved (same rolling model as bootupd).
+      rm -rf /build/nvidia-open
+      git clone --quiet --depth=1 --branch "${NVIDIAOPEN_VER}" \
+        https://github.com/NVIDIA/open-gpu-kernel-modules.git /build/nvidia-open
+      git -C /build/nvidia-open rev-parse HEAD > /build/nvidia-open.commit
+      test -d /build/nvidia-open/kernel-open \
+        || { echo "ERROR: nvidia-open has no kernel-open tree" >&2; exit 1; }
+
+      # Out-of-tree module build against the CI kbuild tree: SYSSRC/SYSOUT
+      # point at the SAME patched source the image kernel was built from.
+      make -C /build/nvidia-open/kernel-open \
+        SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
+
+      # Install the modules into the packaging tree under the kernel's
+      # /lib/modules/<KVER> so modprobe on the target resolves them.
+      DESTDIR="/output/linux-modules-nvidia"
+      rm -rf "${DESTDIR}"
+      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+      [ -f modules.builtin ] || touch modules.builtin
+      [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
+      make -C /build/nvidia-open/kernel-open \
+        SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" \
+        INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1 modules_install
+
+      # Keep ONLY the nvidia modules: the modules_install of an out-of-tree
+      # build installs just them, but the metadata it regenerates overlaps
+      # with the kernel deb (same ownership collision as the device entries).
+      dpkg-deb --fsys-tarfile "${COMMON_DEB}" | tar t | sed 's|^\./||' \
+        | while IFS= read -r f; do
+            target="${DESTDIR}/${f}"
+            if [ -f "${target}" ] || [ -L "${target}" ]; then
+              rm -f "${target}"
+            fi
+          done
+      rm -f "${DESTDIR}/lib/modules/${KVER}/build" \
+        "${DESTDIR}/lib/modules/${KVER}/source"
+
+      # Content check: the five NVIDIA modules are in the deb.
+      test -n "$(find "${DESTDIR}/lib/modules/${KVER}" -name 'nvidia*.ko' 2>/dev/null)" \
+        || { echo "ERROR: modules_install produced no nvidia*.ko" >&2; exit 1; }
+
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|Version: {{ VER }}|Version: ${BUILT_VER}+r1|g" \
+        -e "s|{{ KVER }}|${KVER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        "${DESTDIR}/DEBIAN/control"
+
+      ( cd "${DESTDIR}" && \
+        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        > DEBIAN/md5sums )
+
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/linux-modules-nvidia_${BUILT_VER}+r1_${DEB_ARCH}.deb"
+      test -s "/debs/linux-modules-nvidia_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
+        || { echo "ERROR: output linux-modules-nvidia deb empty" >&2; exit 1; }
+
   # ===========================================================================
   # overlay-tree class — apt-repacked packages whose modifications are a whole
   # extra file overlay (ifupdown2 autoconf suite, timesyncd network-online

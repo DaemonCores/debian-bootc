@@ -18,9 +18,10 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # tagged `<tag>-nosign`: the same image on the -nosign kernel package, for amd64
 # and the plain-tag arm64 kernel only. The 4 KB image has no twin.
 LABEL org.daemoncores.unsigned-kernel-image="true"
-# The -nvidia twin (opt-in, gpu_driver_images input): the same layers plus
-# the NVIDIA proprietary user-space, accepted at install time (EULA).
-LABEL org.daemoncores.nvidia-image="true"
+# The GPU usage twins (wiki: GPU-Support.md): the labels on the variant
+# layers below (org.daemoncores.gpu-gaming-image / org.daemoncores.gpu-ia-image)
+# plan the `<tag>-gaming` (public display stack) and `<tag>-ia` (NVIDIA
+# compute; opt-in on gpu_driver_images, EULA at install time) twins.
 
 
 # -----------------------------------------------------------------------------
@@ -214,20 +215,43 @@ RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_
 HEALTHCHECK NONE
 
 #####################################################################################
-# NVIDIA proprietary layer — opt-in `-nvidia` twin only
+# GPU usage variants — the `ia` and `gaming` image twins
 #####################################################################################
-# The public image never carries the NVIDIA proprietary user-space: the EULA
-# requires an acceptance step, which happens at install time (bootc-installer
-# offers the NVIDIA variant after an explicit consent, see the debian-bootc
-# wiki). The image declares `LABEL org.daemoncores.nvidia-image` so the CI
-# plans the `<tag>-nvidia` twin ONLY when its gpu_driver_images input is set:
-# the same layers, one extra RUN. The twin is otherwise identical — bootc
-# upgrade follows the same suite.
-ARG GPU_EXTRA_PKGS=""
-RUN if [ -n "${GPU_EXTRA_PKGS}" ]; then \
-      # Headers must match the kernel IN THE IMAGE: nvidia-kernel-dkms builds
-      # against /lib/modules/<kver>/build. The pairing is verified on the
-      # first real twin build — PENDING.
-      apt-get install -y dkms ${GPU_EXTRA_PKGS} \
+# Two usages, two twins (same layers, one extra RUN each — the twins of the
+# images, like `-16k` and `-nosign`; wiki: GPU-Support.md):
+#   <tag>-gaming  display stack: the in-tree drivers (amdgpu DC, nouveau,
+#                 i915/xe — all =m in the kernel) plus the free user-space
+#                 stack (mesa/vulkan, graphics firmware). Public: no EULA.
+#   <tag>-ia      compute: the NVIDIA kernel module as a PLAN DEB
+#                 (linux-modules-nvidia, built in CI against the same
+#                 daemoncores-kernel as the image — no DKMS, nothing compiles
+#                 on the target) plus the NVIDIA user-space. EULA-restricted:
+#                 built only on the gpu_driver_images input, selected at
+#                 install time after the explicit consent.
+# Nothing compiles on the target: the images are immutable and the module is
+# an artefact of the build, exactly like the rest of the plan.
+#
+# Labels (static so the CI image discoverer can plan the twins without
+# building):
+LABEL org.daemoncores.gpu-gaming-image="gaming" \
+      org.daemoncores.gpu-ia-image="ia"
+# The public image never carries either variant: both args stay empty unless
+# the CI twin build sets them (CI: GAMING_PKGS / IA_PKGS with their
+# vars.* overrides).
+ARG GPU_GAMING_PKGS=""
+RUN if [ -n "${GPU_GAMING_PKGS}" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends ${GPU_GAMING_PKGS} \
+      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
+    fi
+ARG GPU_IA_PKGS=""
+RUN if [ -n "${GPU_IA_PKGS}" ]; then \
+      # linux-modules-nvidia is the plan deb built in CI against the SAME
+      # kernel the image installs (deps on linux-image in packages.yml), so
+      # the pairing is structural, not a hope. The NVIDIA user-space follows
+      # from the EULA-restricted repository the twin build enables.
+      apt-get update \
+      && apt-get install -y --no-install-recommends \
+        linux-modules-nvidia ${GPU_IA_PKGS} \
       && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
     fi
