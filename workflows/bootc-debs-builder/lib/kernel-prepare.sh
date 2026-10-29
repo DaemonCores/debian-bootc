@@ -57,19 +57,18 @@ kernel_prepare() {
   # Download the kernel.org tarball of the version the common deb was built
   # from (the upstream part of BUILT_VER, before the package revision), so the
   # modules always match the kernel image whatever kernel.org released since.
-  # shellcheck source=/dev/null  # sourced at build time from the checkout
-  . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
+  # The kernel helpers (kernel_fetch_source, kernel_apply_patches) are the
+  # standard DaemonCores-CI scripts/kernel_helpers.sh primitives — sourced
+  # implicitly by deb_helpers.sh in the same bash, no import here.
   kernel_fetch_source "${BUILT_VER%%-*}"
   # The modules build against the same patched tree as the image.
-  # shellcheck source=/dev/null  # sourced at build time from the checkout
-  . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-patches.sh"
   # Kernel-class patches are already in the image; module-class patches only
   # exist in the tree the modules are built from.
   local class
   for class in kernel module; do
     kernel_apply_patches \
       "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches.yml" \
-      "${class}" "${DEB_ARCH}" "${BUILT_VER%%-*}" "${SRCDIR}"
+      "${DEB_ARCH}" "${BUILT_VER%%-*}" "${SRCDIR}" "${class}"
   done
 
   apt-get install -y "${COMMON_DEB}"

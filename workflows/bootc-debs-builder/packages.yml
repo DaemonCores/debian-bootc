@@ -127,6 +127,11 @@ packages:
         sources:
           - kernel/pages/16k
     env:
+      # Kernel build primitives come from DaemonCores-CI scripts/
+      # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
+      # bump when those helpers change (other repository, invisible to the
+      # content hash of the lib files).
+      HELPERS_VER: 3
       KERNEL_PAGES: "4k"
       # Regenerate the patch lock on each build instead of verifying it.
       # patch --dry-run is the real guard; the lock file is bumped manually
@@ -144,8 +149,6 @@ packages:
       - kernel/modules/x86_64
       - kernel/patches.yml
       - kernel/patches.lock.json
-      - lib/kernel-source.sh
-      - lib/kernel-patches.sh
       - lib/kernel-signing.sh
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
     # whose series every patch source (CachyOS, ROCKNIX) already provides
@@ -177,15 +180,15 @@ packages:
 
       # Download the kernel.org tarball resolved by `track:` and verify its
       # sha256. The kernel is never a distribution source package.
-      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-source.sh"
+      # (kernel helpers of DaemonCores-CI scripts/kernel_helpers.sh, sourced
+      # implicitly by deb_helpers.sh in the same bash.)
       kernel_fetch_source "${KERNEL_VER}" "${KERNEL_SHA256}"
 
       # Apply the kernel-class patches fetched from their official upstream
       # (kernel/patches.yml): common first, then this architecture.
-      . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-patches.sh"
       kernel_apply_patches \
         "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches.yml" \
-        kernel "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
+        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}" kernel
 
       cd "${SRCDIR}"
       make mrproper
@@ -215,8 +218,9 @@ packages:
       fi
 
       # Merge the base config (filesystems, virtio, serial, disables — the
-      # base for every device). merge_config.sh -m merges in place.
-      scripts/kconfig/merge_config.sh -m .config "${CONFIG_FILES[@]}"
+      # base for every device). The standard kernel helper merges in place:
+      # each fragment appended, then olddefconfig resolves the rest.
+      kernel_merge_config "${SRCDIR}" "${CONFIG_FILES[@]}"
       # Sign the in-tree modules with the CI key, trust it in the kernel keyring
       # and enforce signatures + MOK keyrings when active (lib/kernel-signing.sh); the device module packages use the same.
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
@@ -376,6 +380,10 @@ packages:
     variant-env: DEVICE
     variant-source: "kernel/modules/{variant}"
     env:
+      # Kernel build primitives come from DaemonCores-CI scripts/
+      # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
+      # bump when those helpers change.
+      HELPERS_VER: 3
       PATCH_GUARD_UPDATE: "1"
     # Track the stable kernel version so KERNEL_VER enters the content hash.
     # The modules build derives their actual version from the kernel dep deb
@@ -391,8 +399,6 @@ packages:
     sources:
       - preinstall/output/linux-modules-arm-device
       - lib/kernel-prepare.sh
-      - lib/kernel-source.sh
-      - lib/kernel-patches.sh
       - lib/kernel-signing.sh
       - kernel/patches.yml
       - kernel/patches.lock.json
@@ -411,7 +417,9 @@ packages:
       # only the device overlay is merged on top.
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-prepare.sh"
       kernel_prepare
-      scripts/kconfig/merge_config.sh -m .config "${OVERLAY}"
+      # The standard kernel helper merges the device overlay in place
+      # (append + olddefconfig) — same final .config as merge_config.sh -m.
+      kernel_merge_config "${SRCDIR}" "${OVERLAY}"
       # Sign the modules with the CI key at modules_install, or turn the
       # automatic signing off when no key is configured (lib/kernel-signing.sh).
       . "${SAVE_PWD}/workflows/bootc-debs-builder/lib/kernel-signing.sh"
@@ -545,7 +553,7 @@ packages:
     variant-env: PKG
     variant-source: "{variant}"
     env:
-      HELPERS_VER: 2
+      HELPERS_VER: 3
     build: |
       deb_overlay_tree "${PKG}" "${VER_SUFFIX}" "${PKG}" ${EXTRA_EXEC:-}
     deb-glob: "{variant}_*"
