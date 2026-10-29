@@ -88,7 +88,9 @@ def _build_images(
                     if arch not in twin_arches:
                         continue
                     entry: JsonObject = {
-                        "name": f"{distro_name} {variant} {name_suffix} ({arch})",
+                        "name": (
+                            f"{distro_name} {variant} {name_suffix} ({arch})"
+                        ),
                         "imgref": f"{registry}:{tag}{twin_tag}_{arch}",
                         "bootloader": "grub2",
                         "filesystem": "btrfs",
