@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""nvidia-eula-stage — GPU detection, NVIDIA EULA consent and image selection.
+
+Installer-lane helper (wiki: GPU-Support.md, install-time EULA flow).
+
+Commands:
+
+    probe                       exit 0 and print the lspci device lines when
+                                an NVIDIA GPU is detected, exit 1 otherwise
+    text                        print the shipped EULA text verbatim
+    consent [--accept]          display the EULA, record the explicit
+                                acceptance flag only on a strict ``ACCEPT``
+                                (or ``--accept`` for scripted runs)
+    select <recipe> <imgref>    validate the chosen imgref against the recipe
+                                and record it as recipe["imgref"]; the
+                                ``-nvidia`` twin requires a detected GPU AND
+                                the acceptance flag, the public image does
+                                not
+
+The ``-nvidia`` twin is frozen once deployed: the image itself carries the
+same tag plus the ``-nvidia`` suffix, so ``bootc upgrade`` follows the twin.
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import NoReturn, cast
+
+EULA_TXT = Path(
+    os.environ.get(
+        "NVIDIA_EULA_FILE", "/usr/share/debian-bootc/nvidia-eula.txt"
+    )
+)
+STATE_DIR = Path(
+    os.environ.get("NVIDIA_EULA_STATE_DIR", "/run/bootc-installer")
+)
+STATE_FILE = STATE_DIR / "nvidia-eula-accepted"
+ACCEPT_WORD = "ACCEPT"
+
+
+def fail(message: str) -> NoReturn:
+    """Print an error on stderr and exit with status 1.
+
+    Args:
+        message: The error text to report.
+    """
+    print(f"nvidia-eula-stage: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def probe() -> int:
+    """Detect an NVIDIA GPU with lspci.
+
+    Returns:
+        0 when at least one NVIDIA display/3D controller exists, 1 otherwise.
+    """
+    devices = [
+        line for cmdline in (
+            ["lspci", "-d", "10de::0300"],
+            ["lspci", "-d", "10de::0380"],
+        ) for line in run_lspci(cmdline).splitlines() if line.strip()
+    ]
+    for line in devices:
+        print(line)
+    return 0 if devices else 1
+
+
+def run_lspci(args: list[str]) -> str:
+    """Run lspci with the given arguments.
+
+    Args:
+        args: Command line after ``lspci``.
+
+    Returns:
+        Stdout of lspci, empty when lspci is missing or fails.
+    """
+    try:
+        result = subprocess.run(
+            args, capture_output=True, text=True, check=False,
+        )
+    except FileNotFoundError:
+        return ""
+    return result.stdout if result.returncode == 0 else ""
+
+
+def eula_text(path: str = str(EULA_TXT)) -> str:
+    """Read the shipped EULA text.
+
+    Args:
+        path: Path of the EULA text file.
+
+    Returns:
+        The file content verbatim.
+    """
+    return Path(path).read_text(encoding="utf-8")
+
+
+def cmd_text() -> int:
+    """Print the EULA text verbatim.
+
+    Returns:
+        0 on success, 1 when the text is missing.
+    """
+    try:
+        sys.stdout.write(eula_text())
+    except OSError as err:
+        fail(f"EULA text missing: {err}")
+    return 0
+
+
+def cmd_consent(accept: bool) -> int:
+    """Record the explicit EULA acceptance in the state file.
+
+    Args:
+        accept: When True, record non-interactively; otherwise require the
+            exact ``ACCEPT`` word on stdin.
+
+    Returns:
+        0 when accepted, 1 otherwise.
+    """
+    if not accept:
+        try:
+            sys.stdout.write(eula_text())
+        except OSError as err:
+            fail(f"EULA text missing: {err}")
+        sys.stdout.write(
+            "\nType ACCEPT exactly (nothing else will do): "
+        )
+        sys.stdout.flush()
+        if sys.stdin.readline().rstrip("\n") != ACCEPT_WORD:
+            print(
+                "nvidia-eula-stage: EULA not accepted; "
+                "the public image will be deployed.",
+                file=sys.stderr,
+            )
+            return 1
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text("accepted-at-install\n", encoding="utf-8")
+    return 0
+
+
+def cmd_select(recipe_path: str, imgref: str) -> int:
+    """Validate a chosen imgref and record it as the recipe's imgref.
+
+    Args:
+        recipe_path: Path of the recipe.json to update in-place.
+        imgref: The chosen image reference from recipe["images"].
+
+    Returns:
+        0 on success, 1 when the image is unknown or the EULA gate refuses.
+    """
+    recipe = cast_recipe(recipe_path)
+    twin = get_entry(recipe, imgref)
+    if twin is None:
+        fail(f"{imgref}: not part of the installer recipe")
+    if twin:
+        result = probe()
+        if result != 0:
+            fail(f"{imgref}: no NVIDIA GPU detected")
+        if not STATE_FILE.is_file():
+            fail(f"{imgref}: EULA not accepted at install")
+    recipe["imgref"] = imgref
+    dump_recipe(recipe_path, recipe)
+    return 0
+
+
+def cast_recipe(recipe_path: str) -> dict[str, object]:
+    """Load a recipe.json.
+
+    Args:
+        recipe_path: Path of the recipe.json.
+
+    Returns:
+        The parsed recipe.
+    """
+    return cast_load_json(recipe_path)
+
+
+def cast_load_json(recipe_path: str) -> dict[str, object]:
+    """Load and type-cast a recipe.json.
+
+    Args:
+        recipe_path: Path of the recipe.json.
+
+    Returns:
+        The parsed recipe mapping.
+    """
+    with open(recipe_path, encoding="utf-8") as handle:
+        loaded = json.load(handle)
+    assert isinstance(loaded, dict)
+    return cast(dict[str, object], loaded)
+
+
+def get_entry(
+    recipe: dict[str, object], imgref: str
+) -> bool | None:
+    """Look the imgref up in the recipe's image list.
+
+    Args:
+        recipe: The parsed recipe mapping.
+        imgref: The reference to find.
+
+    Returns:
+        True when the imgref is the NVIDIA twin, False when it is a public
+        image, None when it is absent.
+    """
+    images = recipe.get("images")
+    if not isinstance(images, list):
+        fail("recipe has no image list")
+    for image in images:
+        if isinstance(image, dict) and image.get("imgref") == imgref:
+            return bool(image.get("nvidia"))
+    return None
+
+
+def dump_recipe(recipe_path: str, recipe: dict[str, object]) -> None:
+    """Write the recipe back in-place.
+
+    Args:
+        recipe_path: Path of the recipe.json.
+        recipe: The updated recipe mapping.
+    """
+    with open(recipe_path, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(recipe, indent=4, ensure_ascii=False) + "\n")
+
+
+def main() -> NoReturn:
+    """Entry point: dispatch the command line."""
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__.strip(), file=sys.stderr)
+        sys.exit(1)
+    command, rest = args[0], args[1:]
+    if command == "probe":
+        sys.exit(probe())
+    if command == "text":
+        sys.exit(cmd_text())
+    if command == "consent":
+        sys.exit(cmd_consent("--accept" in rest))
+    if command == "select" and len(rest) == 2:
+        sys.exit(cmd_select(rest[0], rest[1]))
+    fail(
+        "usage: nvidia-eula-stage {probe|text|consent [--accept]|"
+        "select <recipe.json> <imgref>}"
+    )
+
+
+if __name__ == "__main__":
+    main()

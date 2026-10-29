@@ -15,3 +15,13 @@ polkit.addRule(function(action, subject) {
         return polkit.Result.YES;
     }
 });
+// The installer stage gates the -nvidia image behind GPU detection and the
+// NVIDIA EULA acceptance recorded at install (wiki: GPU-Support.md).
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.policykit.exec" &&
+        action.lookup("program") ===
+            "/usr/libexec/debian-bootc/nvidia-eula-stage" &&
+        subject.user === "live") {
+        return polkit.Result.YES;
+    }
+});
