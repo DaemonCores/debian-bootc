@@ -28,7 +28,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
 EULA_TXT = Path(
     os.environ.get(
@@ -219,7 +219,7 @@ def cast_load_json(recipe_path: str) -> dict[str, object]:
         The parsed recipe mapping.
     """
     with open(recipe_path, encoding="utf-8") as handle:
-        loaded: dict[str, object] = json.load(handle)
+        loaded = cast(dict[str, object], json.load(handle))
     assert isinstance(loaded, dict)
     return loaded
 
@@ -235,13 +235,14 @@ def get_entry(recipe: dict[str, object], imgref: str) -> str | None:
         The GPU usage variant the entry carries (``ia`` / ``gaming``), the
         empty string for a public image, None when it is absent.
     """
-    images = recipe.get("images")
-    if not isinstance(images, list):
+    entries_raw = recipe.get("images")
+    if not isinstance(entries_raw, list):
         fail("recipe has no image list")
-    for entry_object in images:
+    entries = cast("list[object]", entries_raw)
+    for entry_object in entries:
         if not isinstance(entry_object, dict):
             continue
-        image: dict[str, object] = entry_object
+        image = cast(dict[str, object], entry_object)
         ref = image.get("imgref")
         if isinstance(ref, str) and ref == imgref:
             gpu = image.get("gpu")
