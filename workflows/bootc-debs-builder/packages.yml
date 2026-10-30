@@ -138,9 +138,6 @@ packages:
       # only when forcing a cache-bust rebuild is needed.
       PATCH_GUARD_UPDATE: "1"
     deb-glob: "linux-image-common_*"
-    secret-env:
-      SB_SIGNING_KEY: SB_SIGNING_KEY
-      SB_SIGNING_CERT: SB_SIGNING_CERT
     sources:
       # The base config, the two architecture overlays and the source download
       # feed this package's content hash. A per-device overlay change must NOT
@@ -179,7 +176,7 @@ packages:
       apt-get install -y --no-install-recommends \
         build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
         rsync libudev-dev elfutils dpkg-dev \
-        debhelper kmod libdw-dev curl xz-utils python3 sbsigntool
+        debhelper kmod libdw-dev curl xz-utils python3
 
       # Download the kernel.org tarball resolved by `track:` and verify its
       # sha256. The kernel is never a distribution source package.
@@ -300,16 +297,6 @@ packages:
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
       dpkg-deb -R "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
-
-      # Secure Boot: the shim verifies the kernel GRUB loads, so vmlinuz carries
-      # the image signing signature (lib/kernel-signing.sh). The key is the one
-      # that signs GRUB, whose certificate the installer already enrolls in MOK.
-      KERNEL_IMAGES=("${REPACK_DIR}"/boot/vmlinuz-*)
-      test -f "${KERNEL_IMAGES[0]}" \
-        || { echo "ERROR: no /boot/vmlinuz-* in the kernel deb" >&2; exit 1; }
-      for img in "${KERNEL_IMAGES[@]}"; do
-        kernel_sign_efi "${img}"
-      done
 
       # Ship the build inputs the module packages need INSIDE the deb. A cache
       # hit restores only the .deb from the published APT repo, so a file
