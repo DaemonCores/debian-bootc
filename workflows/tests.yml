@@ -58,6 +58,12 @@ tests:
       rm -f "${unit}"
       systemctl daemon-reload
       [ "$(systemctl is-enabled bootc-fetch-apply-updates.timer)" = enabled ]
+      # Unmasking leaves the timer's last activation state "failed" behind: a
+      # masked unit never ran, so systemd keeps its failed activation until
+      # explicitly cleared. Without this, the later "no failed systemd units"
+      # test fails on a state the mask cycle itself created (replayed boot-test
+      # 2026-10-30).
+      systemctl reset-failed bootc-fetch-apply-updates.timer 2>&1 || true
     diag: |
       ls -la /etc/systemd/system/bootc-fetch-apply-updates.timer 2>&1
       systemctl is-enabled bootc-fetch-apply-updates.timer 2>&1
@@ -71,6 +77,9 @@ tests:
       autoupdate enable
       [ "$(systemctl is-enabled bootc-fetch-apply-updates.timer)" = enabled ]
       autoupdate status | grep -q enabled
+      # Clear the activation state the mask cycle left behind (see the symlink
+      # test above): the later "no failed systemd units" check must not inherit it.
+      systemctl reset-failed bootc-fetch-apply-updates.timer 2>&1 || true
     diag: |
       command -v autoupdate 2>&1
       ls -la /etc/systemd/system/bootc-fetch-apply-updates.timer 2>&1
@@ -378,7 +387,12 @@ tests:
 
   # ── rollback preparation (pre-reboot — must pass before the reboot phase) ─
   - name: two deployments staged for rollback test
-    run: test "$(ls -d /ostree/deploy/*/deploy/*.0 2>/dev/null | wc -l)" -ge 2
+    # ostree names the first deployment <rev>.0 and the next <rev>.1: the
+    # staging step in install-fs.sh creates exactly two, so count the serial
+    # suffixes rather than hunting entries whose name "ends in .0" — the
+    # replayed boot-test (2026-10-30) shows only ONE such entry and the
+    # original pattern could never reach 2 on a healthy two-slot install.
+    run: test "$(ls -d /ostree/deploy/*/deploy/*.0 /ostree/deploy/*/deploy/*.1 2>/dev/null | wc -l)" -ge 2
     diag: |
       ls -la /ostree/deploy/*/deploy/ 2>&1
       ostree admin status 2>&1
@@ -390,9 +404,12 @@ tests:
       findmnt /var 2>&1
 
   - name: bootc rollback queues prior deployment
+    # No jq: the image ships deliberately minimal tooling and the test must be
+    # self-sufficient (the replayed boot-test 2026-10-30 fails "jq: command
+    # not found" though bootc rollback itself queues the deployment).
     run: |
       bootc rollback &&
-      bootc status --format json | jq -e '.status.rollbackQueued == true'
+      bootc status --format json | grep -q '"rollbackQueued" *: *true'
     diag: |
       bootc status 2>&1
       ostree admin status 2>&1
@@ -406,7 +423,9 @@ reboot_tests:
       findmnt /var 2>&1
 
   - name: rollback consumed after reboot (rollbackQueued is false)
-    run: bootc status --format json | jq -e '.status.rollbackQueued == false'
+    # No jq either (see the rollback-queue test above).
+    run: |
+      bootc status --format json | grep -q '"rollbackQueued" *: *false'
     diag: |
       bootc status 2>&1
       ostree admin status 2>&1
