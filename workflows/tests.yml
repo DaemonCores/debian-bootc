@@ -15,6 +15,16 @@
 #                  that are x86_64-only, and for U-Boot tests that are
 #                  arm64-only. The harness skips a test whose arch does not
 #                  match the running arch (reports SKIP, not FAIL).
+#   categories     optional: one entry per class of image, picked from the tag
+#                  (minus its `_<arch>`) by the longest `suffix` that ends it,
+#                  among the entries of the running arch. Each has `name`,
+#                  `arch`, `suffix` ("" = the plain tags), `secure_boot` (0|1:
+#                  how the VM is booted) and `reference: true` on exactly one
+#                  entry per arch. A manifest without `categories` runs every
+#                  test with Secure Boot off.
+#   tests[].category optional block list of category names: the test runs ONLY
+#                  on those. Absent = global test, run on the reference
+#                  category only (the most complete and most secured image).
 #   tests[].variant optional: `main` or `minimal` to run the test ONLY on that
 #                  image variant. Absent = run on all variants. Used for tests
 #                  that target packages present only in the full (main) image,
@@ -25,6 +35,34 @@ boot_timeout: 60
 # Timeout for the VM to come back after the rollback reboot (shorter than
 # boot_timeout since the image is already installed — no dracut rebuild).
 reboot_timeout: 60
+
+# The signed image is the reference: the most complete and the most secured, so
+# the global tests run there once. The other categories boot with their own
+# security profile and run only the tests listed for them.
+categories:
+  - name: signed
+    arch: amd64
+    suffix: ""
+    secure_boot: 1
+    reference: true
+  - name: unsigned-kernel
+    arch: amd64
+    suffix: "-nosign"
+    secure_boot: 0
+  - name: signed
+    arch: arm64
+    suffix: ""
+    secure_boot: 1
+    reference: true
+  # U-Boot devices have no secure boot (see packages.yml, kernel -4k).
+  - name: uboot
+    arch: arm64
+    suffix: "-4k"
+    secure_boot: 0
+  - name: unsigned-kernel
+    arch: arm64
+    suffix: "-nosign"
+    secure_boot: 0
 
 tests:
   # ── bootc / ostree / immutability ──────────────────────────────────────
@@ -153,12 +191,51 @@ tests:
     run: test -f /usr/share/debian-bootc/sb_signing.crt
     diag: |
       ls -la /usr/share/debian-bootc/ 2>&1
+  # Per-category boot profile: the VM must have been booted the way the category
+  # states (SecureBoot is the last byte of the UEFI global variable).
+  - name: booted with UEFI Secure Boot enforced
+    category:
+      - signed
+    run: |
+      v=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+      [ "$(tail -c1 "${v}" | od -An -tu1 | tr -d ' ')" = 1 ]
+    diag: |
+      ls -la /sys/firmware/efi/efivars/ 2>&1 | head -n 20
+      od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-* 2>&1
+      dmesg 2>&1 | grep -i 'secure boot' | head -n 5
+  - name: booted with UEFI Secure Boot off
+    category:
+      - unsigned-kernel
+    run: |
+      v=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+      [ "$(tail -c1 "${v}" | od -An -tu1 | tr -d ' ')" = 0 ]
+    diag: |
+      ls -la /sys/firmware/efi/efivars/ 2>&1 | head -n 20
+      od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-* 2>&1
+  - name: signed kernel enforces module signatures
+    category:
+      - signed
+    run: '[ "$(cat /sys/module/module/parameters/sig_enforce)" = Y ]'
+    diag: |
+      cat /sys/module/module/parameters/sig_enforce 2>&1
+      dpkg-query -W 'daemoncores-kernel-*' 2>&1
+      cat /proc/cmdline 2>&1
+  - name: unsigned-kernel variant does not enforce module signatures
+    category:
+      - unsigned-kernel
+    run: '[ "$(cat /sys/module/module/parameters/sig_enforce)" = N ]'
+    diag: |
+      cat /sys/module/module/parameters/sig_enforce 2>&1
+      dpkg-query -W 'daemoncores-kernel-*' 2>&1
   # arm64: U-Boot tooling replaces GRUB/shim. Verify mkimage is present on an
   # arm64 build. Skipped on amd64 where the image uses GRUB instead.
   # Note: Debian Trixie's u-boot-tools ships ONLY mkimage; fw_printenv and
   # fw_setenv are not in the package (no /usr/bin/fw_printenv in the filelist).
   - name: u-boot-tools present (arm64 boot stack)
     arch: arm64
+    category:
+      - signed
+      - uboot
     run: command -v mkimage
     diag: |
       command -v mkimage 2>&1 || echo absent
