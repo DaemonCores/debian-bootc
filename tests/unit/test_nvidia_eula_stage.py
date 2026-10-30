@@ -110,7 +110,7 @@ def run(
 
     Args:
         tmp_path: Scratch directory holding the sandbox.
-        args: Command line of the script.
+        *args: Command line of the script (variadic).
         stdin: Text fed on stdin.
         lspci: Body of the stub ``lspci``.
 
