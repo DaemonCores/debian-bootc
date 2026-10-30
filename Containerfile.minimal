@@ -104,6 +104,10 @@ ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: empty on x86_64 (downstream adds microcode); arm64 ships
 # firmware-linux-free firmware-misc-nonfree for SBC peripherals.
 ARG FIRMWARE_PKGS=""
+# Fingerprint of the custom APT repository content for this architecture, set by the CI.
+# Declared before the first layer installing from it: a changed value re-runs those
+# layers, so a rebuilt package is picked up even when its version string is unchanged.
+ARG DEBS_HASH=none
 RUN apt update \
     && apt install -y --no-install-recommends \
         bootc \

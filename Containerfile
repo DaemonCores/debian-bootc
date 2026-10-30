@@ -65,6 +65,10 @@ ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-
 # Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
 # the arm64 embedded profile (no GRUB).
 ARG APT_HOLD_PKG=grub-efi-amd64-signed
+# Fingerprint of the custom APT repository content for this architecture, set by the CI.
+# Declared before the first layer installing from it: a changed value re-runs those
+# layers, so a rebuilt package is picked up even when its version string is unchanged.
+ARG DEBS_HASH=none
 RUN apt update \
     && apt install -y --no-install-recommends \
         git \
