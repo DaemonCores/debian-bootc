@@ -127,3 +127,57 @@ kernel_signing_verify() {
   done
   [ "${missing}" -eq 0 ] || exit 1
 }
+
+#######################################
+# Sign a kernel image for UEFI Secure Boot with the image signing key, the one
+# that signs GRUB. GRUB hands the kernel to the shim for verification, and the
+# shim accepts it once that key's certificate is enrolled in MOK (the installer
+# enrolls it with the GRUB one), so one enrollment covers the whole boot chain.
+# Every image is signed, the unsigned-kernel variants included: a signature is
+# ignored where Secure Boot is off, and that variant only differs by not
+# enforcing module signatures.
+# Only a PE/COFF image carries an Authenticode signature. The arm64 build ships
+# the kernel as a gzip (Image.gz), which cannot be signed and which the shim
+# refuses; it is replaced by the uncompressed Image, itself a PE image through
+# the EFI stub, then signed.
+# Globals:
+#   SB_SIGNING_KEY: read, private key (base64 PEM), optional
+#   SB_SIGNING_CERT: read, certificate (base64 PEM), optional
+# Arguments:
+#   $1: path of the kernel image, replaced in place by the signed image
+# Returns:
+#   0 when signed, or when no key is configured (reported as a warning);
+#   1 when the image is not a PE image once decompressed, or when the
+#   signature cannot be produced or does not verify.
+#######################################
+kernel_sign_efi() {
+  local image=$1 dir
+  if [ -z "${SB_SIGNING_KEY:-}" ] || [ -z "${SB_SIGNING_CERT:-}" ]; then
+    echo "::warning::no SB_SIGNING_KEY/CERT: ${image##*/} is not signed for Secure Boot"
+    return 0
+  fi
+  dir=$(umask 077 && mktemp -d)
+  # An && chain: errexit is off inside a `||` list, and the image is only
+  # overwritten once the signed copy exists and verifies.
+  (
+    trap 'rm -rf "${dir}"' EXIT
+    if [ "$(head -c2 "${image}" | od -An -tx1 | tr -d ' ')" = "1f8b" ]; then
+      gzip -dc "${image}" >"${dir}/plain" || exit 1
+    else
+      cp "${image}" "${dir}/plain" || exit 1
+    fi
+    [ "$(head -c2 "${dir}/plain")" = "MZ" ] || {
+      echo "ERROR: ${image##*/} is not a PE image, it cannot carry a Secure Boot signature" >&2
+      exit 1
+    }
+    printf '%s' "${SB_SIGNING_KEY}" | base64 -d >"${dir}/sb.key" \
+      && printf '%s' "${SB_SIGNING_CERT}" | base64 -d >"${dir}/sb.crt" \
+      && sbsign --key "${dir}/sb.key" --cert "${dir}/sb.crt" \
+        --output "${dir}/signed" "${dir}/plain" \
+      && sbverify --cert "${dir}/sb.crt" "${dir}/signed" \
+      && cat "${dir}/signed" >"${image}"
+  ) || {
+    echo "ERROR: Secure Boot signing of ${image##*/} failed" >&2
+    return 1
+  }
+}
