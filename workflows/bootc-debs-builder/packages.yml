@@ -774,11 +774,27 @@ packages:
       mkdir -p \
         /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed
 
+      # SBAT metadata: shim refuses (0x1A Security Violation) a next stage with
+      # no .sbat section or a generation below its revocation policy. The grub
+      # generation is taken from the Fedora packaging of this same source, so it
+      # follows upstream instead of being pinned here; our own component line
+      # lets a vulnerable build of this package be revoked on its own.
+      curl -fsSL \
+        https://src.fedoraproject.org/rpms/grub2/raw/rawhide/f/sbat.csv.in \
+        | sed -n -e 's|^\(sbat,1,.*\)$|\1|p' \
+                 -e "s|^\(grub,[0-9]*,.*\)@@VERSION@@,https//|\1${GRUB_UPSTREAM},https://|p" \
+        > /tmp/sbat.csv
+      grep -q '^grub,[0-9]' /tmp/sbat.csv \
+        || { echo "ERROR: no grub SBAT line resolved" >&2; exit 1; }
+      echo "grub.debian-bootc,1,debian-bootc,grub2,${GRUB_VER},${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown}" \
+        >> /tmp/sbat.csv
+
       ./grub-mkimage \
         -O x86_64-efi \
         -o /output/grub-efi-amd64-signed/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed \
         -d grub-core \
         -p /EFI/debian \
+        --sbat /tmp/sbat.csv \
         ${GRUB_MODULES}
 
       cd /output/grub-efi-amd64-signed/
@@ -948,11 +964,27 @@ packages:
       mkdir -p \
         /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed
 
+      # SBAT metadata: shim refuses (0x1A Security Violation) a next stage with
+      # no .sbat section or a generation below its revocation policy. The grub
+      # generation is taken from the Fedora packaging of this same source, so it
+      # follows upstream instead of being pinned here; our own component line
+      # lets a vulnerable build of this package be revoked on its own.
+      curl -fsSL \
+        https://src.fedoraproject.org/rpms/grub2/raw/rawhide/f/sbat.csv.in \
+        | sed -n -e 's|^\(sbat,1,.*\)$|\1|p' \
+                 -e "s|^\(grub,[0-9]*,.*\)@@VERSION@@,https//|\1${GRUB_UPSTREAM},https://|p" \
+        > /tmp/sbat.csv
+      grep -q '^grub,[0-9]' /tmp/sbat.csv \
+        || { echo "ERROR: no grub SBAT line resolved" >&2; exit 1; }
+      echo "grub.debian-bootc,1,debian-bootc,grub2,${GRUB_VER},${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown}" \
+        >> /tmp/sbat.csv
+
       ./grub-mkimage \
         -O arm64-efi \
         -o /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
         -d grub-core \
         -p /EFI/debian \
+        --sbat /tmp/sbat.csv \
         ${GRUB_MODULES}
 
       cd /output/grub-efi-arm64-signed/
