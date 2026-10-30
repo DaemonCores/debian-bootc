@@ -127,3 +127,46 @@ kernel_signing_verify() {
   done
   [ "${missing}" -eq 0 ] || exit 1
 }
+
+#######################################
+# Sign a kernel image for UEFI Secure Boot with the image signing key, the one
+# that signs GRUB. GRUB hands the kernel to the shim for verification, and the
+# shim accepts it once that key's certificate is enrolled in MOK (the installer
+# enrolls it with the GRUB one), so one enrollment covers the whole boot chain.
+# Only a PE/COFF image carries an Authenticode signature: another format (a
+# compressed arm64 Image.gz) is reported and left as built.
+# Globals:
+#   SB_SIGNING_KEY: read, private key (base64 PEM), optional
+#   SB_SIGNING_CERT: read, certificate (base64 PEM), optional
+# Arguments:
+#   $1: path of the kernel image, signed in place
+# Returns:
+#   0 when signed or when there is nothing to sign (no key, not a PE image);
+#   1 when the signature cannot be produced or does not verify.
+#######################################
+kernel_sign_efi() {
+  local image=$1 dir
+  if [ -z "${SB_SIGNING_KEY:-}" ] || [ -z "${SB_SIGNING_CERT:-}" ]; then
+    echo "::notice::no SB_SIGNING_KEY/CERT: ${image##*/} left unsigned for Secure Boot"
+    return 0
+  fi
+  if [ "$(head -c2 "${image}")" != "MZ" ]; then
+    echo "::notice::${image##*/} is not a PE image: it cannot carry a Secure Boot signature"
+    return 0
+  fi
+  dir=$(umask 077 && mktemp -d)
+  # An && chain: errexit is off inside a `||` list, and the image is only
+  # overwritten once the signed copy exists and verifies.
+  (
+    trap 'rm -rf "${dir}"' EXIT
+    printf '%s' "${SB_SIGNING_KEY}" | base64 -d >"${dir}/sb.key" \
+      && printf '%s' "${SB_SIGNING_CERT}" | base64 -d >"${dir}/sb.crt" \
+      && sbsign --key "${dir}/sb.key" --cert "${dir}/sb.crt" \
+        --output "${dir}/signed" "${image}" \
+      && sbverify --cert "${dir}/sb.crt" "${dir}/signed" \
+      && cat "${dir}/signed" >"${image}"
+  ) || {
+    echo "ERROR: Secure Boot signing of ${image##*/} failed" >&2
+    return 1
+  }
+}
