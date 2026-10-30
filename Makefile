@@ -20,6 +20,11 @@ VBIN = $(VENV)/bin
 CI_REPO ?= .ci
 CI_REPO_URL ?= https://github.com/DaemonCores/DaemonCores-CI.git
 
+# The docs/ tree is a wiki checkout sibling; a plain CI checkout sees a
+# dangling symlink, so ci-repo materialises it before the docs gates run.
+WIKI_DIR ?= ../debian-bootc.wiki
+WIKI_URL ?= https://github.com/DaemonCores/debian-bootc.wiki.git
+
 # ---- file sets ------------------------------------------------------------ #
 
 SHELL_SRCS := \
@@ -129,7 +134,12 @@ check-yaml:
 .PHONY: ci-repo
 
 ci-repo:
-	@if [ ! -d "$(CI_REPO)/scripts" ]; then \
+	@mkdir -p "$(dir $(CI_REPO))"
+	if [ -L docs ] && [ ! -e docs/ ]; then \
+	  git clone --depth 1 --quiet "$(WIKI_URL)" "$(WIKI_DIR)" \
+	    || { echo "cannot fetch the docs wiki: set WIKI_DIR" >&2; exit 1; }; \
+	fi
+	if [ ! -d "$(CI_REPO)/scripts" ]; then \
 	  git clone --depth 1 --quiet "$(CI_REPO_URL)" "$(CI_REPO)" \
 	    || { echo "cannot fetch DaemonCores-CI: set CI_REPO" >&2; exit 1; }; \
 	elif [ -z "$${CI:-}" ] && [ -d "$(CI_REPO)/.git" ]; then \
