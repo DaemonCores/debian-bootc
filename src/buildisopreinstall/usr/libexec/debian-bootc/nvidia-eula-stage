@@ -28,7 +28,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import NoReturn, cast
+from typing import NoReturn
 
 EULA_TXT = Path(
     os.environ.get(
@@ -219,9 +219,9 @@ def cast_load_json(recipe_path: str) -> dict[str, object]:
         The parsed recipe mapping.
     """
     with open(recipe_path, encoding="utf-8") as handle:
-        loaded = json.load(handle)
+        loaded: dict[str, object] = json.load(handle)
     assert isinstance(loaded, dict)
-    return cast(dict[str, object], loaded)
+    return loaded
 
 
 def get_entry(recipe: dict[str, object], imgref: str) -> str | None:
@@ -238,9 +238,14 @@ def get_entry(recipe: dict[str, object], imgref: str) -> str | None:
     images = recipe.get("images")
     if not isinstance(images, list):
         fail("recipe has no image list")
-    for image in images:
-        if isinstance(image, dict) and image.get("imgref") == imgref:
-            return str(image.get("gpu") or "")
+    for entry_object in images:
+        if not isinstance(entry_object, dict):
+            continue
+        image: dict[str, object] = entry_object
+        ref = image.get("imgref")
+        if isinstance(ref, str) and ref == imgref:
+            gpu = image.get("gpu")
+            return gpu if isinstance(gpu, str) else ""
     return None
 
 
@@ -257,9 +262,9 @@ def dump_recipe(recipe_path: str, recipe: dict[str, object]) -> None:
 
 def main() -> NoReturn:
     """Entry point: dispatch the command line."""
-    args = sys.argv[1:]
+    args: list[str] = sys.argv[1:]
     if not args:
-        print(__doc__.strip(), file=sys.stderr)
+        print((__doc__ or __package__ or "usage").strip(), file=sys.stderr)
         sys.exit(1)
     command, rest = args[0], args[1:]
     if command == "probe":
