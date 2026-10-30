@@ -255,3 +255,17 @@ RUN if [ -n "${GPU_IA_PKGS}" ]; then \
         linux-modules-nvidia ${GPU_IA_PKGS} \
       && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
     fi
+
+# -----------------------------------------------------------------------------
+# Phase 9: Version stamp — the aleph install metadata
+# -----------------------------------------------------------------------------
+# bootc install writes /sysroot/.bootc-aleph.json from the OCI metadata, and
+# Debian's bootupd unit (bootupctl 0.3.x) parses it with a STRICT string schema:
+# with these labels absent both fields are null and bootloader-update.service
+# fails on EVERY boot (replayed and confirmed on 2026-10-30; see GPU-Support).
+# The CI passes the build-arg (tag + sha); the label layers stay after every
+# content layer so stamping never invalidates the build cache.
+ARG IMAGE_VERSION=unversioned
+ARG IMAGE_CREATED=2026-10-30T00:00:00Z
+LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}"

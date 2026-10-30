@@ -230,3 +230,8 @@ RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_
 # bootc images are updated in-place via ostree; a healthcheck would spawn a
 # process on a schedule, defeating the minimal RAM target.
 HEALTHCHECK NONE
+# Version stamp: see the standard Containerfile (aleph/bootupctl strict strings).
+ARG IMAGE_VERSION=unversioned
+ARG IMAGE_CREATED=2026-10-30T00:00:00Z
+LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
+LABEL org.opencontainers.image.created="${IMAGE_CREATED}"
