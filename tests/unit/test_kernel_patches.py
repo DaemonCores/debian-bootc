@@ -125,9 +125,14 @@ def test_common_then_architecture_in_order(setup: Path) -> None:
     # dry-run sees a pristine, coherent tree; the applied order is
     # stage-staged (common first), whatever the manifest order is.
     (setup / 'tree' / 'file2').write_text('upstream other\n')
-    (setup / 'indep.patch').write_text(
-        '--- a/file2\n+++ b/file2\n@@ -1 +1 @@\n-upstream other\n+patched other\n'
+    patch_body = (
+        '--- a/file2\n'
+        '+++ b/file2\n'
+        '@@ -1 +1 @@\n'
+        '-upstream other\n'
+        '+patched other\n'
     )
+    (setup / 'indep.patch').write_text(patch_body)
     lock = json.loads((setup / 'patches.lock.json').read_text())
     lock['file2'] = hashlib.sha256(b'upstream other\n').hexdigest()
     (setup / 'patches.lock.json').write_text(json.dumps(lock) + '\n')

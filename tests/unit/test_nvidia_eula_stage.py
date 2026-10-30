@@ -1,14 +1,12 @@
 """Unit tests for the installer helper ``nvidia-eula-stage``.
 
-The script is run AS IS through ``subprocess`` with the ``NVIDIA_EULA_FILE``
-and ``NVIDIA_EULA_STATE_DIR`` environment variables pointing at the sandbox,
-so coverage measures the real source file. A stub ``lspci`` sits first on
-``PATH`` so both the NVIDIA-detected and the no-GPU branches run without real
-hardware.
+The script is run AS IS through ``subprocess`` with the ``NVIDIA_EULA_FILE`` and
+``NVIDIA_EULA_STATE_DIR`` environment variables pointing at the sandbox, so
+coverage measures the real source file. A stub ``lspci`` sits first on ``PATH``
+so both the NVIDIA-detected and the no-GPU branches run without real hardware.
 
-Wiki contract: ``DaemonCores-VE.wiki/GPU-Support.md`` (install-time EULA
-flow) — the shipped EULA file must stay the verbatim consent paragraph of
-that page.
+Wiki contract: ``DaemonCores-VE.wiki/GPU-Support.md`` (install-time EULA flow) —
+the shipped EULA file must stay the verbatim consent paragraph of that page.
 """
 
 import importlib.machinery
@@ -27,8 +25,8 @@ SCRIPT = (
     'libexec' / 'debian-bootc' / 'nvidia-eula-stage'
 )
 NVIDIA_EULA = (
-    Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' /
-    'usr' / 'share' / 'debian-bootc' / 'nvidia-eula.txt'
+    Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' / 'usr' /
+    'share' / 'debian-bootc' / 'nvidia-eula.txt'
 )
 
 LSPCI_NVIDIA = """\
@@ -38,11 +36,20 @@ echo "01:00.0 3D controller: NVIDIA Corporation GA106 [GeForce RTX 3060]"
 LSPCI_NONE = "#!/bin/sh\nexit 0\n"
 
 RECIPE = {
-    'imgref': 'reg/x:latest_amd64',
+    'imgref':
+    'reg/x:latest_amd64',
     'images': [
-        {'imgref': 'reg/x:latest_amd64'},
-        {'imgref': 'reg/x:latest-gaming_amd64', 'gpu': 'gaming'},
-        {'imgref': 'reg/x:latest-ia_amd64', 'gpu': 'ia'},
+        {
+            'imgref': 'reg/x:latest_amd64'
+        },
+        {
+            'imgref': 'reg/x:latest-gaming_amd64',
+            'gpu': 'gaming'
+        },
+        {
+            'imgref': 'reg/x:latest-ia_amd64',
+            'gpu': 'ia'
+        },
     ],
 }
 
@@ -54,9 +61,11 @@ def load() -> ModuleType:
         The freshly executed ``nvidia_eula_stage`` module.
     """
     spec = importlib.util.spec_from_file_location(
-        'nvidia_eula_stage', SCRIPT,
-        loader=importlib.machinery.SourceFileLoader('nvidia_eula_stage',
-                                                    str(SCRIPT)),
+        'nvidia_eula_stage',
+        SCRIPT,
+        loader=importlib.machinery.SourceFileLoader(
+            'nvidia_eula_stage', str(SCRIPT)
+        ),
     )
     assert spec is not None
     assert spec.loader is not None
@@ -66,7 +75,8 @@ def load() -> ModuleType:
 
 
 def recipe(
-    tmp_path: Path, images: list[dict[str, object]] | None = None,
+    tmp_path: Path,
+    images: list[dict[str, object]] | None = None,
     imgref: str = 'reg/x:latest_amd64',
 ) -> Path:
     """Write a sandbox recipe.json.
@@ -81,12 +91,10 @@ def recipe(
     """
     path = tmp_path / 'recipe.json'
     path.write_text(
-        json.dumps(
-            {
-                'imgref': imgref,
-                'images': RECIPE['images'] if images is None else images,
-            }
-        ),
+        json.dumps({
+            'imgref': imgref,
+            'images': RECIPE['images'] if images is None else images,
+        }),
         encoding='utf-8',
     )
     return path
@@ -152,9 +160,8 @@ def eula_sandbox(tmp_path: Path) -> Path:
     Returns:
         The sandbox root.
     """
-    (tmp_path / 'nvidia-eula.txt').write_text(
-        'EULA-TEXT-VERBATIM\n', encoding='utf-8'
-    )
+    (tmp_path /
+     'nvidia-eula.txt').write_text('EULA-TEXT-VERBATIM\n', encoding='utf-8')
     return tmp_path
 
 
@@ -199,13 +206,9 @@ def test_consent_interactive_requires_exact_accept(
     Args:
         eula_sandbox: Sandbox directory with the EULA text.
     """
-    assert run(
-        eula_sandbox, 'consent', stdin='accept\n'
-    ).returncode != 0
+    assert run(eula_sandbox, 'consent', stdin='accept\n').returncode != 0
     assert not state_path(eula_sandbox).exists()
-    assert run(
-        eula_sandbox, 'consent', stdin='ACCEPT\n'
-    ).returncode == 0
+    assert run(eula_sandbox, 'consent', stdin='ACCEPT\n').returncode == 0
     assert state_path(eula_sandbox).exists()
 
 
@@ -244,7 +247,10 @@ def test_select_twin_requires_gpu(tmp_path: Path) -> None:
     target = recipe(root)
     assert run(root, 'consent', '--accept').returncode == 0
     result = run(
-        root, 'select', str(target), 'reg/x:latest-ia_amd64',
+        root,
+        'select',
+        str(target),
+        'reg/x:latest-ia_amd64',
         lspci=LSPCI_NONE,
     )
     assert result.returncode == 1
@@ -276,11 +282,16 @@ def test_select_public_never_needs_consent(tmp_path: Path) -> None:
     """
     target = recipe(
         tmp_path,
-        images=[{'imgref': 'reg/x:latest_amd64'}],
+        images=[{
+            'imgref': 'reg/x:latest_amd64'
+        }],
         imgref='reg/x:latest-ia_amd64',
     )
     result = run(
-        tmp_path, 'select', str(target), 'reg/x:latest_amd64',
+        tmp_path,
+        'select',
+        str(target),
+        'reg/x:latest_amd64',
         lspci=LSPCI_NONE,
     )
     assert result.returncode == 0, result.stderr
@@ -296,7 +307,10 @@ def test_select_gaming_requires_gpu(tmp_path: Path) -> None:
     """
     target = recipe(tmp_path, imgref='reg/x:latest_amd64')
     result = run(
-        tmp_path, 'select', str(target), 'reg/x:latest-gaming_amd64',
+        tmp_path,
+        'select',
+        str(target),
+        'reg/x:latest-gaming_amd64',
         lspci=LSPCI_NONE,
     )
     assert result.returncode == 1
@@ -323,9 +337,7 @@ def test_select_unknown_imgref_refused(tmp_path: Path) -> None:
     Args:
         tmp_path: Scratch directory.
     """
-    target = recipe(
-        tmp_path, images=[{'imgref': 'reg/x:latest_amd64'}]
-    )
+    target = recipe(tmp_path, images=[{'imgref': 'reg/x:latest_amd64'}])
     result = run(tmp_path, 'select', str(target), 'reg/x:evil_amd64')
     assert result.returncode == 1
     data = json.loads(target.read_text(encoding='utf-8'))

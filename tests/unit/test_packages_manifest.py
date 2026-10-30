@@ -84,8 +84,7 @@ def test_both_images_install_the_same_modules() -> None:
     assert modules['Containerfile'] - gpu_twins \
         == modules['Containerfile.minimal']
     assert not any(
-        'x86' in tok or 'modules-arm' in tok
-        for tok in modules['Containerfile']
+        'x86' in tok or 'modules-arm' in tok for tok in modules['Containerfile']
     ), modules
 
 
