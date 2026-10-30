@@ -103,7 +103,10 @@ def run_lspci(args: list[str]) -> str:
     """
     try:
         result = subprocess.run(
-            args, capture_output=True, text=True, check=False,
+            args,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     except FileNotFoundError:
         return ""
@@ -150,9 +153,7 @@ def cmd_consent(accept: bool) -> int:
             sys.stdout.write(eula_text())
         except OSError as err:
             fail(f"EULA text missing: {err}")
-        sys.stdout.write(
-            "\nType ACCEPT exactly (nothing else will do): "
-        )
+        sys.stdout.write("\nType ACCEPT exactly (nothing else will do): ")
         sys.stdout.flush()
         if sys.stdin.readline().rstrip("\n") != ACCEPT_WORD:
             print(
@@ -223,9 +224,7 @@ def cast_load_json(recipe_path: str) -> dict[str, object]:
     return cast(dict[str, object], loaded)
 
 
-def get_entry(
-    recipe: dict[str, object], imgref: str
-) -> str | None:
+def get_entry(recipe: dict[str, object], imgref: str) -> str | None:
     """Look the imgref up in the recipe's image list.
 
     Args:

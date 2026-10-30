@@ -1,10 +1,10 @@
 """Repository-specific checks of the image build context.
 
-The generic checks (COPY sources, ``.dockerignore`` exclusions, package
-manifest coherence) are shared by every repository and live in
-``DaemonCores-CI/scripts/check_build_context.py``, run by ``make check``.
-What stays here concerns this repository only: ``gen-recipe.py`` against the
-real Containerfiles, the local-state exclusions and the kernel helper users.
+The generic checks (COPY sources, ``.dockerignore`` exclusions, package manifest
+coherence) are shared by every repository and live in ``DaemonCores-
+CI/scripts/check_build_context.py``, run by ``make check``. What stays here
+concerns this repository only: ``gen-recipe.py`` against the real
+Containerfiles, the local-state exclusions and the kernel helper users.
 """
 
 import json
@@ -72,9 +72,9 @@ def test_kernel_prepare_users_hash_the_library() -> None:
         entry for entry in _packages()
         if 'kernel_prepare' in str(entry.get('build', ''))
     ]
-    assert {e['name'] for e in users} == {
-        'linux-modules-arm-device', 'linux-modules-nvidia'
-    }
+    assert {e['name']
+            for e in users
+            } == {'linux-modules-arm-device', 'linux-modules-nvidia'}
     for entry in users:
         assert library in entry['sources'], entry['name']
         assert 'lib/kernel-prepare.sh' in entry['build']
@@ -90,8 +90,9 @@ def test_kernel_signing_users_hash_the_library() -> None:
     ]
     assert {e['name']
             for e in users} == {
-        'linux-image', 'linux-modules-arm-device', 'linux-modules-nvidia'
-    }
+                'linux-image', 'linux-modules-arm-device',
+                'linux-modules-nvidia'
+            }
     for entry in users:
         assert library in entry['sources'], entry['name']
 

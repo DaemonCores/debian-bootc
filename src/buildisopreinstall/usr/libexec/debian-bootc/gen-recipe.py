@@ -83,14 +83,13 @@ def _build_images(
                 # for amd64 only.
                 for gpu_key, name_suffix, twin_tag, twin_arches in (
                     ("gaming", "Gaming", "-gaming", ("amd64", "arm64")),
-                    ("ia", "IA", "-ia", ("amd64",)),
+                    ("ia", "IA", "-ia", ("amd64", )),
                 ):
                     if arch not in twin_arches:
                         continue
                     entry: JsonObject = {
-                        "name": (
-                            f"{distro_name} {variant} {name_suffix} ({arch})"
-                        ),
+                        "name":
+                        (f"{distro_name} {variant} {name_suffix} ({arch})"),
                         "imgref": f"{registry}:{tag}{twin_tag}_{arch}",
                         "bootloader": "grub2",
                         "filesystem": "btrfs",

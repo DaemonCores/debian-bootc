@@ -72,7 +72,9 @@ def test_main_updates_only_images_fields(tmp_path: Path) -> None:
          str(recipe)],
         check=True,
         capture_output=True,
-        env={**os.environ, "IMAGE_REGISTRY": "reg/x"},
+        env={
+            **os.environ, "IMAGE_REGISTRY": "reg/x"
+        },
     )
     data = json.loads(recipe.read_text(encoding="utf-8"))
     assert data["branding"] == "keep"
@@ -99,9 +101,8 @@ def test_build_images_lists_gpu_twins(tmp_path: Path) -> None:
         'LABEL org.daemoncores.gpu-gaming-image="gaming"\n',
         encoding="utf-8",
     )
-    (tmp_path / "Containerfile.minimal").write_text(
-        "FROM scratch\n", encoding="utf-8"
-    )
+    (tmp_path /
+     "Containerfile.minimal").write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "amd64")
     twins = [i for i in images if i.get("gpu")]
     assert [i["imgref"] for i in twins] == [
