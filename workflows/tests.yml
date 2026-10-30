@@ -48,7 +48,7 @@ categories:
   - name: unsigned-kernel
     arch: amd64
     suffix: "-nosign"
-    secure_boot: 0
+    secure_boot: 1
   - name: signed
     arch: arm64
     suffix: ""
@@ -62,7 +62,7 @@ categories:
   - name: unsigned-kernel
     arch: arm64
     suffix: "-nosign"
-    secure_boot: 0
+    secure_boot: 1
 
 tests:
   # ── bootc / ostree / immutability ──────────────────────────────────────
@@ -196,6 +196,7 @@ tests:
   - name: booted with UEFI Secure Boot enforced
     category:
       - signed
+      - unsigned-kernel
     run: |
       v=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
       [ "$(tail -c1 "${v}" | od -An -tu1 | tr -d ' ')" = 1 ]
@@ -203,15 +204,6 @@ tests:
       ls -la /sys/firmware/efi/efivars/ 2>&1 | head -n 20
       od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-* 2>&1
       dmesg 2>&1 | grep -i 'secure boot' | head -n 5
-  - name: booted with UEFI Secure Boot off
-    category:
-      - unsigned-kernel
-    run: |
-      v=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
-      [ "$(tail -c1 "${v}" | od -An -tu1 | tr -d ' ')" = 0 ]
-    diag: |
-      ls -la /sys/firmware/efi/efivars/ 2>&1 | head -n 20
-      od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-* 2>&1
   - name: signed kernel enforces module signatures
     category:
       - signed
