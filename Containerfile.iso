@@ -22,18 +22,22 @@
 #####################################################################################
 
 ARG ARCH=amd64
-# Derives directly from the published base — no duplication.
+# Derives directly from the base image — no duplication. CI passes the image
+# built (or published) for this architecture; the default covers manual and
+# local builds.
 # The base already carries: kernel, firmware, bootc, systemd, ostree migration,
 # initramfs (bootc-finalize), APT sources, GPG key, /sysroot.
-FROM ghcr.io/daemoncores/debian-bootc:latest_${ARCH}
+ARG BASE_IMAGE=ghcr.io/daemoncores/debian-bootc:latest_${ARCH}
+FROM ${BASE_IMAGE}
 ARG ARCH=amd64
+ARG BASE_IMAGE
 # Container registry hosting the install-target images.  CI overrides this to
 # ghcr.io/${GITHUB_REPOSITORY,,}; the default covers manual / local builds.
 ARG IMAGE_REGISTRY="ghcr.io/daemoncores/debian-bootc"
 
 LABEL org.opencontainers.image.title="DaemonCores Installer"
 LABEL org.opencontainers.image.description="Graphical bootc installer live image (bootc-installer + fisherman)"
-LABEL org.opencontainers.image.base.name="ghcr.io/daemoncores/debian-bootc:latest_${ARCH}"
+LABEL org.opencontainers.image.base.name="${BASE_IMAGE}"
 LABEL org.opencontainers.image.source="https://github.com/DaemonCores/debian-bootc"
 LABEL org.opencontainers.image.licenses="LGPL-2.1"
 LABEL containers.bootc=1
