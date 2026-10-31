@@ -561,15 +561,15 @@ packages:
   # same deps/waves module pattern as the device entries: built in CI against
   # the kernel of the SAME build (linux-image dep), .config + Module.symvers
   # seeded from the published kernel deb. NOT DKMS: nothing compiles on the
-  # target, the module is an artefact of the image commit via the <tag>-ia
-  # twin (wiki: GPU-Support.md). Opt-in: when.gpu-driver, like the other
-  # EULA-bound GPU packages (the ia user-space is EULA-restricted; the module
-  # itself is the MIT open-gpu-kernel-modules). amd64 only — arm64 has no
-  # shipped NVIDIA compute target.
+  # target. Shipped in the ONE all-vendor image (OPTIMIZATION.md L9, wiki
+  # GPU-VARIANTS.md): which vendors load is an install-time profile, not a
+  # separate image. The module is the MIT open-gpu-kernel-modules; its version
+  # is the one of the Debian NVIDIA user-space (a module and its user-space
+  # must be the same release), read from the apt index at build time. amd64
+  # only — arm64 has no shipped NVIDIA compute target.
   - name: linux-modules-nvidia
     when:
       arch: amd64
-      gpu-driver: true
     deps:
       - linux-image
     deb-glob: "linux-modules-nvidia_*"
@@ -578,14 +578,7 @@ packages:
       - kernel/patches.yml
       - kernel/patches.lock.json
     env:
-      HELPERS_VER: 6
-    # Rolling: the latest NVIDIA/open-gpu-kernel-modules release (the MIT
-    # out-of-tree kernel modules). PENDING (first real build): confirm the
-    # tags upstream are non-prerelease releases so the repo: resolver wins,
-    # and the SYSSRC/SYSOUT interface of the nvidia-open Makefile.
-    track:
-      NVIDIAOPEN_VER:
-        repo: NVIDIA/open-gpu-kernel-modules
+      HELPERS_VER: 7
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -606,8 +599,14 @@ packages:
         "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
         > /tmp/nvidia-vmlinux-only.symvers
 
-      # Upstream NVIDIA open kernel modules, pinned to the release `track:`
-      # resolved (same rolling model as bootupd).
+      # Upstream NVIDIA open kernel modules at the release of the Debian
+      # user-space the image installs (libcuda1 is versioned like the whole
+      # NVIDIA stack there, e.g. 550.163.01-2 -> tag 550.163.01).
+      apt-get update -qq
+      NVIDIAOPEN_VER=$(apt-cache policy libcuda1 \
+        | awk '/Candidate:/ { sub(/-[^-]*$/, "", $2); print $2 }')
+      test -n "${NVIDIAOPEN_VER}" && [ "${NVIDIAOPEN_VER}" != "(none)" ] \
+        || { echo "ERROR: no libcuda1 candidate in the apt index" >&2; exit 1; }
       rm -rf /build/nvidia-open
       git clone --quiet --depth=1 --branch "${NVIDIAOPEN_VER}" \
         https://github.com/NVIDIA/open-gpu-kernel-modules.git /build/nvidia-open

@@ -11,7 +11,6 @@ the shipped EULA file must stay the verbatim consent paragraph of that page.
 
 import importlib.machinery
 import importlib.util
-import json
 import os
 import subprocess
 import sys
@@ -35,25 +34,6 @@ echo "01:00.0 3D controller: NVIDIA Corporation GA106 [GeForce RTX 3060]"
 """
 LSPCI_NONE = "#!/bin/sh\nexit 0\n"
 
-RECIPE = {
-    'imgref':
-    'reg/x:latest_amd64',
-    'images': [
-        {
-            'imgref': 'reg/x:latest_amd64'
-        },
-        {
-            'imgref': 'reg/x:latest-gaming_amd64',
-            'gpu': 'gaming'
-        },
-        {
-            'imgref': 'reg/x:latest-ia_amd64',
-            'gpu': 'ia'
-        },
-    ],
-}
-
-
 def load() -> ModuleType:
     """Import nvidia-eula-stage as a single module.
 
@@ -72,32 +52,6 @@ def load() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def recipe(
-    tmp_path: Path,
-    images: list[dict[str, object]] | None = None,
-    imgref: str = 'reg/x:latest_amd64',
-) -> Path:
-    """Write a sandbox recipe.json.
-
-    Args:
-        tmp_path: Scratch directory.
-        images: The image list to record; defaults to the standard pair.
-        imgref: The currently selected imgref.
-
-    Returns:
-        The recipe path.
-    """
-    path = tmp_path / 'recipe.json'
-    path.write_text(
-        json.dumps({
-            'imgref': imgref,
-            'images': RECIPE['images'] if images is None else images,
-        }),
-        encoding='utf-8',
-    )
-    return path
 
 
 def run(
@@ -223,125 +177,77 @@ def test_consent_explicit_flag(eula_sandbox: Path) -> None:
     assert state_path(eula_sandbox).exists()
 
 
-def test_select_twin_requires_consent_and_gpu(tmp_path: Path) -> None:
-    """Selecting the -ia twin without prior consent is refused.
+def usage_path(root: Path) -> Path:
+    """Locate the recorded usage file of a sandbox.
+
+    Args:
+        root: Sandbox directory.
+
+    Returns:
+        The usage state path.
+    """
+    return state_path(root).with_name('gpu-usage')
+
+
+def test_usage_ia_with_nvidia_requires_consent(tmp_path: Path) -> None:
+    """The ia profile with an NVIDIA GPU present is refused before consent.
 
     Args:
         tmp_path: Scratch directory.
     """
-    target = recipe(tmp_path, imgref='reg/x:minimal_amd64')
-    result = run(tmp_path, 'select', str(target), 'reg/x:latest-ia_amd64')
+    result = run(tmp_path, 'usage', 'ia')
     assert result.returncode == 1
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:minimal_amd64'
+    assert not usage_path(tmp_path).exists()
 
 
-def test_select_twin_requires_gpu(tmp_path: Path) -> None:
-    """Selecting the ia twin with consent but no NVIDIA GPU is refused.
-
-    Args:
-        tmp_path: Scratch directory.
-    """
-    root = tmp_path
-    (root / 'nvidia-eula.txt').write_text('EULA\n', encoding='utf-8')
-    target = recipe(root)
-    assert run(root, 'consent', '--accept').returncode == 0
-    result = run(
-        root,
-        'select',
-        str(target),
-        'reg/x:latest-ia_amd64',
-        lspci=LSPCI_NONE,
-    )
-    assert result.returncode == 1
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest_amd64'
-
-
-def test_select_twin_with_consent_rewrites_imgref(tmp_path: Path) -> None:
-    """Consent + detected GPU lets the twin become the deployed imgref.
+def test_usage_ia_with_consent_is_recorded(tmp_path: Path) -> None:
+    """Consent lets the ia profile be recorded.
 
     Args:
         tmp_path: Scratch directory.
     """
-    root = tmp_path
-    (root / 'nvidia-eula.txt').write_text('EULA\n', encoding='utf-8')
-    target = recipe(root)
-    assert run(root, 'consent', '--accept').returncode == 0
-    result = run(root, 'select', str(target), 'reg/x:latest-ia_amd64')
+    (tmp_path / 'nvidia-eula.txt').write_text('EULA\n', encoding='utf-8')
+    assert run(tmp_path, 'consent', '--accept').returncode == 0
+    result = run(tmp_path, 'usage', 'ia')
     assert result.returncode == 0, result.stderr
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest-ia_amd64'
+    assert usage_path(tmp_path).read_text(encoding='utf-8') == 'ia\n'
 
 
-def test_select_public_never_needs_consent(tmp_path: Path) -> None:
-    """Selecting the public image needs no GPU and no EULA.
+def test_usage_ia_without_nvidia_needs_no_consent(tmp_path: Path) -> None:
+    """Another vendor's GPU running ia never needs the NVIDIA EULA.
 
     Args:
         tmp_path: Scratch directory.
     """
-    target = recipe(
-        tmp_path,
-        images=[{
-            'imgref': 'reg/x:latest_amd64'
-        }],
-        imgref='reg/x:latest-ia_amd64',
-    )
-    result = run(
-        tmp_path,
-        'select',
-        str(target),
-        'reg/x:latest_amd64',
-        lspci=LSPCI_NONE,
-    )
+    result = run(tmp_path, 'usage', 'ia', lspci=LSPCI_NONE)
     assert result.returncode == 0, result.stderr
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest_amd64'
+    assert usage_path(tmp_path).read_text(encoding='utf-8') == 'ia\n'
 
 
-def test_select_gaming_requires_gpu(tmp_path: Path) -> None:
-    """Selecting the gaming twin with no GPU at all is refused.
-
-    Args:
-        tmp_path: Scratch directory.
-    """
-    target = recipe(tmp_path, imgref='reg/x:latest_amd64')
-    result = run(
-        tmp_path,
-        'select',
-        str(target),
-        'reg/x:latest-gaming_amd64',
-        lspci=LSPCI_NONE,
-    )
-    assert result.returncode == 1
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest_amd64'
-
-
-def test_select_gaming_public_no_consent(tmp_path: Path) -> None:
-    """The gaming twin is a public variant: a detected GPU is enough, no EULA.
+@pytest.mark.parametrize('usage', ['gaming', 'auto'])
+def test_usage_other_profiles_need_no_consent(
+    tmp_path: Path, usage: str
+) -> None:
+    """gaming and auto are recorded without consent even with NVIDIA present.
 
     Args:
         tmp_path: Scratch directory.
+        usage: The profile under test.
     """
-    target = recipe(tmp_path, imgref='reg/x:latest_amd64')
-    result = run(tmp_path, 'select', str(target), 'reg/x:latest-gaming_amd64')
+    result = run(tmp_path, 'usage', usage)
     assert result.returncode == 0, result.stderr
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest-gaming_amd64'
+    assert usage_path(tmp_path).read_text(encoding='utf-8') == f'{usage}\n'
 
 
-def test_select_unknown_imgref_refused(tmp_path: Path) -> None:
-    """An imgref absent from the recipe is refused, recipe untouched.
+def test_usage_unknown_refused(tmp_path: Path) -> None:
+    """An unknown profile is refused and nothing is recorded.
 
     Args:
         tmp_path: Scratch directory.
     """
-    target = recipe(tmp_path, images=[{'imgref': 'reg/x:latest_amd64'}])
-    result = run(tmp_path, 'select', str(target), 'reg/x:evil_amd64')
+    result = run(tmp_path, 'usage', 'evil')
     assert result.returncode == 1
-    data = json.loads(target.read_text(encoding='utf-8'))
-    assert data['imgref'] == 'reg/x:latest_amd64'
+    assert not usage_path(tmp_path).exists()
 
 
 def test_usage_error(tmp_path: Path) -> None:

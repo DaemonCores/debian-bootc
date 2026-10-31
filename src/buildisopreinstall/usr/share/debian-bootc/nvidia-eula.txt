@@ -1,12 +1,12 @@
 **NVIDIA driver acceptance (NVIDIA Software License Agreement, driver and
-CUDA user-space).** By installing the `-ia` image you accept the NVIDIA
-Software License Agreement for the NVIDIA driver user-space libraries and
-CUDA components shipped in this image. The kernel modules themselves are
+CUDA user-space).** By enabling the NVIDIA components at installation you
+accept the NVIDIA Software License Agreement for the NVIDIA driver
+user-space libraries and CUDA components shipped in this image. The kernel modules themselves are
 the MIT-licensed open-gpu-kernel-modules, built in CI as a plan deb
 against the project kernel — nothing compiles on this machine.
 Redistributing the image without the acceptance step at installation is
 not permitted. The complete agreement is reproduced at first install and
 by `nvidia-smi --license` on the installed host; the authoritative text:
 <https://www.nvidia.com/en-us/drivers/nvidia-license/>. The full verbatim
-agreement is pinned here before the first public `-ia` build — PENDING,
+agreement is pinned here before the first public build that activates them — PENDING,
 installer lane.
