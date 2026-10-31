@@ -604,6 +604,10 @@ packages:
       awk -F'\t' '$3 == "vmlinux"' \
         "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
         > /tmp/nvidia-vmlinux-only.symvers
+      # The NVIDIA conftest (module_symvers_sanity_check) requires a
+      # Module.symvers carrying vmlinux exports in the kernel output tree, and
+      # modpost reads the same file to resolve the built-in kernel symbols.
+      cp /tmp/nvidia-vmlinux-only.symvers "${SRCDIR}/Module.symvers"
 
       # Upstream NVIDIA open kernel modules at the release of the Debian
       # user-space the image installs (libcuda1 is versioned like the whole
