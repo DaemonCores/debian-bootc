@@ -626,7 +626,10 @@ packages:
 
       # Out-of-tree module build against the CI kbuild tree: SYSSRC/SYSOUT
       # point at the SAME patched source the image kernel was built from.
-      make -C /build/nvidia-open/kernel-open \
+      # Built from the repository ROOT: its Makefile first builds the
+      # OS-agnostic nv-kernel.o / nv-modeset-kernel.o from src/ and links them
+      # as kernel-open/*/*.o_binary, which the kbuild in kernel-open/ needs.
+      make -C /build/nvidia-open \
         SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
 
       # Install the modules into the packaging tree under the kernel's
@@ -636,7 +639,7 @@ packages:
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
       [ -f modules.builtin ] || touch modules.builtin
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
-      make -C /build/nvidia-open/kernel-open \
+      make -C /build/nvidia-open \
         SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" \
         INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1 modules_install
 
