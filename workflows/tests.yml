@@ -219,19 +219,22 @@ tests:
     diag: |
       cat /sys/module/module/parameters/sig_enforce 2>&1
       dpkg-query -W 'daemoncores-kernel-*' 2>&1
-  # arm64: U-Boot tooling replaces GRUB/shim. Verify mkimage is present on an
-  # arm64 build. Skipped on amd64 where the image uses GRUB instead.
+  # arm64 has two boot stacks, chosen at build time by the boot profile
+  # (`LABEL org.daemoncores.boot-profile`): signed GRUB (generic, the default)
+  # or U-Boot tooling (embedded). Exactly the stack of the profile must be
+  # installed; the test accepts either one, never neither.
   # Note: Debian Trixie's u-boot-tools ships ONLY mkimage; fw_printenv and
   # fw_setenv are not in the package (no /usr/bin/fw_printenv in the filelist).
-  - name: u-boot-tools present (arm64 boot stack)
+  - name: arm64 boot stack present (GRUB or U-Boot)
     arch: arm64
     category:
       - signed
       - uboot
-    run: command -v mkimage
+    run: |
+      command -v mkimage || [ "$(dpkg-query -W -f='${db:Status-Abbrev}' grub-efi-arm64-signed 2>/dev/null)" = 'ii ' ]
     diag: |
-      command -v mkimage 2>&1 || echo absent
-      dpkg -l 2>&1 | grep -i u-boot
+      command -v mkimage 2>&1 || echo "mkimage absent"
+      dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' grub-efi-arm64-signed u-boot-tools 2>&1
 
   # ── kernel / initramfs / dracut ────────────────────────────────────────
   - name: kernel modules tree present
