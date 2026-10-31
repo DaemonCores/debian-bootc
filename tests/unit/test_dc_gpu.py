@@ -1,6 +1,7 @@
 """Unit tests for ``dc-gpu``, run against a sandbox root and a fake sysfs."""
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -35,6 +36,7 @@ def run(
         os.environ,
         INSTALL_ROOT=str(tmp_path / 'root'),
         DC_GPU_SYSFS=str(drm),
+        DC_GPU_LDCONFIG='true',
     )
     return subprocess.run(
         ['sh', str(SCRIPT), *args],
@@ -138,9 +140,11 @@ def test_usage_errors(tmp_path: Path, args: tuple[str, ...]) -> None:
     assert run(tmp_path, *args).returncode == 2
 
 
-@pytest.mark.parametrize('containerfile', ['Containerfile', 'Containerfile.minimal'])
+@pytest.mark.parametrize(
+    'containerfile', ['Containerfile', 'Containerfile.minimal']
+)
 def test_dc_gpu_ships_in_the_images(containerfile: str) -> None:
-    """Every image copies ``src/basepostinstall`` to ``/`` and the script is executable.
+    """Every image copies ``src/basepostinstall`` and the script is executable.
 
     Args:
         containerfile: Containerfile that must carry the script.
@@ -152,7 +156,160 @@ def test_dc_gpu_ships_in_the_images(containerfile: str) -> None:
         for line in text.splitlines()
     )
     mode = subprocess.run(
-        ['git', '-C', str(root), 'ls-files', '-s', str(SCRIPT.relative_to(root))],
-        capture_output=True, text=True, check=True,
+        [
+            'git', '-C',
+            str(root), 'ls-files', '-s',
+            str(SCRIPT.relative_to(root))
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.split()[0]
     assert mode == '100755'
+
+
+def payload(tmp_path: Path, profile: str, rusticl: bool = False) -> Path:
+    """Create a fake installed userspace build for a profile.
+
+    Args:
+        tmp_path: Sandbox directory.
+        profile: Profile name (directory under the build prefix).
+        rusticl: Whether the build ships an OpenCL ICD.
+
+    Returns:
+        The sandbox path of the profile data directory.
+    """
+    root = tmp_path / 'root'
+    lib = root / 'usr' / 'lib' / 'dc-gpu' / profile / 'lib'
+    share = root / 'usr' / 'share' / 'dc-gpu' / profile
+    (lib / 'dri').mkdir(parents=True)
+    (share / 'vulkan' / 'icd.d').mkdir(parents=True)
+    (share / 'glvnd' / 'egl_vendor.d').mkdir(parents=True)
+    (share / 'vulkan' / 'icd.d' / 'radeon.json').write_text('{}')
+    if rusticl:
+        vendors = share / 'etc' / 'OpenCL' / 'vendors'
+        vendors.mkdir(parents=True)
+        (vendors / 'rusticl.icd').write_text('libRusticlOpenCL.so.1\n')
+    return share
+
+
+def read(tmp_path: Path, rel: str) -> str:
+    """Read a file of the sandbox root.
+
+    Args:
+        tmp_path: Sandbox directory.
+        rel: Path below the sandbox root.
+
+    Returns:
+        The file content.
+    """
+    return (tmp_path / 'root' / rel).read_text(encoding='utf-8')
+
+
+@pytest.mark.parametrize('profile', ['gaming', 'ia'])
+def test_set_activates_the_profile_prefix(tmp_path: Path, profile: str) -> None:
+    """Each profile points the linker and the loaders at its own prefix.
+
+    Args:
+        tmp_path: Sandbox directory.
+        profile: The profile under test.
+    """
+    for name in ('gaming', 'ia'):
+        payload(tmp_path, name)
+    assert run(tmp_path, 'set', profile).returncode == 0
+    prefix = f'/usr/lib/dc-gpu/{profile}'
+    assert read(tmp_path, 'etc/ld.so.conf.d/dc-gpu.conf') == f'{prefix}/lib\n'
+    env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
+    assert (
+        f'VK_DRIVER_FILES=/usr/share/dc-gpu/{profile}/vulkan/icd.d/radeon.json'
+        in env
+    )
+    assert f'LIBGL_DRIVERS_PATH={prefix}/lib/dri' in env
+    assert (
+        f'__EGL_VENDOR_LIBRARY_DIRS=/usr/share/dc-gpu/{profile}/'
+        'glvnd/egl_vendor.d' in env
+    )
+    other = 'ia' if profile == 'gaming' else 'gaming'
+    assert f'dc-gpu/{other}' not in env
+    assert f'userspace: {profile}' in run(tmp_path, 'status').stdout
+
+
+def test_ia_build_exposes_its_opencl_icd(tmp_path: Path) -> None:
+    """A build shipping an OpenCL ICD is merged with the host ICDs.
+
+    Args:
+        tmp_path: Sandbox directory.
+    """
+    payload(tmp_path, 'ia', rusticl=True)
+    host = tmp_path / 'root' / 'etc' / 'OpenCL' / 'vendors'
+    host.mkdir(parents=True)
+    (host / 'amdocl64.icd').write_text('libamdocl64.so\n')
+    assert run(tmp_path, 'set', 'ia').returncode == 0
+    env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
+    assert 'OCL_ICD_VENDORS=/etc/dc-gpu/OpenCL/vendors' in env
+    merged = tmp_path / 'root' / 'etc' / 'dc-gpu' / 'OpenCL' / 'vendors'
+    assert sorted(p.name
+                  for p in merged.iterdir()) == ['amdocl64.icd', 'rusticl.icd']
+
+
+def test_gaming_build_without_opencl_leaves_the_host_loader(
+    tmp_path: Path
+) -> None:
+    """No OpenCL variable is set when the profile ships no ICD.
+
+    Args:
+        tmp_path: Sandbox directory.
+    """
+    payload(tmp_path, 'gaming')
+    assert run(tmp_path, 'set', 'gaming').returncode == 0
+    env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
+    assert 'OCL_ICD_VENDORS' not in env
+
+
+def test_host_vulkan_icds_stay_visible(tmp_path: Path) -> None:
+    """The loader's default search is replaced, so host ICDs are listed too.
+
+    Args:
+        tmp_path: Sandbox directory.
+    """
+    payload(tmp_path, 'gaming')
+    host = tmp_path / 'root' / 'usr' / 'share' / 'vulkan' / 'icd.d'
+    host.mkdir(parents=True)
+    (host / 'nvidia_icd.json').write_text('{}')
+    assert run(tmp_path, 'set', 'gaming').returncode == 0
+    env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
+    assert '/usr/share/vulkan/icd.d/nvidia_icd.json' in env
+
+
+def test_auto_follows_the_connected_display(tmp_path: Path) -> None:
+    """Auto picks gaming with a connected display, ia on a headless host.
+
+    Args:
+        tmp_path: Sandbox directory.
+    """
+    for name in ('gaming', 'ia'):
+        payload(tmp_path, name)
+    assert run(tmp_path, 'set', 'auto').returncode == 0
+    assert 'userspace: ia' in run(tmp_path, 'status').stdout
+    out = tmp_path / 'drm' / 'card0-HDMI-A-1'
+    out.mkdir(parents=True)
+    (out / 'status').write_text('connected\n')
+    assert run(tmp_path, 'apply').returncode == 0
+    assert 'userspace: gaming' in run(tmp_path, 'status').stdout
+
+
+def test_missing_build_clears_the_activation(tmp_path: Path) -> None:
+    """Without the profile's build the system libraries stay active.
+
+    Args:
+        tmp_path: Sandbox directory.
+    """
+    payload(tmp_path, 'gaming')
+    assert run(tmp_path, 'set', 'gaming').returncode == 0
+    shutil.rmtree(tmp_path / 'root' / 'usr' / 'lib' / 'dc-gpu')
+    result = run(tmp_path, 'apply')
+    assert result.returncode == 0
+    assert 'not installed' in result.stderr
+    conf = tmp_path / 'root' / 'etc' / 'ld.so.conf.d' / 'dc-gpu.conf'
+    assert not conf.exists()
+    assert 'userspace: none' in run(tmp_path, 'status').stdout

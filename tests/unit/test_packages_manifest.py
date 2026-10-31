@@ -1,5 +1,9 @@
 """Static consistency checks of the ``packages.yml`` manifest."""
 
+import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, cast
 
@@ -169,3 +173,57 @@ def test_images_build_on_the_shared_base() -> None:
             '        linux-image-${KERNEL_VARIANT}'
         ) > suffix, name
         assert 'bootcpreinstall' not in text, name
+
+
+def _expand(arch: str) -> list[dict[str, Any]]:
+    """Expand the manifest variants with the shared ``expand.jq`` filter.
+
+    Args:
+        arch: Target architecture kept by the filter.
+
+    Returns:
+        The resolved package entries.
+    """
+    assert shutil.which('jq'), 'jq is required to expand the manifest'
+    ci_repo = Path(os.environ.get('CI_REPO', str(MANIFEST.parents[2] / '.ci')))
+    data = yaml.safe_load(MANIFEST.read_text())
+    done = subprocess.run(
+        ['jq', '-c', '-f',
+         str(ci_repo / 'manifest-expand' / 'expand.jq')],
+        input=json.dumps(data),
+        env=dict(os.environ, ARCH=arch),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return cast(list[dict[str, Any]], json.loads(done.stdout)['packages'])
+
+
+def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
+    """Each profile expands to one package per CPU level of its arch."""
+    amd64 = {p['name']: p for p in _expand('amd64')}
+    arm64 = {p['name'] for p in _expand('arm64')}
+    for profile in ('gaming', 'ia'):
+        for level in ('x64v1', 'x64v2', 'x64v3'):
+            entry = amd64[f'gpu-userspace-{profile}-{level}']
+            assert entry['env']['GPU_PROFILE'] == profile
+            assert entry['env']['GPU_LEVEL'] == level
+            assert entry['env']['GPU_VARIANT'] == f'{profile}-{level}'
+            assert 'gpu-userspace' in entry['sources']
+        assert f'gpu-userspace-{profile}-generic' in arm64
+        assert f'gpu-userspace-{profile}-generic' not in amd64
+        assert not any(f'gpu-userspace-{profile}-x64' in n for n in arm64)
+
+
+def test_gpu_userspace_lists_no_vendor_and_no_fixed_march() -> None:
+    """Drivers stay on auto and the CPU level comes from the variable."""
+    build = _packages()['gpu-userspace']['build']
+    code = '\n'.join(
+        ln for ln in build.splitlines() if not ln.lstrip().startswith('#')
+    )
+    assert '-Dgallium-drivers=auto' in code
+    assert '-Dvulkan-drivers=auto' in code
+    for vendor in ('radeonsi', 'iris', 'nouveau', 'panfrost'):
+        assert vendor not in code, vendor
+    assert 'kernel_flavour_kcflags "${GPU_LEVEL}"' in code
+    assert '-march' not in code

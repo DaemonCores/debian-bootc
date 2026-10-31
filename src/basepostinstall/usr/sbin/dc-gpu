@@ -3,6 +3,7 @@
 #
 # Usage: dc-gpu set gaming|ia|auto
 #        dc-gpu status
+#        dc-gpu apply
 #
 # The image carries the drivers of every vendor; the profile only decides
 # which ones are activated. It is stored in /etc/dc-gpu/usage (written by the
@@ -12,6 +13,16 @@
 # file /etc/dc-gpu/nvidia-consent exists. The vendors present are detected
 # from sysfs at run time; each device keeps its own driver (no global
 # blacklist), so multi-GPU machines use several vendors at once.
+#
+# Userspace: the image holds two builds of the Mesa stack, one per profile,
+# each under its own prefix ($libdir/<profile>, data under $sharedir/<profile>).
+# CPU-level builds (x86-64-v2/v3) sit in the prefix's glibc-hwcaps directories
+# and are picked by ld.so itself; nothing here selects a level.
+# Activating a profile points the dynamic linker (ld.so.conf.d) and the driver
+# loaders (environment.d) at that prefix; the other build stays installed and
+# inert. `auto` resolves to gaming when a display is connected, else ia. `apply`
+# re-applies the stored profile (run at every boot by dc-gpu-apply.service, so
+# `auto` follows the hardware actually attached).
 set -eu
 
 # Prefix for every path used; empty in the image, set by the unit tests.
@@ -21,9 +32,22 @@ usage_file=${conf}/usage
 consent=${conf}/nvidia-consent
 modload=${root}/etc/modules-load.d/dc-gpu.conf
 sysdrm=${DC_GPU_SYSFS:-/sys/class/drm}
+libdir=${DC_GPU_LIBDIR:-/usr/lib/dc-gpu}
+sharedir=${DC_GPU_SHAREDIR:-/usr/share/dc-gpu}
+ldconf=${root}/etc/ld.so.conf.d/dc-gpu.conf
+envfile=${root}/etc/environment.d/50-dc-gpu.conf
+ocl_dir=/etc/dc-gpu/OpenCL/vendors
+# ldconfig runs for real only on the live system; the tests inject a stand-in.
+if [ -n "${DC_GPU_LDCONFIG:-}" ]; then
+  ldconfig_cmd=${DC_GPU_LDCONFIG}
+elif [ -z "${root}" ]; then
+  ldconfig_cmd=ldconfig
+else
+  ldconfig_cmd=
+fi
 
 usage() {
-  echo "Usage: dc-gpu set gaming|ia|auto | dc-gpu status" >&2
+  echo "Usage: dc-gpu set gaming|ia|auto | dc-gpu status | dc-gpu apply" >&2
   exit 2
 }
 
@@ -60,6 +84,110 @@ modules() {
 apply() {
   mkdir -p "$(dirname "${modload}")"
   { echo "# Written by dc-gpu for profile $1"; modules "$1"; } >"${modload}"
+  userspace "$(resolve "$1")"
+}
+
+# Concrete userspace profile for a stored one: auto follows the hardware, a
+# connected display selects gaming, a headless machine selects ia.
+resolve() {
+  if [ "$1" != auto ]; then echo "$1"; return; fi
+  for st in "${sysdrm}"/card*-*/status; do
+    [ -r "${st}" ] || continue
+    if [ "$(cat "${st}")" = connected ]; then echo gaming; return; fi
+  done
+  echo ia
+}
+
+# Colon-joined list of the existing files matching "$1"/*"$2" for each
+# directory given after the suffix (runtime paths, checked under the root).
+joinfiles() {
+  suffix=$1; shift
+  out=
+  for d in "$@"; do
+    for f in "${root}${d}"/*"${suffix}"; do
+      [ -e "${f}" ] || continue
+      out=${out:+${out}:}${d}/${f##*/}
+    done
+  done
+  printf '%s' "${out}"
+}
+
+# Directories among the given runtime paths that exist, colon-joined.
+joindirs() {
+  out=
+  for d in "$@"; do
+    [ -d "${root}${d}" ] || continue
+    out=${out:+${out}:}${d}
+  done
+  printf '%s' "${out}"
+}
+
+run_ldconfig() {
+  if [ -n "${ldconfig_cmd}" ]; then ${ldconfig_cmd}; fi
+}
+
+# Point the linker and the driver loaders at the build of profile "$1".
+# Variables are written only for the parts that build ships; host-provided
+# vendor ICDs (the NVIDIA proprietary stack) stay in the search lists because
+# the loaders replace their default search path once a variable is set.
+userspace() {
+  prof=$1
+  prefix=${libdir}/${prof}
+  share=${sharedir}/${prof}
+  if [ ! -d "${root}${prefix}/lib" ]; then
+    rm -f "${ldconf}" "${envfile}"
+    run_ldconfig
+    echo "userspace build for ${prof} not installed: system libraries stay active" >&2
+    return 0
+  fi
+  mkdir -p "$(dirname "${ldconf}")" "$(dirname "${envfile}")"
+  echo "${prefix}/lib" >"${ldconf}"
+  {
+    echo "# Written by dc-gpu for userspace profile ${prof}"
+    vk=$(joinfiles .json "${share}/vulkan/icd.d" /etc/vulkan/icd.d /usr/share/vulkan/icd.d)
+    if [ -n "${vk}" ]; then
+      echo "VK_DRIVER_FILES=${vk}"
+      echo "VK_ICD_FILENAMES=${vk}"
+    fi
+    egl=$(joindirs "${share}/glvnd/egl_vendor.d" /etc/glvnd/egl_vendor.d /usr/share/glvnd/egl_vendor.d)
+    if [ -n "${egl}" ]; then echo "__EGL_VENDOR_LIBRARY_DIRS=${egl}"; fi
+    if [ -d "${root}${prefix}/lib/dri" ]; then
+      echo "LIBGL_DRIVERS_PATH=${prefix}/lib/dri"
+      # libva accepts a list: keep host-installed VA-API drivers (Intel
+      # media driver) next to this build's.
+      va=${prefix}/lib/dri
+      for d in "${root}"/usr/lib/*/dri "${root}"/usr/lib/dri; do
+        [ -d "${d}" ] || continue
+        va=${va}:${d#"${root}"}
+      done
+      echo "LIBVA_DRIVERS_PATH=${va}"
+    fi
+    if [ -d "${root}${prefix}/lib/gbm" ]; then echo "GBM_BACKENDS_PATH=${prefix}/lib/gbm"; fi
+    if [ -d "${root}${prefix}/lib/vdpau" ]; then echo "VDPAU_DRIVER_PATH=${prefix}/lib/vdpau"; fi
+    if [ -d "${root}${share}/etc/OpenCL/vendors" ]; then
+      # The ICD loader reads a single directory: merge this build's ICDs
+      # with the host-installed ones (ROCm, NVIDIA) through symlinks.
+      rm -rf "${root}${ocl_dir}"
+      mkdir -p "${root}${ocl_dir}"
+      for d in "${share}/etc/OpenCL/vendors" /etc/OpenCL/vendors; do
+        for f in "${root}${d}"/*.icd; do
+          [ -e "${f}" ] || continue
+          ln -sf "${d}/${f##*/}" "${root}${ocl_dir}/${f##*/}"
+        done
+      done
+      echo "OCL_ICD_VENDORS=${ocl_dir}"
+    fi
+  } >"${envfile}"
+  run_ldconfig
+}
+
+# Profile whose build the linker configuration currently points at.
+active() {
+  if [ -r "${ldconf}" ]; then
+    sed -n 's|/lib$||; s|.*/||p' "${ldconf}"
+  else
+    echo none
+  fi
 }
 
 [ "$#" -ge 1 ] || usage
@@ -75,8 +203,12 @@ case $1 in
     echo "$2" >"${usage_file}"
     apply "$2"
     echo "profile $2 applied at next boot" ;;
+  apply)
+    [ "$#" -eq 1 ] || usage
+    apply "$(current)" ;;
   status)
     echo "profile: $(current)"
+    echo "userspace: $(active)"
     echo "vendors: $(vendors | tr '\n' ' ')"
     if [ -e "${consent}" ]; then echo "nvidia-consent: yes"; else echo "nvidia-consent: no"; fi ;;
   *) usage ;;
