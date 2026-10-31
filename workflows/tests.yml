@@ -231,7 +231,7 @@ tests:
       - signed
       - uboot
     run: |
-      command -v mkimage || [ "$(dpkg-query -W -f='${db:Status-Abbrev}' grub-efi-arm64-signed 2>/dev/null)" = 'ii ' ]
+      command -v mkimage || dpkg-query -W -f='${db:Status-Abbrev}' grub-efi-arm64-signed 2>/dev/null | grep -qE '^[ih]i'
     diag: |
       command -v mkimage 2>&1 || echo "mkimage absent"
       dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' grub-efi-arm64-signed u-boot-tools 2>&1
