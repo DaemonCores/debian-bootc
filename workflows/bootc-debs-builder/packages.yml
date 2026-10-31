@@ -588,6 +588,12 @@ packages:
       # download the kernel source, seed .config (kernel_prepare).
       kernel_prepare
       kernel_signing_setup
+      # An out-of-tree build reads include/config/auto.conf and the generated
+      # headers of the kernel tree; the seeded .config alone does not provide
+      # them. olddefconfig resolves the config, modules_prepare generates the
+      # rest (the Kbuild contract for external modules).
+      make olddefconfig
+      make -j"$(nproc)" modules_prepare
 
       # Module.symvers of the SAME kernel, at
       # /usr/lib/linux-kernel-build/Module.symvers in the kernel deb: an
