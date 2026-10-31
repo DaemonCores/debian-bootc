@@ -246,8 +246,15 @@ tests:
   # it from the modules themselves and checks the matching behaviour.
   - name: kernel modules are all signed or none is
     run: |
-      signed=0; unsigned=0
-      for m in $(find /usr/lib/modules -name '*.ko*'); do
+      # A plain .ko is signed when it ends with the kernel's signature magic:
+      # one grep over all of them instead of a modinfo process per module (that
+      # loop took 118 s on the emulated arm64 guest). Compressed modules hide
+      # the magic, so those still go through modinfo.
+      magic='~Module signature appended~'
+      plain=$(find /usr/lib/modules -name '*.ko' | wc -l)
+      unsigned=$(find /usr/lib/modules -name '*.ko' -print0 | xargs -0 -r grep -L -a -F "${magic}" | wc -l)
+      signed=$((plain - unsigned))
+      for m in $(find /usr/lib/modules -name '*.ko.*'); do
         if [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
           signed=$((signed + 1))
         else
