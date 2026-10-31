@@ -263,7 +263,7 @@ tests:
     run: |
       m=$(find /usr/lib/modules -name '*.ko*' | head -1)
       enforce=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null || echo absent)
-      if dpkg-query -W -f '${Package}\n' 'daemoncores-kernel-*' | grep -q -- '-nosign$'; then
+      if dpkg-query -W -f '${db:Status-Abbrev}${Package}\n' 'daemoncores-kernel-*' | grep -q -- '^ii .*-nosign$'; then
         echo "unsigned kernel, sig_enforce=${enforce}"
         [ "${enforce}" = N ]
       elif [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
@@ -281,7 +281,12 @@ tests:
   - name: a signed module loads on either kernel
     run: |
       m=$(find /usr/lib/modules -name 'dummy.ko*' | head -1)
-      [ -n "${m}" ] || m=$(find /usr/lib/modules -name '*.ko*' -size -20k | head -1)
+      # insmod does not resolve dependencies: take a module that needs none.
+      if [ -z "${m}" ]; then
+        for c in $(find /usr/lib/modules -name '*.ko*' -size -20k); do
+          [ -z "$(modinfo -F depends "${c}" 2>/dev/null)" ] && { m=${c}; break; }
+        done
+      fi
       if [ -z "$(modinfo -F signer "${m}" 2>/dev/null)" ]; then
         echo "no signing key in this build: no signed module to load"
         exit 0
