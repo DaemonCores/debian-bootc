@@ -1,0 +1,16 @@
+Package: {{ PKG }}
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+Section: libs
+Priority: optional
+Depends: {{ DEPS }}
+Description: GPU userspace stack built from source ({{ PROFILE }}, {{ LEVEL }})
+ Mesa (OpenGL, EGL, GBM, Vulkan, video acceleration, OpenCL where the profile
+ enables it) built in CI from the upstream release matching Debian's Mesa
+ version, with every Gallium and Vulkan driver the architecture supports.
+ Installed under /usr/lib/dc-gpu/{{ PROFILE }} and /usr/share/dc-gpu/{{ PROFILE }}
+ only: it coexists with the other profile and stays inert until `dc-gpu`
+ activates it. The x64v2/x64v3 packages carry only the libraries rebuilt for
+ that CPU level, in glibc-hwcaps directories that the dynamic linker prefers
+ on a CPU supporting the level.

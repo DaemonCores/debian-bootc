@@ -665,6 +665,225 @@ packages:
         || { echo "ERROR: output linux-modules-nvidia deb empty" >&2; exit 1; }
 
   # ===========================================================================
+  # gpu-userspace class — the GPU userspace stack, compiled from source, one
+  # build per usage profile. BOTH profiles carry the drivers of EVERY vendor
+  # (Gallium and Vulkan drivers are left on `auto`, no vendor list); they differ
+  # only in build configuration and optimisation. Both debs live in the same
+  # image under their own prefix and `dc-gpu set gaming|ia|auto` activates one.
+  # Mesa is built at the upstream release matching Debian's candidate (the way
+  # linux-modules-nvidia derives its tag from libcuda1), so the Debian runtime
+  # libraries it links against (LLVM, libdrm, wayland, ...) agree with it.
+  # Limits: the NVIDIA proprietary userspace cannot be recompiled and stays the
+  # Debian packages; ROCm and Level Zero userspace are not built here.
+  # ===========================================================================
+  - name: gpu-userspace
+    # One variant per (usage profile, CPU level), the transverse-variant
+    # strategy of the VE kernel-pve entry (DaemonCores-VE packages.yml): the
+    # level is a build variable (GPU_LEVEL x64v1/x64v2/x64v3 on amd64, mapped
+    # to -march by the CI helper kernel_flavour_kcflags, the same mapping the
+    # kernels use; `generic` on arm64 = one build, no microarch matrix). All
+    # variants are installed side by side; ld.so picks the level per CPU through
+    # glibc-hwcaps directories, no boot-time switch (x64v1 = baseline).
+    variants:
+      gaming-x64v1:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: gaming, GPU_LEVEL: x64v1}
+      gaming-x64v2:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: gaming, GPU_LEVEL: x64v2}
+      gaming-x64v3:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: gaming, GPU_LEVEL: x64v3}
+      gaming-generic:
+        when: {arch: arm64}
+        env: {GPU_PROFILE: gaming, GPU_LEVEL: generic}
+      ia-x64v1:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: ia, GPU_LEVEL: x64v1}
+      ia-x64v2:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: ia, GPU_LEVEL: x64v2}
+      ia-x64v3:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: ia, GPU_LEVEL: x64v3}
+      ia-generic:
+        when: {arch: arm64}
+        env: {GPU_PROFILE: ia, GPU_LEVEL: generic}
+    variant-name-prefix: "gpu-userspace-"
+    variant-env: GPU_VARIANT
+    sources:
+      - gpu-userspace
+    env:
+      HELPERS_VER: 7
+    build: |
+      set -euo pipefail
+      SAVE_PWD=$(pwd)
+      DEB_ARCH=$(dpkg --print-architecture)
+      PKG="gpu-userspace-${GPU_PROFILE}-${GPU_LEVEL}"
+      BASE_PKG="gpu-userspace-${GPU_PROFILE}-x64v1"
+      [ "${GPU_LEVEL}" != generic ] || BASE_PKG="${PKG}"
+      PREFIX="/usr/lib/dc-gpu/${GPU_PROFILE}"
+      SHARE="/usr/share/dc-gpu/${GPU_PROFILE}"
+      STAGE="/output/${PKG}-stage"
+      TREE="/output/${PKG}"
+
+      # Profile = build configuration only (every vendor in both).
+      #   gaming  full optimisation + LTO, every video codec, Vulkan overlay
+      #           and screenshot layers, no compute-only front end (rusticl)
+      #   ia      OpenCL through rusticl on the LLVM compute stack, no
+      #           display-only layers; -O2 without LTO
+      case "${GPU_PROFILE}" in
+        gaming)
+          MESON_PROFILE_OPTS="-Doptimization=3 -Db_lto=true -Dvideo-codecs=all
+            -Dgallium-rusticl=false -Dgallium-va=enabled -Dgallium-vdpau=enabled
+            -Dvulkan-layers=device-select,overlay,screenshot" ;;
+        ia)
+          MESON_PROFILE_OPTS="-Doptimization=2 -Dllvm=enabled -Dshared-llvm=enabled
+            -Dgallium-rusticl=true -Dgallium-va=disabled
+            -Dgallium-vdpau=disabled -Dvulkan-layers=device-select" ;;
+        *) echo "ERROR: unknown GPU profile ${GPU_PROFILE}" >&2; exit 1 ;;
+      esac
+      # CPU level -> -march (empty for x64v1 and generic); the level builds
+      # ship only their libraries, in the glibc-hwcaps directory ld.so searches.
+      MARCH=$(kernel_flavour_kcflags "${GPU_LEVEL}")
+      HWCAPS=
+      case "${GPU_LEVEL}" in
+        x64v1|generic) ;;
+        x64v[2-9]) HWCAPS="x86-64-v${GPU_LEVEL#x64v}" ;;
+        *) echo "ERROR: unknown CPU level ${GPU_LEVEL}" >&2; exit 1 ;;
+      esac
+
+      # Mesa release = Debian's candidate (epoch, Debian revision and a
+      # repack suffix stripped, "~rc" -> "-rc" as upstream names its tarballs).
+      apt-get update -qq
+      DEB_MESA=$(apt-cache policy mesa-vulkan-drivers \
+        | awk '/Candidate:/ { print $2 }')
+      test -n "${DEB_MESA}" && [ "${DEB_MESA}" != "(none)" ] \
+        || { echo "ERROR: no mesa-vulkan-drivers candidate in the apt index" >&2; exit 1; }
+      MESA_VER=$(printf '%s' "${DEB_MESA#*:}" | sed -E 's/-[^-]*$//; s/\+.*//; s/~/-/')
+      BUILT_VER="${MESA_VER}+r1"
+
+      # Build dependencies come from Debian's own mesa source package, so
+      # the list follows the version that is built. deb-src is enabled on the
+      # existing apt sources (deb822 and one-line forms) before build-dep.
+      for f in /etc/apt/sources.list.d/*.sources; do
+        [ -e "${f}" ] || continue
+        sed -i -E 's/^Types:[[:space:]]*deb[[:space:]]*$/Types: deb deb-src/' "${f}"
+      done
+      if [ -s /etc/apt/sources.list ]; then
+        sed -E -n 's/^deb[[:space:]]/deb-src /p' /etc/apt/sources.list \
+          > /etc/apt/sources.list.d/dc-gpu-src.list
+      fi
+      apt-get update -qq
+      apt-get build-dep -y mesa
+      apt-get install -y --no-install-recommends \
+        build-essential meson ninja-build pkgconf curl xz-utils dpkg-dev binutils
+
+      rm -rf /build/mesa /build/mesa-src
+      mkdir -p /build/mesa-src
+      curl -fsSL "https://archive.mesa3d.org/mesa-${MESA_VER}.tar.xz" \
+        | tar -xJ -C /build/mesa-src --strip-components=1
+      test -f /build/mesa-src/meson.build \
+        || { echo "ERROR: mesa ${MESA_VER} source tree is empty" >&2; exit 1; }
+
+      # Every driver the architecture supports: left on `auto`, never listed.
+      # The profile options are set above, the optimisation level comes from
+      # meson's buildtype; -march only from the CPU level variable.
+      # shellcheck disable=SC2086
+      meson setup /build/mesa /build/mesa-src \
+        --prefix="${PREFIX}" --libdir=lib --datadir="${SHARE}" \
+        --sysconfdir="${SHARE}/etc" --buildtype=release \
+        -Dgallium-drivers=auto -Dvulkan-drivers=auto \
+        -Dglvnd=enabled -Dbuild-tests=false -Dstrip=true \
+        ${MARCH:+-Dc_args="${MARCH}" -Dcpp_args="${MARCH}"} \
+        ${MESON_PROFILE_OPTS}
+      meson compile -C /build/mesa
+      rm -rf "${STAGE}" "${TREE}"
+      DESTDIR="${STAGE}" meson install -C /build/mesa
+
+      # Content check: at least one Vulkan ICD, one Gallium/DRI driver, and
+      # the OpenCL ICD for the profile that builds it.
+      ls "${STAGE}${SHARE}"/vulkan/icd.d/*.json >/dev/null 2>&1 \
+        || { echo "ERROR: no Vulkan ICD installed for ${GPU_PROFILE}" >&2; exit 1; }
+      test -n "$(find "${STAGE}${PREFIX}/lib" -name '*_dri.so' -o -name 'libgallium*.so*' 2>/dev/null | head -1)" \
+        || { echo "ERROR: no Gallium driver installed for ${GPU_PROFILE}" >&2; exit 1; }
+      if printf '%s' "${MESON_PROFILE_OPTS}" | grep -q 'gallium-rusticl=true'; then
+        ls "${STAGE}${SHARE}"/etc/OpenCL/vendors/*.icd >/dev/null 2>&1 \
+          || { echo "ERROR: rusticl requested but no OpenCL ICD installed" >&2; exit 1; }
+      fi
+
+      # Descriptors name their library by soname only: the loader resolves it
+      # through ld.so (profile prefix registered by dc-gpu), so the glibc-hwcaps
+      # build of the CPU is the one found. Rewritten for every descriptor kind.
+      for j in "${STAGE}${SHARE}"/vulkan/icd.d/*.json "${STAGE}${SHARE}"/glvnd/egl_vendor.d/*.json; do
+        [ -e "${j}" ] || continue
+        sed -i -E 's#("library_path"[[:space:]]*:[[:space:]]*")([^"]*/)?([^"/]*)"#\1\3"#' "${j}"
+      done
+      for i in "${STAGE}${SHARE}"/etc/OpenCL/vendors/*.icd; do
+        [ -e "${i}" ] || continue
+        basename "$(cat "${i}")" > "${i}.new" && mv "${i}.new" "${i}"
+      done
+      ! grep -rE '"library_path"[[:space:]]*:[[:space:]]*"[^"]*/' "${STAGE}${SHARE}" \
+        || { echo "ERROR: a descriptor still carries a path" >&2; exit 1; }
+
+      # Only the two profile prefixes may be populated.
+      stray=$(cd "${STAGE}" && find . -mindepth 1 -maxdepth 3 -type d \
+        -not -path "./usr" -not -path "./usr/lib" -not -path "./usr/share" \
+        -not -path "./usr/lib/dc-gpu*" -not -path "./usr/share/dc-gpu*" | head -1)
+      test -z "${stray}" \
+        || { echo "ERROR: files installed outside the profile prefix: ${stray}" >&2; exit 1; }
+      find "${STAGE}${PREFIX}/lib" -type f \( -name '*.so' -o -name '*.so.*' \) \
+        -exec strip --strip-unneeded {} +
+
+      # Package tree: the baseline build ships everything; a CPU-level build
+      # ships only the libraries ld.so resolves by name, under
+      # lib/glibc-hwcaps/<level>, and depends on the baseline package.
+      mkdir -p "${TREE}/DEBIAN"
+      if [ -z "${HWCAPS}" ]; then
+        cp -a "${STAGE}/usr" "${TREE}/"
+        EXTRA_DEP=
+      else
+        mkdir -p "${TREE}${PREFIX}/lib/glibc-hwcaps/${HWCAPS}"
+        cp -a "${STAGE}${PREFIX}"/lib/*.so* "${TREE}${PREFIX}/lib/glibc-hwcaps/${HWCAPS}/"
+        test -n "$(find "${TREE}${PREFIX}/lib/glibc-hwcaps/${HWCAPS}" -name '*.so*' | head -1)" \
+          || { echo "ERROR: no library for ${HWCAPS}" >&2; exit 1; }
+        EXTRA_DEP="${BASE_PKG} (= ${BUILT_VER})"
+      fi
+
+      # Runtime dependencies from the linked libraries; libraries of the
+      # profile itself are resolved in the staging tree.
+      mkdir -p "${STAGE}/debian"
+      printf 'Source: %s\n\nPackage: %s\nArchitecture: any\n' "${PKG}" "${PKG}" \
+        > "${STAGE}/debian/control"
+      DEPS=$(cd "${STAGE}" && find "${TREE}${PREFIX}/lib" -type f -name '*.so*' \
+        -exec dpkg-shlibdeps -O --ignore-missing-info -l"${STAGE}${PREFIX}/lib" \
+          "-x${PKG}" {} + 2>/dev/null \
+        | sed -n 's/^shlibs:Depends=//p' | tr ',' '\n' | sed 's/^ *//' \
+        | sort -u | paste -sd, - | sed 's/,/, /g')
+      rm -rf "${STAGE}/debian"
+      DEPS="${EXTRA_DEP:+${EXTRA_DEP}, }${DEPS}"
+      test -n "${DEPS}" \
+        || { echo "ERROR: dpkg-shlibdeps found no runtime dependency" >&2; exit 1; }
+
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/gpu-userspace/DEBIAN/control" \
+        "${TREE}/DEBIAN/control"
+      sed -i \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        -e "s|{{ PKG }}|${PKG}|g" \
+        -e "s|{{ PROFILE }}|${GPU_PROFILE}|g" \
+        -e "s|{{ LEVEL }}|${GPU_LEVEL}|g" \
+        -e "s|{{ DEPS }}|${DEPS}|g" \
+        "${TREE}/DEBIAN/control"
+      ! grep -q '{{' "${TREE}/DEBIAN/control" \
+        || { echo "ERROR: ${PKG} control has unexpanded template" >&2; exit 1; }
+      ( cd "${TREE}" && find usr -type f -print0 | xargs -0 md5sum > DEBIAN/md5sums )
+
+      dpkg-deb --build "${TREE}" "/debs/${PKG}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/${PKG}_${BUILT_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: output ${PKG} deb empty" >&2; exit 1; }
+
+  # ===========================================================================
   # overlay-tree class — apt-repacked packages whose modifications are a whole
   # extra file overlay (ifupdown2 autoconf suite, timesyncd network-online
   # drop-in). One deb_overlay_tree call per package (deb_helpers.sh).

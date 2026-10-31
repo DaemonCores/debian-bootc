@@ -181,25 +181,39 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
 # so the signed and -nosign images share this layer.
 # The image carries the drivers of EVERY vendor (AMD, Intel, NVIDIA) for the
 # display (gaming) and compute (ia) usages. What differs between the usages is
-# configuration, not content: the profile is chosen at install by the
-# bootc-installer and changed later with `dc-gpu` (OPTIMIZATION.md L9-L11,
-# GPU-VARIANTS.md). Kernel side: the in-tree drivers (amdgpu, nouveau,
-# i915/xe) are =m; the NVIDIA open modules are the plan deb linux-modules-nvidia
-# installed after the kernel, so nothing compiles on the target.
-# Vendor user-space stacks (all verified in the trixie index):
-#   common   mesa (GL/Vulkan/VA-API/VDPAU/OpenCL), vulkan and VA-API tools
-#   AMD      graphics firmware, ROCm OpenCL/HIP runtime and tools
-#   Intel    graphics firmware, VA-API media driver, Level Zero loader
-#   NVIDIA   (amd64) driver libraries, CUDA runtime, OpenCL and Vulkan ICDs,
-#            nvidia-smi, persistenced; no DKMS (the module is the plan deb)
+# the BUILD of the open stack, not its content: the plan debs
+# gpu-userspace-<profile>-<level> are Mesa compiled in CI from source with every
+# Gallium/Vulkan driver, once per profile (gaming, ia) and per CPU level
+# (x64v1 baseline, x64v2/x64v3 as glibc-hwcaps libraries that ld.so prefers on a
+# CPU supporting them; generic on arm64). Each profile lives under its own
+# /usr/lib/dc-gpu/<profile> prefix, inert until `dc-gpu` activates it; the
+# profile is chosen at install by the bootc-installer and changed later with
+# `dc-gpu set gaming|ia|auto` (GPU-VARIANTS.md). Kernel side: the in-tree
+# drivers (amdgpu, nouveau, i915/xe) are =m; the NVIDIA open modules are the plan
+# deb linux-modules-nvidia installed after the kernel, so nothing compiles on
+# the target.
+# Installed from Debian instead (not recompilable here):
+#   common   Vulkan loader, glvnd dispatch libraries, vulkan/VA-API/OpenCL
+#            tools, non-free firmware
+#   AMD      graphics firmware, ROCm OpenCL/HIP runtime and tools (no source
+#            build of ROCm yet)
+#   Intel    graphics firmware, VA-API media driver, Level Zero loader (no
+#            source build of the compute runtime yet)
+#   NVIDIA   (amd64) PROPRIETARY driver libraries, CUDA runtime, OpenCL and
+#            Vulkan ICDs, nvidia-smi, persistenced: binary-only upstream, so
+#            they cannot be rebuilt; no DKMS (the module is the plan deb)
 # The loader of each stack (Vulkan/OpenCL ICDs, glvnd) picks the vendor per
 # GPU at run time, so multi-GPU machines use several at once.
-ARG GPU_COMMON_PKGS="mesa-vulkan-drivers mesa-va-drivers mesa-vdpau-drivers mesa-opencl-icd libvulkan1 vulkan-tools vainfo clinfo firmware-misc-nonfree"
+ARG GPU_COMMON_PKGS="libvulkan1 vulkan-tools vainfo clinfo libgl1 libegl1 libgles2 firmware-misc-nonfree"
 ARG GPU_AMD_PKGS="firmware-amd-graphics rocm-opencl-icd rocminfo rocm-smi libamdhip64-5"
 ARG GPU_INTEL_PKGS="firmware-intel-graphics intel-media-va-driver-non-free libze1"
 ARG GPU_NVIDIA_PKGS="firmware-nvidia-graphics nvidia-driver-libs libcuda1 nvidia-opencl-icd nvidia-vulkan-icd nvidia-smi nvidia-persistenced"
+# The pattern matches every gpu-userspace deb the plan built for this
+# architecture (profiles and levels come from the manifest, not from here).
+# Nothing is active until dc-gpu-apply.service runs `dc-gpu apply` at boot, which
+# activates the stored profile (`auto` when the installer recorded none).
 RUN apt-get update \
-    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} ${GPU_INTEL_PKGS} \
+    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} ${GPU_INTEL_PKGS} 'gpu-userspace-*' \
     && if [ "${ARCH}" = "amd64" ]; then set -- "$@" ${GPU_NVIDIA_PKGS}; fi \
     && apt-get install -y --no-install-recommends "$@"
 
