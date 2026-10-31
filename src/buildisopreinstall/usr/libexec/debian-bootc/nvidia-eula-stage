@@ -11,24 +11,21 @@ Commands:
     consent [--accept]          display the EULA, record the explicit
                                 acceptance flag only on a strict ``ACCEPT``
                                 (or ``--accept`` for scripted runs)
-    select <recipe> <imgref>    validate the chosen imgref against the recipe
-                                and record it as recipe["imgref"]; the ``-ia``
-                                twin requires a detected NVIDIA GPU AND the
-                                acceptance flag, the ``-gaming`` twin any
-                                detected GPU (device glue lives here), the
-                                public image does not
+    usage <gaming|ia|auto>      record the chosen GPU usage profile for the
+                                install step; ``ia`` while an NVIDIA GPU is
+                                present requires the acceptance flag (the
+                                NVIDIA userspace is activated by it), any
+                                other profile and any other vendor does not
 
-The GPU usage twins are frozen once deployed: the image itself carries the
-same tag plus its ``-ia`` / ``-gaming`` suffix, so ``bootc upgrade`` follows
-the twin.
+There is ONE image for every GPU vendor: the usage profile is an install-time
+variable (consumed by ``dc-gpu``), not an image choice.
 """
 
-import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import NoReturn, cast
+from typing import NoReturn
 
 EULA_TXT = Path(
     os.environ.get(
@@ -39,6 +36,8 @@ STATE_DIR = Path(
     os.environ.get("NVIDIA_EULA_STATE_DIR", "/run/bootc-installer")
 )
 STATE_FILE = STATE_DIR / "nvidia-eula-accepted"
+USAGE_FILE = STATE_DIR / "gpu-usage"
+USAGES = ("gaming", "ia", "auto")
 ACCEPT_WORD = "ACCEPT"
 
 
@@ -74,20 +73,6 @@ def nvidia_devices() -> list[str]:
         line for cmdline in (
             ["lspci", "-d", "10de::0300"],
             ["lspci", "-d", "10de::0380"],
-        ) for line in run_lspci(cmdline).splitlines() if line.strip()
-    ]
-
-
-def gpu_devices() -> list[str]:
-    """List every display/3D controller lspci sees (any vendor).
-
-    Returns:
-        The lspci device lines (empty when lspci is missing or no device).
-    """
-    return [
-        line for cmdline in (
-            ["lspci", "-d", "::0300"],
-            ["lspci", "-d", "::0380"],
         ) for line in run_lspci(cmdline).splitlines() if line.strip()
     ]
 
@@ -158,7 +143,7 @@ def cmd_consent(accept: bool) -> int:
         if sys.stdin.readline().rstrip("\n") != ACCEPT_WORD:
             print(
                 "nvidia-eula-stage: EULA not accepted; "
-                "the public image will be deployed.",
+                "NVIDIA userspace stays inactive.",
                 file=sys.stderr,
             )
             return 1
@@ -167,98 +152,22 @@ def cmd_consent(accept: bool) -> int:
     return 0
 
 
-def cmd_select(recipe_path: str, imgref: str) -> int:
-    """Validate a chosen imgref and record it as the recipe's imgref.
+def cmd_usage(usage: str) -> int:
+    """Validate a GPU usage profile and record it for the install step.
 
     Args:
-        recipe_path: Path of the recipe.json to update in-place.
-        imgref: The chosen image reference from recipe["images"].
+        usage: One of ``gaming``, ``ia``, ``auto``.
 
     Returns:
-        0 on success, 1 when the image is unknown or the EULA gate refuses.
+        0 on success, 1 when the profile is unknown or the EULA gate refuses.
     """
-    recipe = cast_recipe(recipe_path)
-    variant = get_entry(recipe, imgref)
-    if variant is None:
-        fail(f"{imgref}: not part of the installer recipe")
-    if variant == "ia":
-        result = probe()
-        if result != 0:
-            fail(f"{imgref}: no NVIDIA GPU detected")
-        if not STATE_FILE.is_file():
-            fail(f"{imgref}: EULA not accepted at install")
-    elif variant == "gaming":
-        # Device glue: a gaming-only stack is meaningless without a GPU, any
-        # vendor. Public selection: no EULA, no vendor restriction.
-        if not gpu_devices():
-            fail(f"{imgref}: no GPU detected")
-    recipe["imgref"] = imgref
-    dump_recipe(recipe_path, recipe)
+    if usage not in USAGES:
+        fail(f"{usage}: unknown usage, expected one of {', '.join(USAGES)}")
+    if usage == "ia" and nvidia_devices() and not STATE_FILE.is_file():
+        fail("ia: NVIDIA GPU detected but the EULA was not accepted")
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    USAGE_FILE.write_text(f"{usage}\n", encoding="utf-8")
     return 0
-
-
-def cast_recipe(recipe_path: str) -> dict[str, object]:
-    """Load a recipe.json.
-
-    Args:
-        recipe_path: Path of the recipe.json.
-
-    Returns:
-        The parsed recipe.
-    """
-    return cast_load_json(recipe_path)
-
-
-def cast_load_json(recipe_path: str) -> dict[str, object]:
-    """Load and type-cast a recipe.json.
-
-    Args:
-        recipe_path: Path of the recipe.json.
-
-    Returns:
-        The parsed recipe mapping.
-    """
-    with open(recipe_path, encoding="utf-8") as handle:
-        loaded = cast(dict[str, object], json.load(handle))
-    assert isinstance(loaded, dict)
-    return loaded
-
-
-def get_entry(recipe: dict[str, object], imgref: str) -> str | None:
-    """Look the imgref up in the recipe's image list.
-
-    Args:
-        recipe: The parsed recipe mapping.
-        imgref: The reference to find.
-
-    Returns:
-        The GPU usage variant the entry carries (``ia`` / ``gaming``), the
-        empty string for a public image, None when it is absent.
-    """
-    entries_raw = recipe.get("images")
-    if not isinstance(entries_raw, list):
-        fail("recipe has no image list")
-    entries = cast("list[object]", entries_raw)
-    for entry_object in entries:
-        if not isinstance(entry_object, dict):
-            continue
-        image = cast(dict[str, object], entry_object)
-        ref = image.get("imgref")
-        if isinstance(ref, str) and ref == imgref:
-            gpu = image.get("gpu")
-            return gpu if isinstance(gpu, str) else ""
-    return None
-
-
-def dump_recipe(recipe_path: str, recipe: dict[str, object]) -> None:
-    """Write the recipe back in-place.
-
-    Args:
-        recipe_path: Path of the recipe.json.
-        recipe: The updated recipe mapping.
-    """
-    with open(recipe_path, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(recipe, indent=4, ensure_ascii=False) + "\n")
 
 
 def main() -> NoReturn:
@@ -274,11 +183,11 @@ def main() -> NoReturn:
         sys.exit(cmd_text())
     if command == "consent":
         sys.exit(cmd_consent("--accept" in rest))
-    if command == "select" and len(rest) == 2:
-        sys.exit(cmd_select(rest[0], rest[1]))
+    if command == "usage" and len(rest) == 1:
+        sys.exit(cmd_usage(rest[0]))
     fail(
         "usage: nvidia-eula-stage {probe|text|consent [--accept]|"
-        "select <recipe.json> <imgref>}"
+        "usage <gaming|ia|auto>}"
     )
 
 

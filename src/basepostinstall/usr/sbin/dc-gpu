@@ -1,0 +1,83 @@
+#!/bin/sh
+# Select the GPU usage profile of this machine.
+#
+# Usage: dc-gpu set gaming|ia|auto
+#        dc-gpu status
+#
+# The image carries the drivers of every vendor; the profile only decides
+# which ones are activated. It is stored in /etc/dc-gpu/usage (written by the
+# bootc-installer at install, rewritten here) and applied at the next boot by
+# the modules-load.d / modprobe.d fragments below, so no running display is
+# disturbed. The NVIDIA userspace is activated only when the install consent
+# file /etc/dc-gpu/nvidia-consent exists. The vendors present are detected
+# from sysfs at run time; each device keeps its own driver (no global
+# blacklist), so multi-GPU machines use several vendors at once.
+set -eu
+
+# Prefix for every path used; empty in the image, set by the unit tests.
+root=${INSTALL_ROOT:-}
+conf=${root}/etc/dc-gpu
+usage_file=${conf}/usage
+consent=${conf}/nvidia-consent
+modload=${root}/etc/modules-load.d/dc-gpu.conf
+sysdrm=${DC_GPU_SYSFS:-/sys/class/drm}
+
+usage() {
+  echo "Usage: dc-gpu set gaming|ia|auto | dc-gpu status" >&2
+  exit 2
+}
+
+# One vendor name per detected display/3D device, from the PCI vendor id.
+vendors() {
+  for dev in "${sysdrm}"/card*/device; do
+    [ -r "${dev}/vendor" ] || continue
+    case $(cat "${dev}/vendor") in
+      0x1002) echo amd ;;
+      0x8086) echo intel ;;
+      0x10de) echo nvidia ;;
+    esac
+  done | sort -u
+}
+
+current() {
+  if [ -r "${usage_file}" ]; then cat "${usage_file}"; else echo auto; fi
+}
+
+# Kernel modules to load at boot for the profile and the detected vendors.
+modules() {
+  for v in $(vendors); do
+    case $v in
+      nvidia)
+        # Compute needs the NVIDIA stack; display on NVIDIA stays on nouveau
+        # unless consent was given at install.
+        if [ "$1" != gaming ] && [ -e "${consent}" ]; then
+          echo nvidia; echo nvidia_uvm; echo nvidia_drm
+        fi ;;
+    esac
+  done
+}
+
+apply() {
+  mkdir -p "$(dirname "${modload}")"
+  { echo "# Written by dc-gpu for profile $1"; modules "$1"; } >"${modload}"
+}
+
+[ "$#" -ge 1 ] || usage
+
+case $1 in
+  set)
+    [ "$#" -eq 2 ] || usage
+    case $2 in
+      gaming|ia|auto) ;;
+      *) usage ;;
+    esac
+    mkdir -p "${conf}"
+    echo "$2" >"${usage_file}"
+    apply "$2"
+    echo "profile $2 applied at next boot" ;;
+  status)
+    echo "profile: $(current)"
+    echo "vendors: $(vendors | tr '\n' ' ')"
+    if [ -e "${consent}" ]; then echo "nvidia-consent: yes"; else echo "nvidia-consent: no"; fi ;;
+  *) usage ;;
+esac

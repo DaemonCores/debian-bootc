@@ -65,10 +65,8 @@ def test_both_images_install_the_same_project_kernel() -> None:
 def test_both_images_install_the_same_modules() -> None:
     """The standard image keeps the hardware support of the minimal one.
 
-    The GPU usage twins (`<tag>-ia`: linux-modules-nvidia; `<tag>-gaming`)
-    are excluded: their layers exist only in the twins, guarded on
-    GPU_IA_PKGS / GPU_GAMING_PKGS (wiki: GPU-Support.md) — the public image
-    never installs them, whatever the tokens present in the Containerfile.
+    The standard image additionally carries the NVIDIA open modules
+    (`linux-modules-nvidia`, amd64 only); the minimal image has no GPU stack.
     """
     root = MANIFEST.parents[2]
     modules = {}
@@ -80,8 +78,8 @@ def test_both_images_install_the_same_modules() -> None:
             for tok in ln.replace(';', ' ').replace('\\', ' ').split()
             if tok.startswith('linux-modules-')
         }
-    gpu_twins = {'linux-modules-nvidia'}
-    assert modules['Containerfile'] - gpu_twins \
+    gpu_extra = {'linux-modules-nvidia'}
+    assert modules['Containerfile'] - gpu_extra \
         == modules['Containerfile.minimal']
     assert not any(
         'x86' in tok or 'modules-arm' in tok for tok in modules['Containerfile']

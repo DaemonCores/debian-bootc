@@ -18,10 +18,6 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # tagged `<tag>-nosign`: the same image on the -nosign kernel package, for amd64
 # and the plain-tag arm64 kernel only. The 4 KB image has no twin.
 LABEL org.daemoncores.unsigned-kernel-image="true"
-# The GPU usage twins (wiki: GPU-Support.md): the labels on the variant
-# layers below (org.daemoncores.gpu-gaming-image / org.daemoncores.gpu-ia-image)
-# plan the `<tag>-gaming` (public display stack) and `<tag>-ia` (NVIDIA
-# compute; opt-in on gpu_driver_images, EULA at install time) twins.
 
 
 # -----------------------------------------------------------------------------
@@ -179,36 +175,33 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
     && rm -f /etc/ssh/ssh_host_*
 
 #####################################################################################
-# GPU usage variants — the `ia` and `gaming` image twins
+# GPU stack — every vendor, both usages, ONE image
 #####################################################################################
-# Placed BEFORE the kernel layer: the display stack does not depend on the
-# kernel, so the signed and -nosign twins of a -gaming image share this layer.
-# Two usages, two twins (same layers, one extra RUN each — the twins of the
-# images, like `-16k` and `-nosign`; wiki: GPU-Support.md):
-#   <tag>-gaming  display stack: the in-tree drivers (amdgpu DC, nouveau,
-#                 i915/xe — all =m in the kernel) plus the free user-space
-#                 stack (mesa/vulkan, graphics firmware). Public: no EULA.
-#   <tag>-ia      compute: the NVIDIA kernel module as a PLAN DEB
-#                 (linux-modules-nvidia, built in CI against the same
-#                 daemoncores-kernel as the image — no DKMS, nothing compiles
-#                 on the target) plus the NVIDIA user-space. EULA-restricted:
-#                 built only on the gpu_driver_images input, selected at
-#                 install time after the explicit consent.
-# Nothing compiles on the target: the images are immutable and the module is
-# an artefact of the build, exactly like the rest of the plan.
-#
-# Labels (static so the CI image discoverer can plan the twins without
-# building):
-LABEL org.daemoncores.gpu-gaming-image="gaming" \
-      org.daemoncores.gpu-ia-image="ia"
-# The public image never carries either variant: both args stay empty unless
-# the CI twin build sets them (CI: GAMING_PKGS / IA_PKGS with their
-# vars.* overrides).
-ARG GPU_GAMING_PKGS=""
-RUN if [ -n "${GPU_GAMING_PKGS}" ]; then \
-      apt-get update \
-      && apt-get install -y --no-install-recommends ${GPU_GAMING_PKGS}; \
-    fi
+# Placed BEFORE the kernel layer: the user-space does not depend on the kernel,
+# so the signed and -nosign images share this layer.
+# The image carries the drivers of EVERY vendor (AMD, Intel, NVIDIA) for the
+# display (gaming) and compute (ia) usages. What differs between the usages is
+# configuration, not content: the profile is chosen at install by the
+# bootc-installer and changed later with `dc-gpu` (OPTIMIZATION.md L9-L11,
+# GPU-VARIANTS.md). Kernel side: the in-tree drivers (amdgpu, nouveau,
+# i915/xe) are =m; the NVIDIA open modules are the plan deb linux-modules-nvidia
+# installed after the kernel, so nothing compiles on the target.
+# Vendor user-space stacks (all verified in the trixie index):
+#   common   mesa (GL/Vulkan/VA-API/VDPAU/OpenCL), vulkan and VA-API tools
+#   AMD      graphics firmware, ROCm OpenCL/HIP runtime and tools
+#   Intel    graphics firmware, VA-API media driver, Level Zero loader
+#   NVIDIA   (amd64) driver libraries, CUDA runtime, OpenCL and Vulkan ICDs,
+#            nvidia-smi, persistenced; no DKMS (the module is the plan deb)
+# The loader of each stack (Vulkan/OpenCL ICDs, glvnd) picks the vendor per
+# GPU at run time, so multi-GPU machines use several at once.
+ARG GPU_COMMON_PKGS="mesa-vulkan-drivers mesa-va-drivers mesa-vdpau-drivers mesa-opencl-icd libvulkan1 vulkan-tools vainfo clinfo firmware-misc-nonfree"
+ARG GPU_AMD_PKGS="firmware-amd-graphics rocm-opencl-icd rocminfo rocm-smi libamdhip64-5"
+ARG GPU_INTEL_PKGS="firmware-intel-graphics intel-media-va-driver-non-free libze1"
+ARG GPU_NVIDIA_PKGS="firmware-nvidia-graphics nvidia-driver-libs libcuda1 nvidia-opencl-icd nvidia-vulkan-icd nvidia-smi nvidia-persistenced"
+RUN apt-get update \
+    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} ${GPU_INTEL_PKGS} \
+    && if [ "${ARCH}" = "amd64" ]; then set -- "$@" ${GPU_NVIDIA_PKGS}; fi \
+    && apt-get install -y --no-install-recommends "$@"
 
 # -----------------------------------------------------------------------------
 # Phase 3.1: Kernel and its device modules
@@ -245,17 +238,17 @@ RUN apt update \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} "$@"
 
-# -ia needs the kernel: linux-modules-nvidia depends on the exact kernel package,
-# so this layer can only follow the kernel layer.
-ARG GPU_IA_PKGS=""
-RUN if [ -n "${GPU_IA_PKGS}" ]; then \
-      # linux-modules-nvidia is the plan deb built in CI against the SAME
-      # kernel the image installs (deps on linux-image in packages.yml), so
-      # the pairing is structural, not a hope. The NVIDIA user-space follows
-      # from the EULA-restricted repository the twin build enables.
+# The NVIDIA open modules need the exact kernel package, so this layer can only
+# follow the kernel layer. amd64 only (no NVIDIA compute target on arm64). The
+# module and the user-space above must be the same NVIDIA release: the module
+# deb is built at the release of the Debian user-space (packages.yml), and the
+# build fails here if they ever differ.
+RUN if [ "${ARCH}" = "amd64" ]; then \
       apt-get update \
-      && apt-get install -y --no-install-recommends \
-        linux-modules-nvidia ${GPU_IA_PKGS}; \
+      && apt-get install -y --no-install-recommends linux-modules-nvidia \
+      && [ "$(dpkg-query -W -f='${Version}' linux-modules-nvidia | sed 's/-.*//; s/+.*//')" \
+           = "$(dpkg-query -W -f='${Version}' libcuda1 | sed 's/-.*//')" ] \
+      || { echo "ERROR: linux-modules-nvidia and libcuda1 are not the same NVIDIA release" >&2; exit 1; }; \
     fi
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
