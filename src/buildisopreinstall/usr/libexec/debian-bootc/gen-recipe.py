@@ -17,14 +17,48 @@ Reads ``IMAGE_REGISTRY`` from the environment.  Defaults to the DaemonCores
 registry when the variable is absent (for local/manual builds).  When ``ARCH``
 is set (``amd64`` or ``arm64``), only images for that architecture are listed:
 an installer ISO cannot install an image built for another CPU.
+
+Two Containerfile labels shape an entry:
+
+* ``org.daemoncores.arches`` (space or comma separated) limits the image to
+  those architectures, the way the CI builds it.
+* ``org.daemoncores.requires-eula`` names a license the installer must have
+  accepted before it installs the image; it becomes the ``eula`` field of the
+  entry, absent for every other image.
 """
 
 import json
 import os
+import re
 import sys
 from typing import cast
 
 JsonObject = dict[str, object]
+
+ALL_ARCHES = ("amd64", "arm64")
+LABEL_ARCHES = "org.daemoncores.arches"
+LABEL_EULA = "org.daemoncores.requires-eula"
+
+
+def read_label(path: str, label: str) -> str:
+    """Read the value of a ``LABEL`` instruction from a Containerfile.
+
+    Args:
+        path: Containerfile path.
+        label: Label key to look for.
+
+    Returns:
+        The value without quotes, empty when the label is absent.
+    """
+    pattern = re.compile(
+        r"^\s*LABEL\s+" + re.escape(label) + r"=[\"']?([^\"'\n]*)"
+    )
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            match = pattern.match(line)
+            if match:
+                return match.group(1).strip()
+    return ""
 
 
 def _build_images(
@@ -44,7 +78,7 @@ def _build_images(
     Returns:
         List of image descriptor dicts ready for recipe["images"].
     """
-    arches = [a for a in ("amd64", "arm64") if arch_filter in ("", a)]
+    arches = [a for a in ALL_ARCHES if arch_filter in ("", a)]
     images: list[JsonObject] = []
 
     containerfiles = sorted(
@@ -56,9 +90,14 @@ def _build_images(
     for cf in containerfiles:
         tag = "latest" if cf == "Containerfile" else cf[len("Containerfile."):]
         variant = "Standard" if tag == "latest" else tag.capitalize()
+        path = cf_path(ctx_dir, cf)
+        only = read_label(path, LABEL_ARCHES).replace(",", " ").split()
+        eula = read_label(path, LABEL_EULA)
         for arch in arches:
+            if only and arch not in only:
+                continue
             imgref = f"{registry}:{tag}_{arch}"
-            images.append({
+            entry: JsonObject = {
                 "name": f"{distro_name} {variant} ({arch})",
                 "imgref": imgref,
                 "bootloader": "grub2",
@@ -66,7 +105,10 @@ def _build_images(
                 "composefs": False,
                 "needs_user_creation": True,
                 "filesystems": ["btrfs", "xfs"],
-            })
+            }
+            if eula:
+                entry["eula"] = eula
+            images.append(entry)
 
     return images
 

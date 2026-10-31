@@ -561,9 +561,9 @@ packages:
   # same deps/waves module pattern as the device entries: built in CI against
   # the kernel of the SAME build (linux-image dep), .config + Module.symvers
   # seeded from the published kernel deb. NOT DKMS: nothing compiles on the
-  # target. Shipped in the ONE all-vendor image (OPTIMIZATION.md L9, wiki
-  # GPU-VARIANTS.md): which vendors load is an install-time profile, not a
-  # separate image. The module is the MIT open-gpu-kernel-modules; its version
+  # target. Installed by Containerfile.nvidia only (the separate NVIDIA image,
+  # built FROM the standard one so the kernel is the same); the standard image
+  # does not carry it. The module is the MIT open-gpu-kernel-modules; its version
   # is the one of the Debian NVIDIA user-space (a module and its user-space
   # must be the same release), read from the apt index at build time. amd64
   # only — arm64 has no shipped NVIDIA compute target.

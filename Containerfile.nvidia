@@ -1,0 +1,46 @@
+#####################################################################################
+# NVIDIA image — the standard image plus the NVIDIA proprietary driver stack.
+#
+# Derives FROM the standard image of the same architecture (CI passes the image
+# built or published for it as BASE_IMAGE; the default covers manual and local
+# builds). The proprietary user-space is binary-only and subject to the NVIDIA
+# license, so it ships in its own image: the installer lists it as a separate
+# entry and requires the license acceptance for that entry only.
+# The kernel is the one of the parent image. The module package depends on that
+# exact kernel version, so the build fails (rather than installing a second
+# kernel, which bootc lint would reject) when the package index and the parent
+# image disagree.
+#####################################################################################
+
+ARG ARCH=amd64
+ARG BASE_IMAGE=ghcr.io/daemoncores/debian-bootc:latest_${ARCH}
+FROM ${BASE_IMAGE}
+ARG ARCH=amd64
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+LABEL org.opencontainers.image.title="Debian Trixie bootc (NVIDIA)"
+LABEL org.opencontainers.image.description="Standard image with the NVIDIA proprietary driver user-space and the NVIDIA open kernel modules."
+# The proprietary user-space has no arm64 build here: the CI builds this image
+# for the listed architectures only, and the installer lists it for them only.
+LABEL org.daemoncores.arches="amd64"
+# The installer asks for the NVIDIA license acceptance before it installs this
+# image (see src/buildisopreinstall/etc/bootc-installer/recipe.json).
+LABEL org.daemoncores.requires-eula="nvidia"
+
+# User-space from Debian (binary-only upstream: it cannot be recompiled, and
+# there is no DKMS). The kernel modules are the plan deb linux-modules-nvidia,
+# built in CI against the kernel of the parent image, so nothing compiles on
+# the target. Both usage profiles (gaming, ia) stay available: `dc-gpu`
+# activates the stored profile at boot, as for every other vendor.
+ARG GPU_NVIDIA_PKGS="firmware-nvidia-graphics nvidia-driver-libs libcuda1 nvidia-opencl-icd nvidia-vulkan-icd nvidia-smi nvidia-persistenced"
+# The module and the user-space must be the same NVIDIA release: the module deb
+# is built at the release of the Debian user-space (packages.yml). A mismatch,
+# or a second kernel directory, fails the build here.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ${GPU_NVIDIA_PKGS} linux-modules-nvidia \
+    && module_release=$(dpkg-query -W -f='${Version}' linux-modules-nvidia | sed 's/-.*//; s/+.*//') \
+    && userspace_release=$(dpkg-query -W -f='${Version}' libcuda1 | sed 's/-.*//') \
+    && { [ "${module_release}" = "${userspace_release}" ] \
+         || { echo "ERROR: linux-modules-nvidia (${module_release}) and libcuda1 (${userspace_release}) are not the same NVIDIA release" >&2; exit 1; }; } \
+    && { [ "$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1 ] \
+         || { echo "ERROR: more than one kernel under /usr/lib/modules; the parent image kernel is not the one linux-modules-nvidia needs" >&2; exit 1; }; }

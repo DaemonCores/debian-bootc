@@ -11,6 +11,7 @@ the shipped EULA file must stay the verbatim consent paragraph of that page.
 
 import importlib.machinery
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -82,6 +83,7 @@ def run(
         PATH=f'{bindir}:{os.environ["PATH"]}',
         NVIDIA_EULA_FILE=str(tmp_path / 'nvidia-eula.txt'),
         NVIDIA_EULA_STATE_DIR=str(tmp_path / 'run' / 'bootc-installer'),
+        INSTALLER_RECIPE_FILE=str(tmp_path / 'recipe.json'),
     )
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
@@ -190,46 +192,21 @@ def usage_path(root: Path) -> Path:
     return state_path(root).with_name('gpu-usage')
 
 
-def test_usage_ia_with_nvidia_requires_consent(tmp_path: Path) -> None:
-    """The ia profile with an NVIDIA GPU present is refused before consent.
+def test_usage_ia_never_needs_consent(tmp_path: Path) -> None:
+    """The ia profile is recorded without consent, NVIDIA GPU or not.
 
     Args:
         tmp_path: Scratch directory.
     """
-    result = run(tmp_path, 'usage', 'ia')
-    assert result.returncode == 1
-    assert not usage_path(tmp_path).exists()
-
-
-def test_usage_ia_with_consent_is_recorded(tmp_path: Path) -> None:
-    """Consent lets the ia profile be recorded.
-
-    Args:
-        tmp_path: Scratch directory.
-    """
-    (tmp_path / 'nvidia-eula.txt').write_text('EULA\n', encoding='utf-8')
-    assert run(tmp_path, 'consent', '--accept').returncode == 0
-    result = run(tmp_path, 'usage', 'ia')
-    assert result.returncode == 0, result.stderr
-    assert usage_path(tmp_path).read_text(encoding='utf-8') == 'ia\n'
-
-
-def test_usage_ia_without_nvidia_needs_no_consent(tmp_path: Path) -> None:
-    """Another vendor's GPU running ia never needs the NVIDIA EULA.
-
-    Args:
-        tmp_path: Scratch directory.
-    """
-    result = run(tmp_path, 'usage', 'ia', lspci=LSPCI_NONE)
-    assert result.returncode == 0, result.stderr
-    assert usage_path(tmp_path).read_text(encoding='utf-8') == 'ia\n'
+    for lspci in (LSPCI_NVIDIA, LSPCI_NONE):
+        result = run(tmp_path, 'usage', 'ia', lspci=lspci)
+        assert result.returncode == 0, result.stderr
+        assert usage_path(tmp_path).read_text(encoding='utf-8') == 'ia\n'
 
 
 @pytest.mark.parametrize('usage', ['gaming', 'auto'])
-def test_usage_other_profiles_need_no_consent(
-    tmp_path: Path, usage: str
-) -> None:
-    """Gaming and auto are recorded without consent even with NVIDIA present.
+def test_usage_other_profiles_are_recorded(tmp_path: Path, usage: str) -> None:
+    """Gaming and auto are recorded.
 
     Args:
         tmp_path: Scratch directory.
@@ -302,3 +279,74 @@ def test_wiki_parity() -> None:
     )
     assert 'nvidia-license' in source
     assert shipped.strip() == quote.strip()
+
+
+RECIPE = {
+    'images': [
+        {
+            'imgref': 'reg/x:latest_amd64'
+        },
+        {
+            'imgref': 'reg/x:nvidia_amd64',
+            'eula': 'nvidia'
+        },
+    ]
+}
+
+
+def write_recipe(root: Path, data: object = RECIPE) -> None:
+    """Write the installer recipe of a sandbox.
+
+    Args:
+        root: Sandbox root.
+        data: JSON-serialisable recipe content.
+    """
+    (root / 'recipe.json').write_text(json.dumps(data), encoding='utf-8')
+
+
+def test_image_with_eula_is_refused_before_consent(tmp_path: Path) -> None:
+    """The entry carrying ``eula`` is refused until the license is accepted.
+
+    Args:
+        tmp_path: Scratch directory.
+    """
+    write_recipe(tmp_path)
+    result = run(tmp_path, 'image', 'reg/x:nvidia_amd64')
+    assert result.returncode == 1
+    assert 'not accepted' in result.stderr
+
+
+def test_image_with_eula_passes_after_consent(tmp_path: Path) -> None:
+    """Once the license is recorded the entry carrying ``eula`` passes.
+
+    Args:
+        tmp_path: Scratch directory.
+    """
+    write_recipe(tmp_path)
+    assert run(tmp_path, 'consent', '--accept').returncode == 0
+    result = run(tmp_path, 'image', 'reg/x:nvidia_amd64')
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('imgref', ['reg/x:latest_amd64', 'other/custom:1'])
+def test_other_images_need_no_license(tmp_path: Path, imgref: str) -> None:
+    """Images without ``eula``, and images the recipe does not list, pass.
+
+    Args:
+        tmp_path: Scratch directory.
+        imgref: Image reference under test.
+    """
+    write_recipe(tmp_path)
+    result = run(tmp_path, 'image', imgref)
+    assert result.returncode == 0, result.stderr
+
+
+def test_image_with_unreadable_recipe_is_refused(tmp_path: Path) -> None:
+    """A missing recipe never lets the gate pass silently.
+
+    Args:
+        tmp_path: Scratch directory.
+    """
+    result = run(tmp_path, 'image', 'reg/x:nvidia_amd64')
+    assert result.returncode == 1
+    assert 'recipe unreadable' in result.stderr

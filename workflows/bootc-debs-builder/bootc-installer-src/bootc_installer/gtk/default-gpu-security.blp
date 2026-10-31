@@ -35,7 +35,7 @@ template $BootcDefaultGpuSecurity: Adw.Bin {
             margin-top: 24;
             icon-name: "video-display-symbolic";
             title: _("Graphics and Security");
-            subtitle: _("The image carries every GPU driver; choose how this machine uses them.");
+            subtitle: _("Choose how this machine uses its GPUs.");
           }
         }
 
@@ -49,7 +49,7 @@ template $BootcDefaultGpuSecurity: Adw.Bin {
         Adw.PreferencesGroup eula_group {
           visible: false;
           title: _("NVIDIA license");
-          description: _("An NVIDIA GPU was detected. Type ACCEPT to accept the license and activate the NVIDIA compute stack.");
+          description: _("This image includes the NVIDIA proprietary driver. Type ACCEPT to accept the license.");
 
           Label eula_label {
             wrap: true;

@@ -175,13 +175,13 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
     && rm -f /etc/ssh/ssh_host_*
 
 #####################################################################################
-# GPU stack — every vendor, both usages, ONE image
+# GPU stack — every open vendor stack, both usages
 #####################################################################################
 # Placed BEFORE the kernel layer: the user-space does not depend on the kernel,
 # so the signed and -nosign images share this layer.
-# The image carries the drivers of EVERY vendor (AMD, Intel, NVIDIA) for the
-# display (gaming) and compute (ia) usages. What differs between the usages is
-# the BUILD of the open stack, not its content: the plan debs
+# The image carries the open drivers of EVERY vendor (AMD, Intel, NVIDIA via
+# nouveau) for the display (gaming) and compute (ia) usages. What differs
+# between the usages is the BUILD of the open stack, not its content: the plan debs
 # gpu-userspace-<profile>-<level> are Mesa compiled in CI from source with every
 # Gallium/Vulkan driver, once per profile (gaming, ia) and per CPU level
 # (x64v1 baseline, x64v2/x64v3 as glibc-hwcaps libraries that ld.so prefers on a
@@ -189,9 +189,10 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
 # /usr/lib/dc-gpu/<profile> prefix, inert until `dc-gpu` activates it; the
 # profile is chosen at install by the bootc-installer and changed later with
 # `dc-gpu set gaming|ia|auto` (GPU-VARIANTS.md). Kernel side: the in-tree
-# drivers (amdgpu, nouveau, i915/xe) are =m; the NVIDIA open modules are the plan
-# deb linux-modules-nvidia installed after the kernel, so nothing compiles on
-# the target.
+# drivers (amdgpu, nouveau, i915/xe) are =m, so nothing compiles on the target.
+# The NVIDIA proprietary stack (user-space and the plan deb linux-modules-nvidia)
+# is binary-only and license-gated: it ships in its own image,
+# Containerfile.nvidia, built FROM this one.
 # Installed from Debian instead (not recompilable here):
 #   common   Vulkan loader, glvnd dispatch libraries, vulkan/VA-API/OpenCL
 #            tools, non-free firmware
@@ -199,22 +200,17 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
 #            build of ROCm yet)
 #   Intel    graphics firmware, VA-API media driver, Level Zero loader (no
 #            source build of the compute runtime yet)
-#   NVIDIA   (amd64) PROPRIETARY driver libraries, CUDA runtime, OpenCL and
-#            Vulkan ICDs, nvidia-smi, persistenced: binary-only upstream, so
-#            they cannot be rebuilt; no DKMS (the module is the plan deb)
 # The loader of each stack (Vulkan/OpenCL ICDs, glvnd) picks the vendor per
 # GPU at run time, so multi-GPU machines use several at once.
 ARG GPU_COMMON_PKGS="libvulkan1 vulkan-tools vainfo clinfo libgl1 libegl1 libgles2 firmware-misc-nonfree"
 ARG GPU_AMD_PKGS="firmware-amd-graphics rocm-opencl-icd rocminfo rocm-smi libamdhip64-5"
 ARG GPU_INTEL_PKGS="firmware-intel-graphics intel-media-va-driver-non-free libze1"
-ARG GPU_NVIDIA_PKGS="firmware-nvidia-graphics nvidia-driver-libs libcuda1 nvidia-opencl-icd nvidia-vulkan-icd nvidia-smi nvidia-persistenced"
 # The pattern matches every gpu-userspace deb the plan built for this
 # architecture (profiles and levels come from the manifest, not from here).
 # Nothing is active until dc-gpu-apply.service runs `dc-gpu apply` at boot, which
 # activates the stored profile (`auto` when the installer recorded none).
 RUN apt-get update \
     && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} ${GPU_INTEL_PKGS} 'gpu-userspace-*' \
-    && if [ "${ARCH}" = "amd64" ]; then set -- "$@" ${GPU_NVIDIA_PKGS}; fi \
     && apt-get install -y --no-install-recommends "$@"
 
 # -----------------------------------------------------------------------------
@@ -251,19 +247,6 @@ RUN apt update \
     fi \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} "$@"
-
-# The NVIDIA open modules need the exact kernel package, so this layer can only
-# follow the kernel layer. amd64 only (no NVIDIA compute target on arm64). The
-# module and the user-space above must be the same NVIDIA release: the module
-# deb is built at the release of the Debian user-space (packages.yml), and the
-# build fails here if they ever differ.
-RUN if [ "${ARCH}" = "amd64" ]; then \
-      apt-get update \
-      && apt-get install -y --no-install-recommends linux-modules-nvidia \
-      && [ "$(dpkg-query -W -f='${Version}' linux-modules-nvidia | sed 's/-.*//; s/+.*//')" \
-           = "$(dpkg-query -W -f='${Version}' libcuda1 | sed 's/-.*//')" ] \
-      || { echo "ERROR: linux-modules-nvidia and libcuda1 are not the same NVIDIA release" >&2; exit 1; }; \
-    fi
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
 # public key and the image reference; both are empty until the key exists, in
