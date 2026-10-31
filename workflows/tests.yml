@@ -150,6 +150,10 @@ tests:
       systemctl status networking.service --no-pager -l 2>&1 | tail -20
       echo '--- networking.service journal ---'
       journalctl -u networking.service --no-pager -b 2>&1 | tail -30
+      echo '--- ifupdown2 bytecode validity (source mtime vs pyc header) ---'
+      d=/usr/share/ifupdown2/ifupdown
+      stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
+      python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
   - name: systemd-logind not masked
     run: "! (systemctl is-enabled systemd-logind 2>&1 | grep -q masked)"
     diag: |
@@ -440,6 +444,10 @@ tests:
       cat /etc/network/interfaces 2>&1
       systemctl status networking.service --no-pager -l 2>&1 | tail -20
       journalctl -u networking.service --no-pager -b 2>&1 | tail -30
+      echo '--- ifupdown2 bytecode validity (source mtime vs pyc header) ---'
+      d=/usr/share/ifupdown2/ifupdown
+      stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
+      python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
   - name: systemd-networkd active (minimal)
     variant: minimal
     run: systemctl is-active systemd-networkd
@@ -522,6 +530,10 @@ reboot_tests:
       systemctl status networking.service --no-pager -l 2>&1 | tail -20
       echo '--- networking.service journal ---'
       journalctl -u networking.service --no-pager -b 2>&1 | tail -30
+      echo '--- ifupdown2 bytecode validity (source mtime vs pyc header) ---'
+      d=/usr/share/ifupdown2/ifupdown
+      stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
+      python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
 
   - name: booted through bootc after rollback
     run: bootc status --format json
