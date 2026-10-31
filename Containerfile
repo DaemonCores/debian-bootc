@@ -65,7 +65,8 @@ ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-
 # Package(s) to hold from auto-upgrade: the GRUB package of the profile; empty for
 # the arm64 embedded profile (no GRUB).
 ARG APT_HOLD_PKG=grub-efi-amd64-signed
-# Fingerprint of the custom APT repository content for this architecture, set by the CI.
+# Fingerprint of the custom APT repository content for this architecture, kernels and
+# device modules excluded (see KERNEL_DEBS_HASH), set by the CI.
 # Declared before the first layer installing from it: a changed value re-runs those
 # layers, so a rebuilt package is picked up even when its version string is unchanged.
 ARG DEBS_HASH=none
@@ -186,6 +187,10 @@ ARG KERNEL_VARIANT=minimal
 # defaults build the 4 KB one.
 ARG ARM_DEVICES="rpi3 rpi4"
 ARG KERNEL_SUFFIX=""
+# Fingerprint of the kernel and device-module debs only, set by the CI. Declared here, not
+# with DEBS_HASH, so a kernel rebuild re-runs this layer without re-running the heavy
+# package layer above.
+ARG KERNEL_DEBS_HASH=none
 # The apt lists are wiped after every dpkg run (src/debianpreinstall/etc/apt/apt.conf.d/99-apt-clean),
 # so this layer refreshes them itself, then installs the kernel and the device modules in one
 # transaction.
