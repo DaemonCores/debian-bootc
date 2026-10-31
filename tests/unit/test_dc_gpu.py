@@ -136,3 +136,23 @@ def test_usage_errors(tmp_path: Path, args: tuple[str, ...]) -> None:
         args: The invalid command line.
     """
     assert run(tmp_path, *args).returncode == 2
+
+
+@pytest.mark.parametrize('containerfile', ['Containerfile', 'Containerfile.minimal'])
+def test_dc_gpu_ships_in_the_images(containerfile: str) -> None:
+    """Every image copies ``src/basepostinstall`` to ``/`` and the script is executable.
+
+    Args:
+        containerfile: Containerfile that must carry the script.
+    """
+    root = SCRIPT.parents[4]
+    text = (root / containerfile).read_text()
+    assert any(
+        line.split() == ['COPY', './src/basepostinstall', '/']
+        for line in text.splitlines()
+    )
+    mode = subprocess.run(
+        ['git', '-C', str(root), 'ls-files', '-s', str(SCRIPT.relative_to(root))],
+        capture_output=True, text=True, check=True,
+    ).stdout.split()[0]
+    assert mode == '100755'
