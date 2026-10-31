@@ -160,6 +160,12 @@ tests:
       d=/usr/share/ifupdown2/ifupdown
       stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
       python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
+      echo '--- ld.so.cache state and every ldconfig run of this boot ---'
+      ls -la --time-style=full-iso /etc/ld.so.cache* 2>&1
+      findmnt -no TARGET,FSTYPE,OPTIONS /etc 2>&1
+      journalctl -b --no-pager -o short-precise 2>&1 | grep -iE 'ldconfig|dc-gpu|ld\.so' | head -30
+      systemctl status ldconfig.service --no-pager -l 2>&1 | tail -12
+      systemd-analyze critical-chain dc-gpu-apply.service --no-pager 2>&1 | head -15
   - name: systemd-logind not masked
     run: "! (systemctl is-enabled systemd-logind 2>&1 | grep -q masked)"
     diag: |
