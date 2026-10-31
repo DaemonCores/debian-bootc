@@ -1,22 +1,23 @@
 diff --git a/bootc_installer/utils/processor.py b/bootc_installer/utils/processor.py
-index 094aaf13..d1ce1dad 100644
 --- a/bootc_installer/utils/processor.py
 +++ b/bootc_installer/utils/processor.py
-@@ -19,6 +19,7 @@ import logging
+@@ -19,6 +19,8 @@
  import os
  import tempfile
  
++from bootc_installer.utils.gpu_config import apply_gpu
 +from bootc_installer.utils.system_config import apply_system
  from bootc_installer.utils.secure_install import (
      create_mok_password_file,
      create_recovery_key_file,
-@@ -312,6 +313,9 @@ class Processor:
+@@ -312,6 +314,10 @@
                  "groups": user_groups,
              },
          }
 +        if not merged.get("autoupdate", {}).get("enabled", True):
 +            recipe["autoUpdate"] = False
 +        apply_system(recipe, merged.get("system"))
++        apply_gpu(recipe, merged.get("gpu"))
          if custom_mounts:
              recipe["customMounts"] = custom_mounts
          if image_type and image_type != "bootc":

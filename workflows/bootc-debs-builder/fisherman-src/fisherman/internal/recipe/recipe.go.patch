@@ -1,8 +1,7 @@
 diff --git a/fisherman/internal/recipe/recipe.go b/fisherman/internal/recipe/recipe.go
-index 15446ed..2b97875 100644
 --- a/fisherman/internal/recipe/recipe.go
 +++ b/fisherman/internal/recipe/recipe.go
-@@ -45,10 +45,20 @@ type Recipe struct {
+@@ -45,10 +45,29 @@
  	// auto-detects based on whether the system is ostree or composefs-native.
  	// Override in images.json for non-standard layouts, e.g. GnomeOS/Dakota:
  	//   "flatpak_var_path": "state/os/default/var"
@@ -18,6 +17,15 @@ index 15446ed..2b97875 100644
 +	// RootPassword sets the root password of the installed system (plaintext
 +	// or a pre-hashed crypt(3) string). Empty leaves root as the image ships it.
 +	RootPassword string `json:"rootPassword,omitempty"`
++	// GPUUsage is the GPU usage profile chosen at install (gaming, ia or auto);
++	// it is written to /etc/dc-gpu/usage. Empty leaves the image default.
++	GPUUsage string `json:"gpuUsage,omitempty"`
++	// NvidiaConsent records the explicit NVIDIA EULA acceptance given at
++	// install; it creates /etc/dc-gpu/nvidia-consent.
++	NvidiaConsent bool `json:"nvidiaConsent,omitempty"`
++	// SigEnforce adds module.sig_enforce=1 to the kernel command line of the
++	// installed system when true. Absent (nil) or false leaves it unset.
++	SigEnforce *bool `json:"sigEnforce,omitempty"`
 +	// SSHRootLogin writes the sshd root login policy: true allows root login
 +	// with a password, false forbids it. Absent (nil) leaves the image default.
 +	SSHRootLogin *bool    `json:"sshRootLogin,omitempty"`

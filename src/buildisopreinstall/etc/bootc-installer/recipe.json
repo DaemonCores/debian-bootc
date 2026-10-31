@@ -82,6 +82,9 @@
         "autoupdate": {
             "template": "autoupdate"
         },
+        "gpu_security": {
+            "template": "gpu_security"
+        },
         "user": {
             "template": "user"
         },

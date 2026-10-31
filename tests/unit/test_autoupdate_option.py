@@ -47,7 +47,7 @@ def _overlay_text(name: str) -> str:
     """
     return '\n'.join(
         f.read_text() for f in sorted((BUILDER / name).rglob('*'))
-        if f.is_file()
+        if f.is_file() and '__pycache__' not in f.parts
     )
 
 
