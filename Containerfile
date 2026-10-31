@@ -167,6 +167,17 @@ RUN apt update \
         && apt install -y --no-install-recommends bootupd; \
     fi
 
+# -----------------------------------------------------------------------------
+# Phase 4: ostree filesystem migration
+# -----------------------------------------------------------------------------
+# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
+# read-only /usr tree can be swapped atomically while mutable state persists in /var.
+# The scripts shared with Containerfile.minimal ship in src/basepostinstall.
+COPY ./src/debianpostinstall /
+COPY ./src/basepostinstall /
+RUN /usr/libexec/debian-bootc/ostree-layout \
+    && rm -f /etc/ssh/ssh_host_*
+
 #####################################################################################
 # GPU usage variants — the `ia` and `gaming` image twins
 #####################################################################################
@@ -246,17 +257,6 @@ RUN if [ -n "${GPU_IA_PKGS}" ]; then \
       && apt-get install -y --no-install-recommends \
         linux-modules-nvidia ${GPU_IA_PKGS}; \
     fi
-
-# -----------------------------------------------------------------------------
-# Phase 4: ostree filesystem migration
-# -----------------------------------------------------------------------------
-# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
-# read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# The scripts shared with Containerfile.minimal ship in src/basepostinstall.
-COPY ./src/debianpostinstall /
-COPY ./src/basepostinstall /
-RUN /usr/libexec/debian-bootc/ostree-layout \
-    && rm -f /etc/ssh/ssh_host_*
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
 # public key and the image reference; both are empty until the key exists, in

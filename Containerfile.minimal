@@ -126,15 +126,70 @@ RUN apt update \
         apt update \
         && apt install -y --no-install-recommends bootupd; \
     fi \
-    && apt-get purge -y --autoremove wget \
-    && rm -rf \
-        /tmp/* \
-        /var/tmp/* \
-        /run/* \
-        /usr/sbin/policy-rc.d
+    && apt-get purge -y --autoremove wget
 
 # -----------------------------------------------------------------------------
-# Phase 3.1: Kernel and its device modules
+# Phase 4: GRUB kernel command line (arch-conditional)
+# -----------------------------------------------------------------------------
+# quiet: suppress kernel boot messages. init_on_alloc=0: disable default-on page
+# zeroing hardening (unjustified on a no-untrusted-workload minimal image; saves
+# ~1-3% allocation overhead). Written to /etc/default/grub so bootc-finalize picks
+# it up when regenerating BLS entries.
+# arm64 adds serial consoles (ttyAMA0, ttyS0, ttyAML0) covering common ARM64 SBC
+# UARTs; the kernel silently ignores non-existent consoles, so all three are safe.
+# Fixes A5 (ttyAMA0 alone is not universal on arm64).
+# Idempotent upsert without a conditional: touch guarantees the file exists (u-boot
+# on arm64 ships no /etc/default/grub), sed -i /d removes any prior directive line,
+# printf >> appends the fresh value. Fixes A3 (no duplication on rebuild).
+# Extra kernel cmdline for serial consoles: empty on x86_64; arm64 adds
+# console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200.
+ARG KERNEL_CMDLINE_SERIAL=""
+COPY ./src/minimalpostinstall /
+RUN touch /etc/default/grub \
+    && sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub \
+    && printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0%s%s"\n' \
+        "${KERNEL_CMDLINE_SERIAL:+ }" "${KERNEL_CMDLINE_SERIAL}" \
+        >> /etc/default/grub \
+    && systemctl enable systemd-networkd.service \
+    && systemctl enable systemd-networkd.socket \
+    && systemctl enable systemd-timesyncd.service \
+    && systemctl mask -- \
+        cron.service \
+        getty@tty2.service \
+        getty@tty3.service \
+        getty@tty4.service \
+        getty@tty5.service \
+        getty@tty6.service \
+        apt-daily.timer \
+        apt-daily-upgrade.timer \
+        apt-daily.service \
+        apt-daily-upgrade.service \
+        rsyslog.service \
+        man-db.timer \
+        man-db.service \
+        console-setup.service \
+        keyboard-setup.service \
+        e2scrub_all.timer \
+        e2scrub_all.service \
+        fstrim.timer \
+        fstrim.service \
+        logrotate.timer \
+        logrotate.service
+
+# -----------------------------------------------------------------------------
+# Phase 5: ostree filesystem migration (also empties /tmp, /var/tmp, /run)
+# -----------------------------------------------------------------------------
+# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
+# read-only /usr tree can be swapped atomically while mutable state persists in /var.
+# The scripts shared with Containerfile ship in src/basepostinstall.
+COPY ./src/basepostinstall /
+RUN /usr/libexec/debian-bootc/ostree-layout \
+    && rm -f /etc/ssh/ssh_host_*
+
+# Everything above is kernel-independent and shared by every tag and twin, so the kernel,
+# the only layer that differs between them, comes last.
+# -----------------------------------------------------------------------------
+# Phase 6: Kernel and its device modules (last heavy layer)
 # -----------------------------------------------------------------------------
 # The only layer that differs between the signed image and its `-nosign` twin. The
 # kernel package is derived from KERNEL_VARIANT, KERNEL_SUFFIX and ARCH via the
@@ -169,63 +224,6 @@ RUN apt update \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} "$@"
 
-# -----------------------------------------------------------------------------
-# Phase 4: GRUB kernel command line (arch-conditional)
-# -----------------------------------------------------------------------------
-# quiet: suppress kernel boot messages. init_on_alloc=0: disable default-on page
-# zeroing hardening (unjustified on a no-untrusted-workload minimal image; saves
-# ~1-3% allocation overhead). Written to /etc/default/grub so bootc-finalize picks
-# it up when regenerating BLS entries.
-# arm64 adds serial consoles (ttyAMA0, ttyS0, ttyAML0) covering common ARM64 SBC
-# UARTs; the kernel silently ignores non-existent consoles, so all three are safe.
-# Fixes A5 (ttyAMA0 alone is not universal on arm64).
-# Idempotent upsert without a conditional: touch guarantees the file exists (u-boot
-# on arm64 ships no /etc/default/grub), sed -i /d removes any prior directive line,
-# printf >> appends the fresh value. Fixes A3 (no duplication on rebuild).
-# Extra kernel cmdline for serial consoles: empty on x86_64; arm64 adds
-# console=ttyAMA0,115200 console=ttyS0,115200 console=ttyAML0,115200.
-ARG KERNEL_CMDLINE_SERIAL=""
-COPY ./src/minimalpostinstall /
-RUN sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/d' /etc/default/grub || true \
-    && printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet init_on_alloc=0%s%s"\n' \
-        "${KERNEL_CMDLINE_SERIAL:+ }" "${KERNEL_CMDLINE_SERIAL}" \
-        >> /etc/default/grub \
-    && systemctl enable systemd-networkd.service \
-    && systemctl enable systemd-networkd.socket \
-    && systemctl enable systemd-timesyncd.service \
-    && systemctl mask -- \
-        cron.service \
-        getty@tty2.service \
-        getty@tty3.service \
-        getty@tty4.service \
-        getty@tty5.service \
-        getty@tty6.service \
-        apt-daily.timer \
-        apt-daily-upgrade.timer \
-        apt-daily.service \
-        apt-daily-upgrade.service \
-        rsyslog.service \
-        man-db.timer \
-        man-db.service \
-        console-setup.service \
-        keyboard-setup.service \
-        e2scrub_all.timer \
-        e2scrub_all.service \
-        fstrim.timer \
-        fstrim.service \
-        logrotate.timer \
-        logrotate.service
-
-# -----------------------------------------------------------------------------
-# Phase 5: ostree filesystem migration
-# -----------------------------------------------------------------------------
-# bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
-# read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# The scripts shared with Containerfile ship in src/basepostinstall.
-COPY ./src/basepostinstall /
-RUN /usr/libexec/debian-bootc/ostree-layout \
-    && rm -f /etc/ssh/ssh_host_*
-
 # Host-side signature enforcement. The pipeline passes the repository's cosign
 # public key and the image reference; both are empty until the key exists, in
 # which case no policy is shipped (see src/basepostinstall).
@@ -234,7 +232,7 @@ ARG COSIGN_PUBKEY_B64=""
 RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_PUBKEY_B64}"
 
 # -----------------------------------------------------------------------------
-# Phase 6: Healthcheck
+# Phase 7: Healthcheck
 # -----------------------------------------------------------------------------
 # bootc images are updated in-place via ostree; a healthcheck would spawn a
 # process on a schedule, defeating the minimal RAM target.
