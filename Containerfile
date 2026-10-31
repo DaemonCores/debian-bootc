@@ -167,6 +167,38 @@ RUN apt update \
         && apt install -y --no-install-recommends bootupd; \
     fi
 
+#####################################################################################
+# GPU usage variants — the `ia` and `gaming` image twins
+#####################################################################################
+# Placed BEFORE the kernel layer: the display stack does not depend on the
+# kernel, so the signed and -nosign twins of a -gaming image share this layer.
+# Two usages, two twins (same layers, one extra RUN each — the twins of the
+# images, like `-16k` and `-nosign`; wiki: GPU-Support.md):
+#   <tag>-gaming  display stack: the in-tree drivers (amdgpu DC, nouveau,
+#                 i915/xe — all =m in the kernel) plus the free user-space
+#                 stack (mesa/vulkan, graphics firmware). Public: no EULA.
+#   <tag>-ia      compute: the NVIDIA kernel module as a PLAN DEB
+#                 (linux-modules-nvidia, built in CI against the same
+#                 daemoncores-kernel as the image — no DKMS, nothing compiles
+#                 on the target) plus the NVIDIA user-space. EULA-restricted:
+#                 built only on the gpu_driver_images input, selected at
+#                 install time after the explicit consent.
+# Nothing compiles on the target: the images are immutable and the module is
+# an artefact of the build, exactly like the rest of the plan.
+#
+# Labels (static so the CI image discoverer can plan the twins without
+# building):
+LABEL org.daemoncores.gpu-gaming-image="gaming" \
+      org.daemoncores.gpu-ia-image="ia"
+# The public image never carries either variant: both args stay empty unless
+# the CI twin build sets them (CI: GAMING_PKGS / IA_PKGS with their
+# vars.* overrides).
+ARG GPU_GAMING_PKGS=""
+RUN if [ -n "${GPU_GAMING_PKGS}" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends ${GPU_GAMING_PKGS}; \
+    fi
+
 # -----------------------------------------------------------------------------
 # Phase 3.1: Kernel and its device modules
 # -----------------------------------------------------------------------------
@@ -202,6 +234,19 @@ RUN apt update \
     && apt install -y --no-install-recommends \
         linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} "$@"
 
+# -ia needs the kernel: linux-modules-nvidia depends on the exact kernel package,
+# so this layer can only follow the kernel layer.
+ARG GPU_IA_PKGS=""
+RUN if [ -n "${GPU_IA_PKGS}" ]; then \
+      # linux-modules-nvidia is the plan deb built in CI against the SAME
+      # kernel the image installs (deps on linux-image in packages.yml), so
+      # the pairing is structural, not a hope. The NVIDIA user-space follows
+      # from the EULA-restricted repository the twin build enables.
+      apt-get update \
+      && apt-get install -y --no-install-recommends \
+        linux-modules-nvidia ${GPU_IA_PKGS}; \
+    fi
+
 # -----------------------------------------------------------------------------
 # Phase 4: ostree filesystem migration
 # -----------------------------------------------------------------------------
@@ -222,48 +267,6 @@ RUN /usr/libexec/debian-bootc/install-signature-policy "${IMAGE_REF}" "${COSIGN_
 
 # bootc images are updated in-place via ostree; no runtime healthcheck applies.
 HEALTHCHECK NONE
-
-#####################################################################################
-# GPU usage variants — the `ia` and `gaming` image twins
-#####################################################################################
-# Two usages, two twins (same layers, one extra RUN each — the twins of the
-# images, like `-16k` and `-nosign`; wiki: GPU-Support.md):
-#   <tag>-gaming  display stack: the in-tree drivers (amdgpu DC, nouveau,
-#                 i915/xe — all =m in the kernel) plus the free user-space
-#                 stack (mesa/vulkan, graphics firmware). Public: no EULA.
-#   <tag>-ia      compute: the NVIDIA kernel module as a PLAN DEB
-#                 (linux-modules-nvidia, built in CI against the same
-#                 daemoncores-kernel as the image — no DKMS, nothing compiles
-#                 on the target) plus the NVIDIA user-space. EULA-restricted:
-#                 built only on the gpu_driver_images input, selected at
-#                 install time after the explicit consent.
-# Nothing compiles on the target: the images are immutable and the module is
-# an artefact of the build, exactly like the rest of the plan.
-#
-# Labels (static so the CI image discoverer can plan the twins without
-# building):
-LABEL org.daemoncores.gpu-gaming-image="gaming" \
-      org.daemoncores.gpu-ia-image="ia"
-# The public image never carries either variant: both args stay empty unless
-# the CI twin build sets them (CI: GAMING_PKGS / IA_PKGS with their
-# vars.* overrides).
-ARG GPU_GAMING_PKGS=""
-RUN if [ -n "${GPU_GAMING_PKGS}" ]; then \
-      apt-get update \
-      && apt-get install -y --no-install-recommends ${GPU_GAMING_PKGS} \
-      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
-    fi
-ARG GPU_IA_PKGS=""
-RUN if [ -n "${GPU_IA_PKGS}" ]; then \
-      # linux-modules-nvidia is the plan deb built in CI against the SAME
-      # kernel the image installs (deps on linux-image in packages.yml), so
-      # the pairing is structural, not a hope. The NVIDIA user-space follows
-      # from the EULA-restricted repository the twin build enables.
-      apt-get update \
-      && apt-get install -y --no-install-recommends \
-        linux-modules-nvidia ${GPU_IA_PKGS} \
-      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
-    fi
 
 # -----------------------------------------------------------------------------
 # Phase 9: Version stamp — the aleph install metadata
