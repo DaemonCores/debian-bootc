@@ -775,7 +775,13 @@ packages:
           > /etc/apt/sources.list.d/dc-gpu-src.list
       fi
       apt-get update -qq
-      apt-get build-dep -y mesa
+      if ! apt-get build-dep -y mesa; then
+        echo "--- diag: apt sources and the mesa source records seen by apt" >&2
+        grep -rH . /etc/apt/sources.list.d/ /etc/apt/preferences* 2>/dev/null >&2
+        apt-cache showsrc mesa | grep -E '^(Package|Version|Directory):' >&2
+        apt-cache policy directx-headers-dev >&2
+        exit 1
+      fi
       apt-get install -y --no-install-recommends \
         build-essential meson ninja-build pkgconf curl xz-utils dpkg-dev binutils
 
