@@ -1,0 +1,39 @@
+diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
+index 26f74ff..7b5947f 100644
+--- a/fisherman/cmd/fisherman/main.go
++++ b/fisherman/cmd/fisherman/main.go
+@@ -864,6 +864,20 @@ func main() {
+ 		fatal("writing hostname: %v", err)
+ 	}
+ 
++	if r.AutoUpdate != nil && !*r.AutoUpdate {
++		progress.Info("Disabling automatic updates")
++		if err := post.DisableAutoUpdate(activeTargetMount); err != nil {
++			fatal("disabling automatic updates: %v", err)
++		}
++	}
++
++	if r.SSHRootLogin != nil {
++		progress.Info("Writing SSH root login policy")
++		if err := post.WriteSSHRootPolicy(activeTargetMount, *r.SSHRootLogin); err != nil {
++			fatal("writing SSH root login policy: %v", err)
++		}
++	}
++
+ 	// Write /var fstab entry if a separate /var disk was used.
+ 	if hasVarDisk {
+ 		varUUID := disk.UUID(r.VarDisk.Disk)
+@@ -878,6 +892,13 @@ func main() {
+ 		}
+ 	}
+ 
++	if r.RootPassword != "" {
++		progress.Info("Setting root password")
++		if err := post.SetRootPassword(activeTargetMount, r.RootPassword); err != nil {
++			fatal("setting root password: %v", err)
++		}
++	}
++
+ 	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
+ 	if r.User.Username != "" {
+ 		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))

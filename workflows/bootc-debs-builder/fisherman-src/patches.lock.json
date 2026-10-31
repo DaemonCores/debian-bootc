@@ -1,0 +1,6 @@
+{
+  "fisherman/cmd/fisherman/main.go": "9e158a08d7c558c0289cee70f0674bf3e506b061055286b6166757fde5852987",
+  "fisherman/internal/post/post.go": "576ae0e9898144782c47abe3f84e701b2c57b8fef245e7dfbb6774dec20d0967",
+  "fisherman/internal/post/post_test.go": "793fc2f0c620a8e1b16bec3acb4458c6dfe597a3684ac9ed6359d486495ed47c",
+  "fisherman/internal/recipe/recipe.go": "3798b269a402bacded0a5c0edffff4b63e97afa397dbbe00636062fde357f27e"
+}

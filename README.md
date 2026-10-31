@@ -99,7 +99,7 @@ distribute private keys.
 
 The installer enrolls the signing certificate for you. After a successful
 install on a UEFI machine, the patched `bootc-installer`
-(`workflows/bootc-debs-builder/patches/bootc-installer-mok.patch`) runs the
+(`workflows/bootc-debs-builder/bootc-installer-src`) runs the
 live-image helper `/usr/libexec/debian-bootc/mok-stage` through `pkexec`. The
 helper queues `/usr/share/debian-bootc/sb_signing.crt` with `mokutil --import`
 and a random one-time password, which the installer shows on its

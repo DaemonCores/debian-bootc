@@ -1,5 +1,5 @@
 diff --git a/src/packagesystem.rs b/src/packagesystem.rs
-index 605a3ca..5804a39 100644
+index 605a3ca..972efff 100644
 --- a/src/packagesystem.rs
 +++ b/src/packagesystem.rs
 @@ -88,6 +88,11 @@ pub(crate) fn query_files<T>(
@@ -91,7 +91,7 @@ index 605a3ca..5804a39 100644
  #[cfg(not(feature = "rpm"))]
  fn split_name_version(input: &str) -> Option<(String, String)> {
      // assume it is "grub2-tools-1:2.06-110.el9.x86_64"
-@@ -205,6 +269,22 @@ pub(crate) fn compare_package_versions(a: &str, b: &str) -> Ordering {
+@@ -205,6 +280,22 @@ pub(crate) fn compare_package_versions(a: &str, b: &str) -> Ordering {
  mod tests {
      use super::*;
  

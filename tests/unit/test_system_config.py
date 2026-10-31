@@ -1,7 +1,6 @@
 """System step of the installer: hostname, root password, sudo, SSH root."""
 
 import json
-import re
 import types
 from pathlib import Path
 from typing import Any, cast
@@ -9,46 +8,42 @@ from typing import Any, cast
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-PATCHES = ROOT / 'workflows' / 'bootc-debs-builder' / 'patches'
-MANIFEST = ROOT / 'workflows' / 'bootc-debs-builder' / 'packages.yml'
+BUILDER = ROOT / 'workflows' / 'bootc-debs-builder'
+MANIFEST = BUILDER / 'packages.yml'
 RECIPE = (
     ROOT / 'src' / 'buildisopreinstall' / 'etc' / 'bootc-installer' /
     'recipe.json'
 )
-INSTALLER_PATCH = PATCHES / 'bootc-installer-system-config.patch'
-FISHERMAN_PATCH = PATCHES / 'fisherman-system-config.patch'
+INSTALLER = BUILDER / 'bootc-installer-src'
+FISHERMAN = BUILDER / 'fisherman-src'
 
 
-def _added_file(patch: Path, name: str) -> str:
-    """Return the content of a file created by a patch.
+def _overlay_text(overlay: Path) -> str:
+    """Return the concatenated text of one source overlay.
 
     Args:
-        patch: Patch file.
-        name: Path of the created file inside the patched tree.
+        overlay: Overlay directory.
 
     Returns:
-        The file content, without the diff prefixes.
+        Every patch and added file of the overlay, joined.
     """
-    text = patch.read_text()
-    block = re.search(
-        rf'^\+\+\+ b/{re.escape(name)}\n@@ [^\n]*\n(.*?)(?=^diff --git |\Z)',
-        text, re.S | re.M)
-    assert block, name
-    return ''.join(line[1:] + '\n' for line in block.group(1).splitlines())
+    return '\n'.join(
+        f.read_text() for f in sorted(overlay.rglob('*')) if f.is_file()
+    )
 
 
 def _module() -> types.ModuleType:
-    """Load ``system_config.py`` straight from the installer patch.
+    """Load ``system_config.py`` straight from the installer overlay.
 
     Returns:
         The module, executed without any GTK dependency.
     """
     module = types.ModuleType('system_config')
-    exec(  # noqa: S102 - the file under test, read from this repository
-        compile(_added_file(INSTALLER_PATCH,
-                            'bootc_installer/utils/system_config.py'),
-                'system_config.py', 'exec'),
-        module.__dict__)
+    exec(
+        compile((INSTALLER / 'bootc_installer' / 'utils' /
+                 'system_config.py').read_text(), 'system_config.py', 'exec'),
+        module.__dict__
+    )
     return module
 
 
@@ -89,7 +84,8 @@ def test_groups_follow_the_sudo_choice() -> None:
     base = ['sudo', 'docker', 'dialout']
     with_sudo = m.user_groups(base, True)
     without = m.user_groups(base, False)
-    assert with_sudo[0] == 'sudo' and 'sudo' not in without
+    assert with_sudo[0] == 'sudo'
+    assert 'sudo' not in without
     for groups in (with_sudo, without):
         assert len(groups) == len(set(groups))
         assert {'docker', 'dialout', 'adm', 'audio', 'netdev'} <= set(groups)
@@ -100,9 +96,18 @@ def test_apply_system_fills_the_recipe() -> None:
     """Root password, SSH policy and groups reach the recipe."""
     m = _module()
     recipe: dict[str, Any] = {
-        'user': {'username': 'u', 'groups': ['sudo', 'docker']}}
-    m.apply_system(recipe, {
-        'rootPassword': 'longenough', 'sudo': False, 'sshRootLogin': False})
+        'user': {
+            'username': 'u',
+            'groups': ['sudo', 'docker']
+        }
+    }
+    m.apply_system(
+        recipe, {
+            'rootPassword': 'longenough',
+            'sudo': False,
+            'sshRootLogin': False
+        }
+    )
     assert recipe['rootPassword'] == 'longenough'
     assert recipe['sshRootLogin'] is False
     assert 'sudo' not in recipe['user']['groups']
@@ -133,22 +138,24 @@ def test_step_is_in_the_recipe_after_the_user_step() -> None:
     assert keys.index('system') == keys.index('user') + 1
 
 
-def test_patches_are_built_in_and_hashed() -> None:
-    """Both patches are listed in ``sources`` and applied by the build."""
-    for name, patch in (('fisherman', 'fisherman-system-config.patch'),
-                        ('bootc-installer',
-                         'bootc-installer-system-config.patch')):
+def test_overlays_are_built_in_and_hashed() -> None:
+    """Both source overlays are in ``sources`` and applied by the build."""
+    for name in ('fisherman', 'bootc-installer'):
         entry = _entry(name)
-        assert f'patches/{patch}' in entry['sources']
-        assert (PATCHES / patch).is_file()
-        assert f'patches/{patch}' in entry['build']
+        assert f'{name}-src' in entry['sources']
+        call = (
+            'deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/'
+            f'{name}-src"'
+        )
+        assert call in entry['build']
 
 
 def test_installer_fields_match_the_fisherman_recipe() -> None:
     """The recipe keys written by the installer are read by fisherman."""
-    assert 'recipe["rootPassword"]' in INSTALLER_PATCH.read_text()
-    assert 'recipe["sshRootLogin"]' in INSTALLER_PATCH.read_text()
-    fisherman = FISHERMAN_PATCH.read_text()
+    installer = _overlay_text(INSTALLER)
+    assert 'recipe["rootPassword"]' in installer
+    assert 'recipe["sshRootLogin"]' in installer
+    fisherman = _overlay_text(FISHERMAN)
     assert 'json:"rootPassword,omitempty"' in fisherman
     assert 'json:"sshRootLogin,omitempty"' in fisherman
     assert '01-permitrootlogin.conf' in fisherman

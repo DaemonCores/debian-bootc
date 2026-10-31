@@ -1,0 +1,9 @@
+{
+  "bootc_installer/bootc-installer.gresource.xml": "6eb0412ecf0997389523a1d90189944d21e0419c3817415b799849a0bfde900f",
+  "bootc_installer/defaults/meson.build": "84b44cebbb9c89cfe51de9c674df4499f918ceb7e6379e0bb18c2e19b1396aa2",
+  "bootc_installer/meson.build": "8ce04467b66b1785232fe54de0f0b720a18162f13d3c8ed17e80c1b393476e51",
+  "bootc_installer/utils/builder.py": "60bd58ca655ec4123d0d0bf88185b5ab2ebdd0e75e558d558280d2917950cace",
+  "bootc_installer/utils/meson.build": "7725497ac3e904a1e73b16345f2e9798c0dc43b7e0cf13dea4b96c105080b193",
+  "bootc_installer/utils/processor.py": "ba2688604cb634f0a2c730aaa6c7f891b352cf0ea8719f70f8ed7004d7329b9c",
+  "bootc_installer/windows/main_window.py": "f5b92918f4255d6715aaa63d8d3fbc295ba98cc12f6b0d6e0cfcd18210af38b1"
+}

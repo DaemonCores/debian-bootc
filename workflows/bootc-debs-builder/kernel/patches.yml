@@ -2,7 +2,8 @@
 #
 # Manifest of the patches applied to the kernel.org tarball at build time.
 # The patch files themselves are never committed: each entry names the URL of
-# the file in its official upstream repository, and lib/kernel-patches.sh
+# the file in its official upstream repository, and the shared
+# kernel_apply_patches helper
 # downloads it. A patch that cannot be downloaded or does not apply fails the
 # kernel build, so the last-good published deb is kept.
 #

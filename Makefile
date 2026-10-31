@@ -36,9 +36,7 @@ SHELL_SRCS := \
 	workflows/bootc-debs-builder/ifupdown2/usr/sbin/ifupdown2-autoconf \
 	workflows/bootc-debs-builder/bootcpostinstall/usr/local/bin/bootc-finalize \
 	workflows/bootc-debs-builder/bootcpostinstall/etc/kernel/postinst.d/zz-bootc-finalize \
-	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup \
-	workflows/bootc-debs-builder/lib/kernel-prepare.sh \
-	workflows/bootc-debs-builder/lib/kernel-signing.sh
+	workflows/bootc-debs-builder/firstbootpostinstall/usr/local/bin/firstboot-user-setup
 
 # DEBIAN/postinst files use `set -e` (POSIX sh, not full bash pipefail).
 POSTINST_SRCS := \

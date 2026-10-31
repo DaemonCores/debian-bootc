@@ -1,0 +1,13 @@
+diff --git a/bootc_installer/defaults/meson.build b/bootc_installer/defaults/meson.build
+index d7f3d3eb..a12c3a28 100644
+--- a/bootc_installer/defaults/meson.build
++++ b/bootc_installer/defaults/meson.build
+@@ -10,6 +10,8 @@ sources = [
+   'disk.py',
+   'slurp.py',
+   'encryption.py',
++  'autoupdate.py',
++  'system.py',
+   'image.py',
+   'nvidia.py',
+   'vm.py',
