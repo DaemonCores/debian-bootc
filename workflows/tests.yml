@@ -146,6 +146,12 @@ tests:
     run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
     diag: |
       systemctl --failed --no-pager 2>&1
+      for u in $(systemctl --failed --no-legend --plain | awk '{print $1}'); do
+        echo "--- $u status ---"
+        systemctl status "$u" --no-pager -l 2>&1 | tail -20
+        echo "--- $u journal ---"
+        journalctl -u "$u" --no-pager -b 2>&1 | tail -30
+      done
       echo '--- networking.service status ---'
       systemctl status networking.service --no-pager -l 2>&1 | tail -20
       echo '--- networking.service journal ---'
@@ -526,6 +532,12 @@ reboot_tests:
     run: test "$(systemctl --failed --no-legend | wc -l)" -eq 0
     diag: |
       systemctl --failed --no-pager 2>&1
+      for u in $(systemctl --failed --no-legend --plain | awk '{print $1}'); do
+        echo "--- $u status ---"
+        systemctl status "$u" --no-pager -l 2>&1 | tail -20
+        echo "--- $u journal ---"
+        journalctl -u "$u" --no-pager -b 2>&1 | tail -30
+      done
       echo '--- networking.service status ---'
       systemctl status networking.service --no-pager -l 2>&1 | tail -20
       echo '--- networking.service journal ---'
