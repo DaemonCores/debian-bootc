@@ -1,0 +1,42 @@
+diff --git a/fisherman/internal/post/post_test.go b/fisherman/internal/post/post_test.go
+index 119626d..9f63531 100644
+--- a/fisherman/internal/post/post_test.go
++++ b/fisherman/internal/post/post_test.go
+@@ -156,6 +156,37 @@ func TestWriteHostname_OstreeBackend(t *testing.T) {
+ 	}
+ }
+ 
++// TestDisableAutoUpdate_OstreeBackend verifies that the bootc update timer is
++// masked in the etc dir of the ostree deployment.
++func TestDisableAutoUpdate_OstreeBackend(t *testing.T) {
++	target := t.TempDir()
++	if err := os.MkdirAll(filepath.Join(target, "ostree"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	fakeDeployDir := filepath.Join(target, "ostree", "deploy", "default", "deploy", "abc123.0")
++	if err := os.MkdirAll(fakeDeployDir, 0o755); err != nil {
++		t.Fatal(err)
++	}
++
++	post.DeploymentDirFn = func(sysroot string) (string, error) {
++		return fakeDeployDir, nil
++	}
++	t.Cleanup(func() { post.DeploymentDirFn = post.DefaultDeploymentDir })
++
++	if err := post.DisableAutoUpdate(target); err != nil {
++		t.Fatalf("DisableAutoUpdate: %v", err)
++	}
++
++	link := filepath.Join(fakeDeployDir, "etc", "systemd", "system", "bootc-fetch-apply-updates.timer")
++	dest, err := os.Readlink(link)
++	if err != nil {
++		t.Fatalf("reading the timer link: %v", err)
++	}
++	if dest != "/dev/null" {
++		t.Errorf("timer link target = %q, want /dev/null", dest)
++	}
++}
++
+ // TestCopyFlatpaks_NoLocalData verifies that when no local flatpak data is found,
+ // the function returns successfully without attempting a copy.
+ func TestCopyFlatpaks_NoLocalData(t *testing.T) {

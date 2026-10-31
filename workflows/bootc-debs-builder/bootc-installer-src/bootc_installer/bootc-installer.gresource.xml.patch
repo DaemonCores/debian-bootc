@@ -1,0 +1,13 @@
+diff --git a/bootc_installer/bootc-installer.gresource.xml b/bootc_installer/bootc-installer.gresource.xml
+index c56efb2a..a9ef4dfe 100644
+--- a/bootc_installer/bootc-installer.gresource.xml
++++ b/bootc_installer/bootc-installer.gresource.xml
+@@ -27,6 +27,8 @@
+     <file>gtk/default-disk.ui</file>
+     <file>gtk/default-slurp.ui</file>
+     <file>gtk/default-encryption.ui</file>
++    <file>gtk/default-autoupdate.ui</file>
++    <file>gtk/default-system.ui</file>
+     <file>gtk/default-hardware.ui</file>
+     <file>gtk/default-conn-check.ui</file>
+     <file>gtk/default-network.ui</file>

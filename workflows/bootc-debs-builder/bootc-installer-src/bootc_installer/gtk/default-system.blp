@@ -1,0 +1,91 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $BootcDefaultSystem: Adw.Bin {
+  halign: fill;
+  valign: fill;
+  hexpand: true;
+
+  Overlay {
+    vexpand: true;
+    hexpand: true;
+
+    [overlay]
+    Button btn_next {
+      margin-end: 12;
+      margin-start: 12;
+      icon-name: "go-next-symbolic";
+      halign: end;
+      valign: center;
+      tooltip-text: _("Next");
+      sensitive: false;
+
+      styles [
+        "suggested-action",
+      ]
+    }
+
+    ScrolledWindow {
+      hscrollbar-policy: never;
+      vexpand: true;
+      hexpand: true;
+
+      Adw.PreferencesPage {
+        Adw.PreferencesGroup {
+          $BootcPageHeader page_header {
+            margin-top: 24;
+            icon-name: "preferences-system-symbolic";
+            title: _("System");
+            subtitle: _("Name this computer and secure the administrator account.");
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.EntryRow hostname_entry {
+            title: _("Hostname (empty keeps the generated one)");
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.PasswordEntryRow root_password_entry {
+            title: _("Root password (8 characters minimum)");
+            input-purpose: password;
+          }
+
+          Adw.PasswordEntryRow root_password_confirmation {
+            title: _("Confirm root password");
+            input-purpose: password;
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.ActionRow {
+            title: _("Administrator rights for your user");
+            subtitle: _("Allows running commands as root with sudo.");
+
+            [suffix]
+            Switch sudo_switch {
+              valign: center;
+              active: true;
+            }
+
+            activatable-widget: sudo_switch;
+          }
+
+          Adw.ActionRow {
+            title: _("Allow root login over SSH with a password");
+            subtitle: _("Not recommended for a machine reachable from a network.");
+
+            [suffix]
+            Switch ssh_root_switch {
+              valign: center;
+              active: false;
+            }
+
+            activatable-widget: ssh_root_switch;
+          }
+        }
+      }
+    }
+  }
+}

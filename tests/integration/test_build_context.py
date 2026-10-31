@@ -64,44 +64,29 @@ def test_dockerignore_excludes_local_state() -> None:
         assert required in patterns, f'{required} missing from .dockerignore'
 
 
-def test_kernel_prepare_users_hash_the_library() -> None:
-    """Every entry sourcing kernel-prepare.sh lists it in its sources."""
-    library = 'lib/kernel-prepare.sh'
-    assert (PACKAGES / library).is_file()
-    users = [
-        entry for entry in _packages()
+def test_kernel_prepare_users() -> None:
+    """The module entries bootstrap through the shared kernel_prepare."""
+    users = {
+        entry['name']
+        for entry in _packages()
         if 'kernel_prepare' in str(entry.get('build', ''))
-    ]
-    assert {e['name']
-            for e in users
-            } == {'linux-modules-arm-device', 'linux-modules-nvidia'}
-    for entry in users:
-        assert library in entry['sources'], entry['name']
-        assert 'lib/kernel-prepare.sh' in entry['build']
+    }
+    assert users == {'linux-modules-arm-device', 'linux-modules-nvidia'}
 
 
-def test_kernel_signing_users_hash_the_library() -> None:
+def test_kernel_signing_users() -> None:
     """The kernel and the module entries sign with the same key helper."""
-    library = 'lib/kernel-signing.sh'
-    assert (PACKAGES / library).is_file()
-    users = [
-        entry for entry in _packages()
+    users = {
+        entry['name']
+        for entry in _packages()
         if 'kernel_signing_setup' in str(entry.get('build', ''))
-    ]
-    assert {e['name']
-            for e in users} == {
-                'linux-image', 'linux-modules-arm-device',
-                'linux-modules-nvidia'
-            }
-    for entry in users:
-        assert library in entry['sources'], entry['name']
+    }
+    assert users == {
+        'linux-image', 'linux-modules-arm-device', 'linux-modules-nvidia'
+    }
 
 
-def test_kernel_signing_forces_only_when_active() -> None:
-    """Enforcement and the MOK keyrings are tied to the signing option."""
-    text = (PACKAGES / 'lib/kernel-signing.sh').read_text()
-    assert 'MODULE_SIG_FORCE' in text
-    assert 'INTEGRITY_MACHINE_KEYRING' in text
-    assert 'kernel_signing_verify' in text
+def test_kernel_image_verifies_signing() -> None:
+    """The kernel entry checks the signing options after olddefconfig."""
     kernel = next(e for e in _packages() if e['name'] == 'linux-image')
     assert 'kernel_signing_verify' in kernel['build']

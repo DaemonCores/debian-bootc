@@ -1,0 +1,82 @@
+diff --git a/fisherman/internal/post/post.go b/fisherman/internal/post/post.go
+index 2604d9a..55bddcb 100644
+--- a/fisherman/internal/post/post.go
++++ b/fisherman/internal/post/post.go
+@@ -297,24 +297,30 @@ func IsComposeFsNativeExported(sysroot string) bool {
+ 	return isComposeFsNative(sysroot)
+ }
+ 
+-// WriteHostname writes /etc/hostname into the installed system at target.
+-// For composefs-native deployments, the hostname goes into the active deploy
+-// etc dir (found via ComposeFsDeployEtcDirFn). For ostree-based deployments
+-// it goes into the ostree deployment subtree (found via DeploymentDirFn).
+-func WriteHostname(target, hostname string) error {
+-	var etcDir string
++// deployEtcDir returns the writable /etc of the deployment installed at target.
++// For composefs-native deployments it is the active deploy etc dir (found via
++// ComposeFsDeployEtcDirFn); for ostree-based deployments it is the etc dir of
++// the ostree deployment subtree (found via DeploymentDirFn).
++func deployEtcDir(target string) (string, error) {
+ 	if isComposeFsNative(target) {
+-		var err error
+-		etcDir, err = ComposeFsDeployEtcDirFn(target)
+-		if err != nil {
+-			return fmt.Errorf("finding composefs deploy etc: %w", err)
+-		}
+-	} else {
+-		deployDir, err := DeploymentDirFn(target)
++		etcDir, err := ComposeFsDeployEtcDirFn(target)
+ 		if err != nil {
+-			return fmt.Errorf("finding deployment dir: %w", err)
++			return "", fmt.Errorf("finding composefs deploy etc: %w", err)
+ 		}
+-		etcDir = filepath.Join(deployDir, "etc")
++		return etcDir, nil
++	}
++	deployDir, err := DeploymentDirFn(target)
++	if err != nil {
++		return "", fmt.Errorf("finding deployment dir: %w", err)
++	}
++	return filepath.Join(deployDir, "etc"), nil
++}
++
++// WriteHostname writes /etc/hostname into the installed system at target.
++func WriteHostname(target, hostname string) error {
++	etcDir, err := deployEtcDir(target)
++	if err != nil {
++		return err
+ 	}
+ 	if err := runner.Run("mkdir", "-p", etcDir); err != nil {
+ 		return fmt.Errorf("mkdir %s: %w", etcDir, err)
+@@ -328,6 +334,31 @@ func WriteHostname(target, hostname string) error {
+ 	return nil
+ }
+ 
++// autoUpdateTimer is the unit the bootc package enables to fetch and apply
++// image updates.
++const autoUpdateTimer = "bootc-fetch-apply-updates.timer"
++
++// DisableAutoUpdate switches the automatic image updates off on the installed
++// system at target by masking the bootc update timer: it links
++// /etc/systemd/system/bootc-fetch-apply-updates.timer to /dev/null in the
++// deployment /etc, which overrides the unit the image enables.
++func DisableAutoUpdate(target string) error {
++	etcDir, err := deployEtcDir(target)
++	if err != nil {
++		return err
++	}
++	unitDir := filepath.Join(etcDir, "systemd", "system")
++	if err := runner.Run("mkdir", "-p", unitDir); err != nil {
++		return fmt.Errorf("mkdir %s: %w", unitDir, err)
++	}
++	link := filepath.Join(unitDir, autoUpdateTimer)
++	if err := runner.Run("ln", "-sfn", "/dev/null", link); err != nil {
++		return fmt.Errorf("link %s: %w", link, err)
++	}
++	fmt.Fprintf(os.Stdout, "  masked %s (%s -> /dev/null)\n", autoUpdateTimer, link)
++	return nil
++}
++
+ // fallbackFlatpaks is the core set installed when the recipe doesn't specify
+ // a per-image list. Ensures a usable system with browser and terminal.
+ var fallbackFlatpaks = []string{

@@ -1,0 +1,59 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $BootcDefaultAutoupdate: Adw.Bin {
+  halign: fill;
+  valign: fill;
+  hexpand: true;
+
+  Overlay {
+    vexpand: true;
+    hexpand: true;
+
+    [overlay]
+    Button btn_next {
+      margin-end: 12;
+      margin-start: 12;
+      icon-name: "go-next-symbolic";
+      halign: end;
+      valign: center;
+      tooltip-text: _("Next");
+
+      styles [
+        "suggested-action",
+      ]
+    }
+
+    ScrolledWindow {
+      hscrollbar-policy: never;
+      vexpand: true;
+      hexpand: true;
+
+      Adw.PreferencesPage {
+        Adw.PreferencesGroup {
+          $BootcPageHeader page_header {
+            margin-top: 24;
+            icon-name: "software-update-available-symbolic";
+            title: _("Automatic Updates");
+            subtitle: _("Choose whether the system updates itself.");
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.ActionRow {
+            title: _("Install updates automatically");
+            subtitle: _("The system downloads and applies new images in the background. Turn this off to update by hand.");
+
+            [suffix]
+            Switch autoupdate_switch {
+              valign: center;
+              active: true;
+            }
+
+            activatable-widget: autoupdate_switch;
+          }
+        }
+      }
+    }
+  }
+}
