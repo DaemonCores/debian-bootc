@@ -1,11 +1,12 @@
 """GPU profile and module-signature settings of the installer ``gpu_security`` step.
 
-One image carries the drivers of every GPU vendor and one kernel serves both
-signature policies, so both are install-time choices: the GPU usage profile
-(consumed by ``dc-gpu`` on the installed system) and the module signature
-enforcement (the ``module.sig_enforce=1`` kernel argument). The NVIDIA EULA
-gate is delegated to the live image helper ``nvidia-eula-stage``; the helpers
-here hold no GTK code so they can be tested alone.
+The GPU usage profile (consumed by ``dc-gpu`` on the installed system) and the
+module signature enforcement (the ``module.sig_enforce=1`` kernel argument)
+are install-time choices. The NVIDIA license is tied to the image, not to the
+hardware: it is required exactly when the selected image is a recipe entry
+carrying an ``eula`` key. The gate itself is delegated to the live image
+helper ``nvidia-eula-stage``; the helpers here hold no GTK code so they can be
+tested alone.
 """
 
 import logging
@@ -23,18 +24,43 @@ COMMAND_TIMEOUT = 60
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
-def eula_required(usage: str, nvidia_present: bool) -> bool:
-    """Tell whether the NVIDIA EULA must be accepted for this choice.
+def selected_imgref(finals: dict | None, recipe: dict | None) -> str:
+    """Name the image the installation will deploy.
 
     Args:
-        usage: Chosen GPU usage profile.
-        nvidia_present: Whether an NVIDIA GPU was detected.
+        finals: Finals of the image selection step, or None when it was not
+            shown.
+        recipe: Installer recipe, used for its default ``imgref``.
 
     Returns:
-        True only for the ``ia`` profile on a machine with an NVIDIA GPU, the
-        sole case where the NVIDIA user-space gets activated.
+        The custom image if one was typed, else the selected catalog image,
+        else the recipe default; empty when none is known.
     """
-    return usage == "ia" and nvidia_present
+    finals = finals or {}
+    recipe = recipe or {}
+    return (
+        finals.get("custom_image") or finals.get("selected_image")
+        or recipe.get("imgref") or ""
+    )
+
+
+def eula_required(recipe: dict | None, imgref: str) -> bool:
+    """Tell whether the NVIDIA license must be accepted for this image.
+
+    Args:
+        recipe: Installer recipe holding the ``images`` catalog.
+        imgref: Image the installation will deploy.
+
+    Returns:
+        True when the catalog entry of ``imgref`` carries an ``eula`` key.
+        Images absent from the catalog (custom ones) never require it.
+    """
+    if not imgref:
+        return False
+    for entry in (recipe or {}).get("images", []):
+        if isinstance(entry, dict) and entry.get("imgref") == imgref:
+            return bool(entry.get("eula"))
+    return False
 
 
 def eula_accepted(typed: str) -> bool:
@@ -47,25 +73,6 @@ def eula_accepted(typed: str) -> bool:
         True only for ``ACCEPT`` itself, as the helper demands on a console.
     """
     return typed == ACCEPT_WORD
-
-
-def nvidia_present(run: Runner = subprocess.run) -> bool:
-    """Detect an NVIDIA GPU through the live image helper.
-
-    Args:
-        run: ``subprocess.run`` compatible callable (replaced in tests).
-
-    Returns:
-        True when the helper reports a device; False when none is found or
-        the helper cannot run (the EULA gate then does not apply).
-    """
-    try:
-        done = run([HELPER, "probe"], capture_output=True, text=True,
-                   check=False, timeout=COMMAND_TIMEOUT)
-    except (OSError, subprocess.SubprocessError) as error:
-        logger.warning("GPU probe could not run: %s", error)
-        return False
-    return done.returncode == 0
 
 
 def eula_text(run: Runner = subprocess.run) -> str:
@@ -86,15 +93,19 @@ def eula_text(run: Runner = subprocess.run) -> str:
     return done.stdout if done.returncode == 0 else ""
 
 
-def stage_choice(usage: str, accepted: bool, run: Runner = subprocess.run) -> bool:
+def stage_choice(
+    usage: str, accepted: bool, imgref: str = "", run: Runner = subprocess.run
+) -> bool:
     """Record the choice through the privileged live image helper.
 
-    The helper stays the single gate: it refuses ``ia`` on an NVIDIA machine
-    without the acceptance flag, whatever the caller did.
+    The helper stays the single gate: it refuses an image whose catalog entry
+    requires the license while no acceptance is recorded, whatever the caller
+    did.
 
     Args:
         usage: Chosen GPU usage profile, one of ``USAGES``.
         accepted: Whether the user accepted the NVIDIA EULA.
+        imgref: Image the installation will deploy, checked by the helper.
         run: ``subprocess.run`` compatible callable (replaced in tests).
 
     Returns:
@@ -106,6 +117,8 @@ def stage_choice(usage: str, accepted: bool, run: Runner = subprocess.run) -> bo
     if accepted:
         commands.append(["pkexec", HELPER, "consent", "--accept"])
     commands.append(["pkexec", HELPER, "usage", usage])
+    if imgref:
+        commands.append(["pkexec", HELPER, "image", imgref])
     for command in commands:
         try:
             done = run(command, capture_output=True, text=True, check=False,

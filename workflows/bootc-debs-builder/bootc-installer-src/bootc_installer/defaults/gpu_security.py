@@ -38,7 +38,6 @@ class BootcDefaultGpuSecurity(Adw.Bin):
         self.__key = key
         self.__step = step
         self.delta = False
-        self.__nvidia = gpu_config.nvidia_present()
         self.__accepted = False
 
         labels = {
@@ -52,6 +51,8 @@ class BootcDefaultGpuSecurity(Adw.Bin):
         self.usage_row.connect("notify::selected", self.__on_changed)
         self.eula_entry.connect("changed", self.__on_changed)
         self.btn_next.connect("clicked", self.__on_next)
+        # The image is chosen on an earlier page: re-evaluate when shown.
+        self.connect("map", self.__on_changed)
         self.__on_changed()
 
     def should_show(self, context: dict) -> bool:
@@ -63,8 +64,17 @@ class BootcDefaultGpuSecurity(Adw.Bin):
     def __usage(self) -> str:
         return gpu_config.USAGES[self.usage_row.get_selected()]
 
+    def __imgref(self) -> str:
+        image_step = getattr(self.__window, "image_step", None)
+        finals = image_step.get_finals() if image_step else None
+        return gpu_config.selected_imgref(
+            finals, getattr(self.__window, "recipe", None)
+        )
+
     def __needs_eula(self) -> bool:
-        return gpu_config.eula_required(self.__usage(), self.__nvidia)
+        return gpu_config.eula_required(
+            getattr(self.__window, "recipe", None), self.__imgref()
+        )
 
     def __on_changed(self, *args):
         needs = self.__needs_eula()
@@ -80,7 +90,9 @@ class BootcDefaultGpuSecurity(Adw.Bin):
 
     def __on_next(self, *args):
         self.__accepted = self.__needs_eula()
-        if not gpu_config.stage_choice(self.__usage(), self.__accepted):
+        if not gpu_config.stage_choice(
+            self.__usage(), self.__accepted, self.__imgref()
+        ):
             self.error_label.set_visible(True)
             return
         self.error_label.set_visible(False)

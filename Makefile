@@ -49,7 +49,7 @@ POSTINST_SRCS := \
 	workflows/bootc-debs-builder/preinstall/output/grub-efi-amd64-signed/DEBIAN/postinst \
 	workflows/bootc-debs-builder/preinstall/output/grub-efi-arm64-signed/DEBIAN/postinst
 
-CONTAINERFILES := Containerfile.base Containerfile Containerfile.minimal Containerfile.iso
+CONTAINERFILES := Containerfile.base Containerfile Containerfile.minimal Containerfile.nvidia Containerfile.iso
 
 # Google Shell Style: 2 spaces, operators on the continuation line, indented case.
 # Explicit flags: shfmt ignores .editorconfig once any flag is given (-ln).

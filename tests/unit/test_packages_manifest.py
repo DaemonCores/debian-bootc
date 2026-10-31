@@ -66,28 +66,52 @@ def test_both_images_install_the_same_project_kernel() -> None:
         assert not any('linux-image-${ARCH}' in ln for ln in install), name
 
 
+def _install_lines(text: str) -> list[str]:
+    """Return the non-comment lines of a Containerfile.
+
+    Args:
+        text: Containerfile content.
+
+    Returns:
+        Every line that is not a comment.
+    """
+    return [ln for ln in text.splitlines() if not ln.lstrip().startswith('#')]
+
+
 def test_both_images_install_the_same_modules() -> None:
     """The standard image keeps the hardware support of the minimal one.
 
-    The standard image additionally carries the NVIDIA open modules
-    (`linux-modules-nvidia`, amd64 only); the minimal image has no GPU stack.
+    The NVIDIA open modules (`linux-modules-nvidia`) live in the separate
+    NVIDIA image only, so the two base-derived images list the same modules.
     """
     root = MANIFEST.parents[2]
     modules = {}
     for name in ('Containerfile', 'Containerfile.minimal'):
-        text = (root / name).read_text()
         modules[name] = {
             tok
-            for ln in text.splitlines() if not ln.lstrip().startswith('#')
+            for ln in _install_lines((root / name).read_text())
             for tok in ln.replace(';', ' ').replace('\\', ' ').split()
             if tok.startswith('linux-modules-')
         }
-    gpu_extra = {'linux-modules-nvidia'}
-    assert modules['Containerfile'] - gpu_extra \
-        == modules['Containerfile.minimal']
+    assert modules['Containerfile'] == modules['Containerfile.minimal']
     assert not any(
         'x86' in tok or 'modules-arm' in tok for tok in modules['Containerfile']
     ), modules
+
+
+def test_nvidia_stack_is_only_in_the_nvidia_image() -> None:
+    """The proprietary stack is a separate, amd64-only, licensed image."""
+    root = MANIFEST.parents[2]
+    standard = '\n'.join(_install_lines((root / 'Containerfile').read_text()))
+    for token in ('linux-modules-nvidia', 'nvidia-driver-libs', 'libcuda1'):
+        assert token not in standard, token
+    text = (root / 'Containerfile.nvidia').read_text()
+    install = '\n'.join(_install_lines(text))
+    assert 'FROM ${BASE_IMAGE}' in install
+    assert 'linux-modules-nvidia' in install
+    assert 'libcuda1' in install
+    assert 'LABEL org.daemoncores.arches="amd64"' in install
+    assert 'LABEL org.daemoncores.requires-eula="nvidia"' in install
 
 
 def test_standard_image_keeps_the_login_stack() -> None:

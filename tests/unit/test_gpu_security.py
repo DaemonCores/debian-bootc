@@ -77,12 +77,38 @@ class _Runner:
         )
 
 
-def test_eula_only_for_ia_with_nvidia() -> None:
-    """Only the ia profile on an NVIDIA machine shows the EULA."""
+CATALOG = {
+    'imgref':
+    'reg/x:latest_amd64',
+    'images': [
+        {
+            'imgref': 'reg/x:latest_amd64'
+        },
+        {
+            'imgref': 'reg/x:nvidia_amd64',
+            'eula': 'nvidia'
+        },
+    ],
+}
+
+
+def test_eula_follows_the_selected_image() -> None:
+    """Only the catalog entry carrying ``eula`` asks for the license."""
     m = _module()
-    assert m.eula_required('ia', True)
-    for usage, nvidia in (('ia', False), ('gaming', True), ('auto', True)):
-        assert not m.eula_required(usage, nvidia), (usage, nvidia)
+    assert m.eula_required(CATALOG, 'reg/x:nvidia_amd64')
+    for imgref in ('reg/x:latest_amd64', 'custom/y:1', ''):
+        assert not m.eula_required(CATALOG, imgref), imgref
+    assert not m.eula_required(None, 'reg/x:nvidia_amd64')
+
+
+def test_selected_imgref_priority() -> None:
+    """Custom image, then catalog selection, then the recipe default."""
+    m = _module()
+    both = {'custom_image': 'c', 'selected_image': 's'}
+    assert m.selected_imgref(both, CATALOG) == 'c'
+    assert m.selected_imgref({'selected_image': 's'}, CATALOG) == 's'
+    assert m.selected_imgref({}, CATALOG) == 'reg/x:latest_amd64'
+    assert m.selected_imgref(None, None) == ''
 
 
 def test_acceptance_is_the_exact_word() -> None:
@@ -93,33 +119,34 @@ def test_acceptance_is_the_exact_word() -> None:
         assert not m.eula_accepted(typed), typed
 
 
-def test_probe_follows_the_helper_status() -> None:
-    """A device found means the helper exits 0; a failing helper means no."""
-    m = _module()
-    assert m.nvidia_present(_Runner())
-    assert not m.nvidia_present(_Runner(fail_on='probe'))
-
-
 def test_stage_choice_goes_through_the_helper() -> None:
     """Consent first (when accepted), then the usage, both via pkexec."""
     m = _module()
     run = _Runner()
-    assert m.stage_choice('ia', True, run)
+    assert m.stage_choice('ia', True, 'reg/x:nvidia_amd64', run)
     assert run.commands == [
         ['pkexec', m.HELPER, 'consent', '--accept'],
         ['pkexec', m.HELPER, 'usage', 'ia'],
+        ['pkexec', m.HELPER, 'image', 'reg/x:nvidia_amd64'],
     ]
     run = _Runner()
-    assert m.stage_choice('gaming', False, run)
+    assert m.stage_choice('gaming', False, run=run)
     assert run.commands == [['pkexec', m.HELPER, 'usage', 'gaming']]
+
+
+def test_image_gate_refusal_is_reported() -> None:
+    """The helper refusing the image fails the step."""
+    m = _module()
+    run = _Runner(fail_on='image')
+    assert not m.stage_choice('ia', False, 'reg/x:nvidia_amd64', run)
 
 
 def test_stage_choice_refusals_are_reported() -> None:
     """The helper refusing the profile, or an unknown profile, is a failure."""
     m = _module()
-    assert not m.stage_choice('ia', False, _Runner(fail_on='usage'))
+    assert not m.stage_choice('ia', False, run=_Runner(fail_on='usage'))
     run = _Runner()
-    assert not m.stage_choice('evil', True, run)
+    assert not m.stage_choice('evil', True, run=run)
     assert run.commands == []
 
 
