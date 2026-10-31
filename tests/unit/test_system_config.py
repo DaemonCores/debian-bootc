@@ -28,7 +28,8 @@ def _overlay_text(overlay: Path) -> str:
         Every patch and added file of the overlay, joined.
     """
     return '\n'.join(
-        f.read_text() for f in sorted(overlay.rglob('*')) if f.is_file()
+        f.read_text() for f in sorted(overlay.rglob('*'))
+        if f.is_file() and '__pycache__' not in f.parts
     )
 
 

@@ -1,8 +1,7 @@
 diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
-index 26f74ff..7b5947f 100644
 --- a/fisherman/cmd/fisherman/main.go
 +++ b/fisherman/cmd/fisherman/main.go
-@@ -864,6 +864,20 @@ func main() {
+@@ -864,6 +864,27 @@
  		fatal("writing hostname: %v", err)
  	}
  
@@ -20,10 +19,17 @@ index 26f74ff..7b5947f 100644
 +		}
 +	}
 +
++	if r.GPUUsage != "" {
++		progress.Info("Writing GPU profile")
++		if err := post.WriteGPUProfile(activeTargetMount, r.GPUUsage, r.NvidiaConsent); err != nil {
++			fatal("writing GPU profile: %v", err)
++		}
++	}
++
  	// Write /var fstab entry if a separate /var disk was used.
  	if hasVarDisk {
  		varUUID := disk.UUID(r.VarDisk.Disk)
-@@ -878,6 +892,13 @@ func main() {
+@@ -878,6 +899,13 @@
  		}
  	}
  
@@ -37,3 +43,21 @@ index 26f74ff..7b5947f 100644
  	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
  	if r.User.Username != "" {
  		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))
+@@ -900,6 +928,17 @@
+ 		progress.Info(fmt.Sprintf("Added Plymouth boot args to %d loader entr%s", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
+ 	}
+ 
++	// Module signature enforcement is an install-time choice: the shipped
++	// kernel does not force it, the kernel argument does. Fatal on failure so
++	// a requested enforcement is never silently dropped.
++	if r.SigEnforce != nil && *r.SigEnforce {
++		n, err := post.EnsureKernelArg(activeTargetMount, post.SigEnforceArg)
++		if err != nil {
++			fatal("enforcing module signatures: %v", err)
++		}
++		progress.Info(fmt.Sprintf("Enforced module signatures in %d boot entr%s", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
++	}
++
+ 	// Inject rd.luks.name=<UUID>=root into every BLS entry so the initrd
+ 	// unlocks the LUKS container and maps it to /dev/mapper/root before
+ 	// mounting the root filesystem. bootc install to-filesystem only sees the

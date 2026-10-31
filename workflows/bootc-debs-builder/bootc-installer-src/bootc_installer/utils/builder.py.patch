@@ -1,22 +1,23 @@
 diff --git a/bootc_installer/utils/builder.py b/bootc_installer/utils/builder.py
-index 8a3e1ac3..b81a9c99 100644
 --- a/bootc_installer/utils/builder.py
 +++ b/bootc_installer/utils/builder.py
-@@ -20,6 +20,8 @@ import subprocess
+@@ -20,6 +20,9 @@
  import sys
  from gettext import gettext as _
  
 +from bootc_installer.defaults.autoupdate import BootcDefaultAutoupdate
 +from bootc_installer.defaults.system import BootcDefaultSystem
++from bootc_installer.defaults.gpu_security import BootcDefaultGpuSecurity
  from bootc_installer.defaults.conn_check import BootcDefaultConnCheck
  from bootc_installer.defaults.disk import BootcDefaultDisk
  from bootc_installer.defaults.encryption import BootcDefaultEncryption
-@@ -40,6 +42,8 @@ templates = {
+@@ -40,6 +43,9 @@
      "disk": BootcDefaultDisk,
      "slurp": BootcDefaultSlurp,
      "encryption": BootcDefaultEncryption,
 +    "autoupdate": BootcDefaultAutoupdate,
 +    "system": BootcDefaultSystem,
++    "gpu_security": BootcDefaultGpuSecurity,
      "image": BootcDefaultImage,
      "user": BootcDefaultUsers,
      "qr_companion": BootcDefaultQrCompanion,

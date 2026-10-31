@@ -1,13 +1,13 @@
 diff --git a/bootc_installer/meson.build b/bootc_installer/meson.build
-index 6c76a2e6..d2040846 100644
 --- a/bootc_installer/meson.build
 +++ b/bootc_installer/meson.build
-@@ -9,6 +9,8 @@ if blueprint_compiler.found()
+@@ -9,6 +9,9 @@
      'blueprints',
      input: files(
        'gtk/confirm.blp',
 +      'gtk/default-autoupdate.blp',
 +      'gtk/default-system.blp',
++      'gtk/default-gpu-security.blp',
        'gtk/default-conn-check.blp',
        'gtk/default-disk.blp',
        'gtk/default-encryption.blp',

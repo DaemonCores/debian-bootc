@@ -34,6 +34,7 @@ echo "01:00.0 3D controller: NVIDIA Corporation GA106 [GeForce RTX 3060]"
 """
 LSPCI_NONE = "#!/bin/sh\nexit 0\n"
 
+
 def load() -> ModuleType:
     """Import nvidia-eula-stage as a single module.
 
@@ -228,7 +229,7 @@ def test_usage_ia_without_nvidia_needs_no_consent(tmp_path: Path) -> None:
 def test_usage_other_profiles_need_no_consent(
     tmp_path: Path, usage: str
 ) -> None:
-    """gaming and auto are recorded without consent even with NVIDIA present.
+    """Gaming and auto are recorded without consent even with NVIDIA present.
 
     Args:
         tmp_path: Scratch directory.

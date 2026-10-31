@@ -1,0 +1,95 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $BootcDefaultGpuSecurity: Adw.Bin {
+  halign: fill;
+  valign: fill;
+  hexpand: true;
+
+  Overlay {
+    vexpand: true;
+    hexpand: true;
+
+    [overlay]
+    Button btn_next {
+      margin-end: 12;
+      margin-start: 12;
+      icon-name: "go-next-symbolic";
+      halign: end;
+      valign: center;
+      tooltip-text: _("Next");
+
+      styles [
+        "suggested-action",
+      ]
+    }
+
+    ScrolledWindow {
+      hscrollbar-policy: never;
+      vexpand: true;
+      hexpand: true;
+
+      Adw.PreferencesPage {
+        Adw.PreferencesGroup {
+          $BootcPageHeader page_header {
+            margin-top: 24;
+            icon-name: "video-display-symbolic";
+            title: _("Graphics and Security");
+            subtitle: _("The image carries every GPU driver; choose how this machine uses them.");
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.ComboRow usage_row {
+            title: _("GPU usage");
+            subtitle: _("Can be changed later with dc-gpu.");
+          }
+        }
+
+        Adw.PreferencesGroup eula_group {
+          visible: false;
+          title: _("NVIDIA license");
+          description: _("An NVIDIA GPU was detected. Type ACCEPT to accept the license and activate the NVIDIA compute stack.");
+
+          Label eula_label {
+            wrap: true;
+            selectable: true;
+            xalign: 0;
+            margin-bottom: 12;
+          }
+
+          Adw.EntryRow eula_entry {
+            title: _("Type ACCEPT to accept");
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Adw.ActionRow {
+            title: _("Enforce kernel module signatures");
+            subtitle: _("Only signed kernel modules load. Turn this off to load your own unsigned modules.");
+
+            [suffix]
+            Switch sig_switch {
+              valign: center;
+              active: true;
+            }
+
+            activatable-widget: sig_switch;
+          }
+        }
+
+        Adw.PreferencesGroup {
+          Label error_label {
+            visible: false;
+            wrap: true;
+            label: _("The choice could not be recorded. Check the license acceptance and try again.");
+
+            styles [
+              "error",
+            ]
+          }
+        }
+      }
+    }
+  }
+}
