@@ -276,7 +276,25 @@ packages:
         ! -name '*-dbg*' | head -1)
       if test -n "${HEADERS_DEB}"; then
         HEADERS_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
-        cp "${HEADERS_DEB}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb"
+        # The unsigned twin builds the same kernel version, so bindeb-pkg names
+        # its headers deb exactly like the signed one while the content differs
+        # (signing key setup): both would land on the same APT pool file and
+        # reprepro refuses the second. Same model as the image deb: a distinct
+        # package name that Conflicts with the signed one.
+        case "${KERNEL_SUFFIX:-}" in
+          *-nosign)
+            HEADERS_ORIG=$(dpkg-deb -f "${HEADERS_DEB}" Package)
+            HEADERS_DIR=/tmp/linux-headers-repack
+            rm -rf "${HEADERS_DIR}"
+            dpkg-deb -R "${HEADERS_DEB}" "${HEADERS_DIR}"
+            sed -i -e "s/^Package: .*/Package: ${HEADERS_ORIG}-nosign/" \
+              -e '/^\(Conflicts\|Replaces\):/d' "${HEADERS_DIR}/DEBIAN/control"
+            printf 'Conflicts: %s\nReplaces: %s\n' "${HEADERS_ORIG}" "${HEADERS_ORIG}" \
+              >> "${HEADERS_DIR}/DEBIAN/control"
+            dpkg-deb -b "${HEADERS_DIR}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb"
+            ;;
+          *) cp "${HEADERS_DEB}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb" ;;
+        esac
         test -s "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb" \
           || { echo "ERROR: output linux-headers deb empty" >&2; exit 1; }
       fi
