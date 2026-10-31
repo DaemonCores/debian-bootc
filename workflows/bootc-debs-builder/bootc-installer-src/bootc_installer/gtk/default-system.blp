@@ -36,7 +36,21 @@ template $BootcDefaultSystem: Adw.Bin {
             margin-top: 24;
             icon-name: "preferences-system-symbolic";
             title: _("System");
-            subtitle: _("Name this computer and secure the administrator account.");
+            subtitle: _("Language, keyboard, name of this computer and administrator account.");
+          }
+        }
+
+        Adw.PreferencesGroup locale_group {
+          Adw.ComboRow locale_row {
+            title: _("System language");
+            enable-search: true;
+            expression: expr item as <StringObject>.string;
+          }
+
+          Adw.ComboRow keyboard_row {
+            title: _("Keyboard layout");
+            enable-search: true;
+            expression: expr item as <StringObject>.string;
           }
         }
 

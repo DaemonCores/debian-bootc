@@ -1,13 +1,15 @@
 diff --git a/bootc_installer/utils/meson.build b/bootc_installer/utils/meson.build
+index 4fa2e9aa..b5d231cb 100644
 --- a/bootc_installer/utils/meson.build
 +++ b/bootc_installer/utils/meson.build
-@@ -8,6 +8,9 @@
+@@ -8,6 +8,10 @@ sources = [
    'processor.py',
    'recipe.py',
    'secure_install.py',
 +  'mok_stage.py',
 +  'system_config.py',
 +  'gpu_config.py',
++  'locale_config.py',
    'builder.py',
    'progress_parser.py',
    'codec_check.py',
