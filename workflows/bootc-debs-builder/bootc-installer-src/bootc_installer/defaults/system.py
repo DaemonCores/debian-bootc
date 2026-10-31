@@ -12,8 +12,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from gettext import gettext as _
+
 from gi.repository import Adw, Gtk
 
+from bootc_installer.utils import locale_config
 from bootc_installer.utils.system_config import valid_hostname, valid_root_password
 
 
@@ -22,6 +25,9 @@ class BootcDefaultSystem(Adw.Bin):
     __gtype_name__ = "BootcDefaultSystem"
 
     btn_next = Gtk.Template.Child()
+    locale_group = Gtk.Template.Child()
+    locale_row = Gtk.Template.Child()
+    keyboard_row = Gtk.Template.Child()
     hostname_entry = Gtk.Template.Child()
     root_password_entry = Gtk.Template.Child()
     root_password_confirmation = Gtk.Template.Child()
@@ -35,6 +41,19 @@ class BootcDefaultSystem(Adw.Bin):
         self.__key = key
         self.__step = step
         self.delta = False
+
+        # The first row of each list keeps the image default; the others come
+        # from what the live system ships, and the group is hidden when it
+        # offers nothing.
+        self.__locales = locale_config.supported_locales()
+        self.__keyboards = locale_config.keyboard_layouts()
+        self.locale_row.set_model(Gtk.StringList.new(
+            [_("Image default")] + self.__locales))
+        self.keyboard_row.set_model(Gtk.StringList.new(
+            [_("Image default")] + [k[2] for k in self.__keyboards]))
+        self.locale_group.set_visible(bool(self.__locales or self.__keyboards))
+        self.locale_row.set_visible(bool(self.__locales))
+        self.keyboard_row.set_visible(bool(self.__keyboards))
 
         for row in (self.hostname_entry, self.root_password_entry,
                     self.root_password_confirmation):
@@ -75,6 +94,17 @@ class BootcDefaultSystem(Adw.Bin):
                 "sshRootLogin": self.ssh_root_switch.get_active(),
             }
         }
+        locale_index = self.locale_row.get_selected()
+        if locale_index > 0:
+            finals["system"]["locale"] = self.__locales[locale_index - 1]
+        keyboard_index = self.keyboard_row.get_selected()
+        if keyboard_index > 0:
+            layout, variant, _description = self.__keyboards[keyboard_index - 1]
+            finals["system"]["keyboard"] = {
+                "model": locale_config.DEFAULT_MODEL,
+                "layout": layout,
+                "variant": variant,
+            }
         hostname = self.hostname_entry.get_text().strip()
         if hostname:
             finals["hostname"] = hostname

@@ -1,10 +1,29 @@
 diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
+index 26f74ff..2e88f25 100644
 --- a/fisherman/cmd/fisherman/main.go
 +++ b/fisherman/cmd/fisherman/main.go
-@@ -864,6 +864,27 @@
+@@ -864,6 +864,45 @@ func main() {
  		fatal("writing hostname: %v", err)
  	}
  
++	if r.Locale != "" {
++		progress.Info(fmt.Sprintf("Writing locale: %s", r.Locale))
++		if err := post.WriteLocale(activeTargetMount, r.Locale); err != nil {
++			fatal("writing locale: %v", err)
++		}
++	}
++
++	if r.Keyboard != nil && r.Keyboard.Layout != "" {
++		model := r.Keyboard.Model
++		if model == "" {
++			model = recipe.DefaultKeyboardModel
++		}
++		progress.Info(fmt.Sprintf("Writing keyboard: %s %s", r.Keyboard.Layout, r.Keyboard.Variant))
++		if err := post.WriteKeyboard(activeTargetMount, model, r.Keyboard.Layout, r.Keyboard.Variant); err != nil {
++			fatal("writing keyboard: %v", err)
++		}
++	}
++
 +	if r.AutoUpdate != nil && !*r.AutoUpdate {
 +		progress.Info("Disabling automatic updates")
 +		if err := post.DisableAutoUpdate(activeTargetMount); err != nil {
@@ -29,7 +48,7 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  	// Write /var fstab entry if a separate /var disk was used.
  	if hasVarDisk {
  		varUUID := disk.UUID(r.VarDisk.Disk)
-@@ -878,6 +899,13 @@
+@@ -878,6 +917,13 @@ func main() {
  		}
  	}
  
@@ -43,7 +62,7 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
  	if r.User.Username != "" {
  		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))
-@@ -900,6 +928,17 @@
+@@ -900,6 +946,17 @@ func main() {
  		progress.Info(fmt.Sprintf("Added Plymouth boot args to %d loader entr%s", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
  	}
  
