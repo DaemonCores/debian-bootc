@@ -763,9 +763,9 @@ packages:
       MESA_VER=$(printf '%s' "${DEB_MESA#*:}" | sed -E 's/-[^-]*$//; s/\+.*//; s/~/-/')
       BUILT_VER="${MESA_VER}+r1"
 
-      # Build dependencies come from Debian's own mesa source package, so
-      # the list follows the version that is built. deb-src is enabled on the
-      # existing apt sources (deb822 and one-line forms) before build-dep.
+      # Build dependencies come from Debian's own mesa source package at the
+      # built version (pinned: apt would pick the newest, a trixie-backports
+      # record). deb-src is enabled on the existing apt sources before build-dep.
       for f in /etc/apt/sources.list.d/*.sources; do
         [ -e "${f}" ] || continue
         sed -i -E 's/^Types:[[:space:]]*deb[[:space:]]*$/Types: deb deb-src/' "${f}"
@@ -775,7 +775,7 @@ packages:
           > /etc/apt/sources.list.d/dc-gpu-src.list
       fi
       apt-get update -qq
-      if ! apt-get build-dep -y mesa; then
+      if ! apt-get build-dep -y "mesa=${DEB_MESA#*:}"; then
         echo "--- diag: apt sources and the mesa source records seen by apt" >&2
         grep -rH . /etc/apt/sources.list.d/ /etc/apt/preferences* 2>/dev/null >&2
         apt-cache showsrc mesa | grep -E '^(Package|Version|Directory):' >&2
