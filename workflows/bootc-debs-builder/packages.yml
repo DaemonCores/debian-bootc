@@ -6,6 +6,7 @@
 #   deps       packages that must be built+installed first (creates a wave)
 #   sources    paths under workflows/bootc-debs-builder/ hashed for change
 #   deb-glob   output deb glob when it differs from <name>_*
+#   ccache     true = restore/save a compiler object cache across runs (kernel builds)
 #   env        non-secret KEY: VALUE exported for the build (also hashed)
 #   secret-env ENV_VAR: SECRET_NAME injected from secrets (never hashed)
 #   build      the exact build script, verbatim
@@ -90,6 +91,7 @@ packages:
   # `linux-image-16k` (arm64 only). KERNEL_SUFFIX carries the key, KERNEL_PAGES
   # selects the overlay under kernel/pages/.
   - name: linux-image
+    ccache: true
     variant-name-prefix: linux-image
     variant-env: KERNEL_SUFFIX
     variants:
@@ -366,6 +368,7 @@ packages:
   # Each starts from the .config shipped in its kernel deb (base + arm overlay
   # + page size) and merges only its own device overlay.
   - name: linux-modules-arm-device
+    ccache: true
     when:
       arch: arm64
     # The kernel a device runs follows its hardware generation (docs/Handoff-Decisions.md,
@@ -1349,6 +1352,7 @@ packages:
     sources:
       - preinstall/output/fisherman
       - patches/fisherman-autoupdate.patch
+      - patches/fisherman-system-config.patch
     env:
       FISHERMAN_COMMIT: "4dc8f1cca20e9808c123ed95e572f9106a9be18e"
       FISHERMAN_VER: "0.3.0+git4dc8f1c+bootc1"
@@ -1380,6 +1384,11 @@ packages:
       # docs/minimal.md). Absent or true leaves the image default.
       git -C /build/fisherman-src apply \
         "${SAVE_PWD}/workflows/bootc-debs-builder/patches/fisherman-autoupdate.patch"
+
+      # System configuration: recipe fields `rootPassword` and `sshRootLogin`
+      # replace the first-boot setup service (root password, sshd policy).
+      git -C /build/fisherman-src apply \
+        "${SAVE_PWD}/workflows/bootc-debs-builder/patches/fisherman-system-config.patch"
 
       # Build — CGO_ENABLED=0 gives a fully static binary.
       CGO_ENABLED=0 GOARCH="${GOARCH}" go build \
@@ -1424,6 +1433,7 @@ packages:
       - preinstall/output/bootc-installer
       - patches/bootc-installer-mok.patch
       - patches/bootc-installer-autoupdate.patch
+      - patches/bootc-installer-system-config.patch
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
       BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc8"
@@ -1461,6 +1471,12 @@ packages:
       # whose choice reaches fisherman as the recipe field `autoUpdate`.
       git -C /build/bootc-installer-src apply \
         "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootc-installer-autoupdate.patch"
+
+      # System settings: a step collecting the hostname, root password, sudo
+      # right and SSH root login policy; it replaces the first-boot setup
+      # service. Needs the fisherman recipe fields of fisherman-system-config.
+      git -C /build/bootc-installer-src apply \
+        "${SAVE_PWD}/workflows/bootc-debs-builder/patches/bootc-installer-system-config.patch"
 
       # The fisherman submodule contains data/images/ (distribution logos) that
       # bootc-installer.gresource.xml references at build time. Initialize it so

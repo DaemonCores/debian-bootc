@@ -1,0 +1,264 @@
+diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
+index a5430cc..7b5947f 100644
+--- a/fisherman/cmd/fisherman/main.go
++++ b/fisherman/cmd/fisherman/main.go
+@@ -871,6 +871,13 @@ func main() {
+ 		}
+ 	}
+ 
++	if r.SSHRootLogin != nil {
++		progress.Info("Writing SSH root login policy")
++		if err := post.WriteSSHRootPolicy(activeTargetMount, *r.SSHRootLogin); err != nil {
++			fatal("writing SSH root login policy: %v", err)
++		}
++	}
++
+ 	// Write /var fstab entry if a separate /var disk was used.
+ 	if hasVarDisk {
+ 		varUUID := disk.UUID(r.VarDisk.Disk)
+@@ -885,6 +892,13 @@ func main() {
+ 		}
+ 	}
+ 
++	if r.RootPassword != "" {
++		progress.Info("Setting root password")
++		if err := post.SetRootPassword(activeTargetMount, r.RootPassword); err != nil {
++			fatal("setting root password: %v", err)
++		}
++	}
++
+ 	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
+ 	if r.User.Username != "" {
+ 		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))
+diff --git a/fisherman/internal/recipe/recipe.go b/fisherman/internal/recipe/recipe.go
+index 01c3cb3..2b97875 100644
+--- a/fisherman/internal/recipe/recipe.go
++++ b/fisherman/internal/recipe/recipe.go
+@@ -49,10 +49,16 @@ type Recipe struct {
+ 	// AutoUpdate tells whether the installed system keeps the automatic image
+ 	// updates of the image. Absent (nil) or true leaves the image default (the
+ 	// update timer enabled); false masks the timer in the installed /etc.
+-	AutoUpdate *bool    `json:"autoUpdate,omitempty"`
+-	Hostname   string   `json:"hostname"`
+-	Flatpaks   []string `json:"flatpaks"` // flatpak app IDs to install; empty = fallback
+-	User       UserSpec `json:"user"`     // optional user account to create
++	AutoUpdate *bool `json:"autoUpdate,omitempty"`
++	// RootPassword sets the root password of the installed system (plaintext
++	// or a pre-hashed crypt(3) string). Empty leaves root as the image ships it.
++	RootPassword string `json:"rootPassword,omitempty"`
++	// SSHRootLogin writes the sshd root login policy: true allows root login
++	// with a password, false forbids it. Absent (nil) leaves the image default.
++	SSHRootLogin *bool    `json:"sshRootLogin,omitempty"`
++	Hostname     string   `json:"hostname"`
++	Flatpaks     []string `json:"flatpaks"` // flatpak app IDs to install; empty = fallback
++	User         UserSpec `json:"user"`     // optional user account to create
+ 	// CustomMounts is set for manual partitioning. When non-empty, Disk/Filesystem/
+ 	// BtrfsSubvolumes and the auto-partition steps are skipped; fisherman formats and
+ 	// mounts the listed partitions directly.
+diff --git a/fisherman/internal/post/system.go b/fisherman/internal/post/system.go
+new file mode 100644
+--- /dev/null
++++ b/fisherman/internal/post/system.go
+@@ -0,0 +1,83 @@
++package post
++
++import (
++	"bytes"
++	"fmt"
++	"path/filepath"
++	"strings"
++
++	"github.com/tuna-os/fisherman/internal/runner"
++)
++
++// sshRootPolicyFile is the sshd drop-in that carries the root login policy.
++// The 01- prefix makes it win over later drop-ins, as the first-boot setup
++// service it replaces did.
++const sshRootPolicyFile = "01-permitrootlogin.conf"
++
++// deployRoot returns the writable root of the deployment installed at target
++// and whether the deployment is composefs-native (edited with --root) rather
++// than ostree (edited through a chroot), as CreateUser does.
++func deployRoot(target string) (string, bool, error) {
++	if isComposeFsNative(target) {
++		etcDir, err := ComposeFsDeployEtcDirFn(target)
++		if err != nil {
++			return "", false, fmt.Errorf("finding composefs deploy root: %w", err)
++		}
++		return filepath.Dir(etcDir), true, nil
++	}
++	deployDir, err := DeploymentDirFn(target)
++	if err != nil {
++		return "", false, fmt.Errorf("finding deployment dir: %w", err)
++	}
++	return deployDir, false, nil
++}
++
++// SetRootPassword sets the root password of the installed system at target.
++// The password goes through chpasswd stdin so it never appears in ps output;
++// a pre-hashed crypt(3) string ("$id$salt$hash") is written verbatim with -e.
++// An empty password is a no-op.
++func SetRootPassword(target, password string) error {
++	if password == "" {
++		return nil
++	}
++	root, composefs, err := deployRoot(target)
++	if err != nil {
++		return err
++	}
++	input := bytes.NewBufferString("root:" + password + "\n")
++	flag := []string{}
++	if strings.HasPrefix(password, "$") {
++		flag = []string{"-e"}
++	}
++	if composefs {
++		err = runner.RunWithStdin(input, "chpasswd", append([]string{"--root", root}, flag...)...)
++	} else {
++		err = runner.RunWithStdin(input, "chroot", append([]string{root, "chpasswd"}, flag...)...)
++	}
++	if err != nil {
++		return fmt.Errorf("chpasswd root (%s): %w", root, err)
++	}
++	return nil
++}
++
++// WriteSSHRootPolicy writes the sshd root login policy ("yes" or "no") into
++// the sshd drop-in directory of the installed system at target.
++func WriteSSHRootPolicy(target string, allow bool) error {
++	etcDir, err := deployEtcDir(target)
++	if err != nil {
++		return err
++	}
++	dir := filepath.Join(etcDir, "ssh", "sshd_config.d")
++	if err := runner.Run("mkdir", "-p", dir); err != nil {
++		return fmt.Errorf("mkdir %s: %w", dir, err)
++	}
++	value := "no"
++	if allow {
++		value = "yes"
++	}
++	path := filepath.Join(dir, sshRootPolicyFile)
++	if err := runner.RunWithStdin(bytes.NewBufferString("PermitRootLogin "+value+"\n"), "tee", path); err != nil {
++		return fmt.Errorf("writing %s: %w", path, err)
++	}
++	return nil
++}
+diff --git a/fisherman/internal/post/system_test.go b/fisherman/internal/post/system_test.go
+new file mode 100644
+--- /dev/null
++++ b/fisherman/internal/post/system_test.go
+@@ -0,0 +1,114 @@
++package post_test
++
++import (
++	"io"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/tuna-os/fisherman/internal/post"
++	"github.com/tuna-os/fisherman/internal/runner"
++)
++
++type call struct {
++	stdin string
++	argv  []string
++}
++
++// recordRuns replaces runner.RunFn with a recorder and restores it on cleanup.
++func recordRuns(t *testing.T) *[]call {
++	t.Helper()
++	var calls []call
++	old := runner.RunFn
++	runner.RunFn = func(stdin io.Reader, name string, args ...string) error {
++		if name == "ls" { // layout probe of isComposeFsNative: answer from the real tree
++			_, err := os.Stat(args[0])
++			return err
++		}
++		c := call{argv: append([]string{name}, args...)}
++		if stdin != nil {
++			b, _ := io.ReadAll(stdin)
++			c.stdin = string(b)
++		}
++		calls = append(calls, c)
++		return nil
++	}
++	t.Cleanup(func() { runner.RunFn = old })
++	return &calls
++}
++
++func ostreeTarget(t *testing.T) (target, deploy string) {
++	t.Helper()
++	target = t.TempDir()
++	deploy = filepath.Join(target, "ostree", "deploy", "default", "deploy", "abc123.0")
++	if err := os.MkdirAll(deploy, 0o755); err != nil {
++		t.Fatal(err)
++	}
++	post.DeploymentDirFn = func(string) (string, error) { return deploy, nil }
++	t.Cleanup(func() { post.DeploymentDirFn = post.DefaultDeploymentDir })
++	return target, deploy
++}
++
++func TestSetRootPassword_EmptyIsNoop(t *testing.T) {
++	calls := recordRuns(t)
++	if err := post.SetRootPassword(t.TempDir(), ""); err != nil {
++		t.Fatal(err)
++	}
++	if len(*calls) != 0 {
++		t.Fatalf("empty password ran %v", *calls)
++	}
++}
++
++func TestSetRootPassword_OstreeChrootStdin(t *testing.T) {
++	target, deploy := ostreeTarget(t)
++	calls := recordRuns(t)
++	if err := post.SetRootPassword(target, "s3cret-pass"); err != nil {
++		t.Fatal(err)
++	}
++	if len(*calls) != 1 {
++		t.Fatalf("calls = %v", *calls)
++	}
++	c := (*calls)[0]
++	if got, want := strings.Join(c.argv, " "), "chroot "+deploy+" chpasswd"; got != want {
++		t.Errorf("argv = %q, want %q", got, want)
++	}
++	if c.stdin != "root:s3cret-pass\n" {
++		t.Errorf("stdin = %q", c.stdin)
++	}
++	if strings.Contains(strings.Join(c.argv, " "), "s3cret-pass") {
++		t.Error("password leaked into argv")
++	}
++}
++
++func TestSetRootPassword_HashedUsesE(t *testing.T) {
++	target, deploy := ostreeTarget(t)
++	calls := recordRuns(t)
++	if err := post.SetRootPassword(target, "$6$salt$hash"); err != nil {
++		t.Fatal(err)
++	}
++	if got, want := strings.Join((*calls)[0].argv, " "), "chroot "+deploy+" chpasswd -e"; got != want {
++		t.Errorf("argv = %q, want %q", got, want)
++	}
++}
++
++func TestWriteSSHRootPolicy(t *testing.T) {
++	for _, tc := range []struct {
++		allow bool
++		want  string
++	}{{true, "PermitRootLogin yes\n"}, {false, "PermitRootLogin no\n"}} {
++		target, deploy := ostreeTarget(t)
++		calls := recordRuns(t)
++		if err := post.WriteSSHRootPolicy(target, tc.allow); err != nil {
++			t.Fatal(err)
++		}
++		dir := filepath.Join(deploy, "etc", "ssh", "sshd_config.d")
++		file := filepath.Join(dir, "01-permitrootlogin.conf")
++		if len(*calls) != 2 ||
++			strings.Join((*calls)[0].argv, " ") != "mkdir -p "+dir ||
++			strings.Join((*calls)[1].argv, " ") != "tee "+file ||
++			(*calls)[1].stdin != tc.want {
++			t.Errorf("allow=%v calls = %v", tc.allow, *calls)
++		}
++	}
++}

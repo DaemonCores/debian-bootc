@@ -123,6 +123,9 @@
         },
         "user": {
             "template": "user"
+        },
+        "system": {
+            "template": "system"
         }
     },
     "selinuxDisabled": true
