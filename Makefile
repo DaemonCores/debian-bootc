@@ -188,15 +188,11 @@ format-shell:
 test-unit: py-ready
 	$(VBIN)/pytest -q tests/unit tests/integration
 
-test: py-ready test-unit
-	@# 1. Every runtime test has a diag; counts must match.
-	@name_count=$$(grep -c '^  - name:' workflows/tests.yml); \
-	 diag_count=$$(grep -c '^    diag:' workflows/tests.yml); \
-	 if [ "$$name_count" -ne "$$diag_count" ]; then \
-	   echo "FAIL: workflows/tests.yml — $$name_count names, $$diag_count diags" >&2; \
-	   exit 1; \
-	 fi; \
-	 echo "OK  test manifest integrity ($$name_count tests, $$diag_count diags)"
+test: py-ready ci-repo test-unit
+	@# 1. Every runtime test has a diag (the shared manifest checker also
+	@#    understands the categories block, which a name/diag count does not).
+	$(VBIN)/python $(CI_REPO)/scripts/check_tests_manifest.py --root .
+	@echo "OK  test manifest integrity"
 	@# 2. Syntax-check the installer recipe generator.
 	python3 -m py_compile $(PYTHON_SRCS)
 	@echo "OK  gen-recipe.py syntax"
