@@ -56,7 +56,7 @@ def test_image_installs_the_project_kernel() -> None:
     """Containerfile installs the single project kernel."""
     root = MANIFEST.parents[2]
     kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}'
-    for name in ('Containerfile',):
+    for name in ('Containerfile', ):
         text = (root / name).read_text()
         install = [
             ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
@@ -86,7 +86,7 @@ def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
     """
     root = MANIFEST.parents[2]
     modules = {}
-    for name in ('Containerfile',):
+    for name in ('Containerfile', ):
         modules[name] = {
             tok
             for ln in _install_lines((root / name).read_text())
@@ -188,7 +188,7 @@ def test_images_build_on_the_shared_base() -> None:
     base = (root / 'Containerfile.base').read_text()
     assert 'FROM debian:trixie' in base
     assert 'KERNEL_SUFFIX' not in base
-    for name in ('Containerfile',):
+    for name in ('Containerfile', ):
         text = (root / name).read_text()
         assert 'FROM ${BASE_IMAGE}' in text, name
         assert 'FROM debian:trixie' not in text, name
