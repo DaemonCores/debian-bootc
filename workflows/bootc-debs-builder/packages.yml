@@ -133,12 +133,8 @@ packages:
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
       # bump when those helpers change (other repository, invisible to the
       # content hash of the lib files).
-      HELPERS_VER: 6
+      HELPERS_VER: 7
       KERNEL_PAGES: "4k"
-      # Regenerate the patch lock on each build instead of verifying it.
-      # patch --dry-run is the real guard; the lock file is bumped manually
-      # only when forcing a cache-bust rebuild is needed.
-      PATCH_GUARD_UPDATE: "1"
     deb-glob: "linux-image-common_*"
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
@@ -153,7 +149,6 @@ packages:
       - kernel/modules/arm
       - kernel/modules/x86_64
       - kernel/patches.yml
-      - kernel/patches.lock.json
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
     # whose series every patch source (CachyOS, ROCKNIX) already provides
     # (version and tarball sha256 resolved before each build, nothing pinned).
@@ -415,8 +410,7 @@ packages:
       # Kernel build primitives come from DaemonCores-CI scripts/
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
       # bump when those helpers change.
-      HELPERS_VER: 6
-      PATCH_GUARD_UPDATE: "1"
+      HELPERS_VER: 7
     # Track the stable kernel version so KERNEL_VER enters the content hash.
     # The modules build derives their actual version from the kernel dep deb
     # (kernel_prepare), not from KERNEL_VER directly, but the track entry
@@ -431,7 +425,6 @@ packages:
     sources:
       - preinstall/output/linux-modules-arm-device
       - kernel/patches.yml
-      - kernel/patches.lock.json
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
@@ -576,9 +569,8 @@ packages:
     sources:
       - nvidia
       - kernel/patches.yml
-      - kernel/patches.lock.json
     env:
-      HELPERS_VER: 7
+      HELPERS_VER: 8
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
