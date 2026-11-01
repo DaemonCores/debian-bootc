@@ -2,7 +2,8 @@
 Description=Apply the stored GPU userspace profile (dc-gpu)
 Documentation=man:ld.so(8)
 DefaultDependencies=no
-After=local-fs.target systemd-tmpfiles-setup.service
+# ldconfig.service rewrites /etc/ld.so.cache~ too; two concurrent runs race on the rename.
+After=local-fs.target systemd-tmpfiles-setup.service ldconfig.service
 Before=sysinit.target systemd-modules-load.service
 ConditionPathExists=/usr/sbin/dc-gpu
 

@@ -588,18 +588,17 @@ packages:
       make -j"$(nproc)" modules_prepare
 
       # Module.symvers of the SAME kernel, at
-      # /usr/lib/linux-kernel-build/Module.symvers in the kernel deb: an
-      # out-of-tree modules-only build has no vmlinux.o, so modpost needs the
-      # vmlinux-only symbol table (the device-entries comment explains why).
+      # /usr/lib/linux-kernel-build/Module.symvers in the kernel deb, FULL:
+      # nvidia-drm and nvidia-modeset import symbols exported by kernel
+      # MODULES (drm, drm_kms_helper, ...), which only the inter-module lines
+      # list. The device entries filter those out because they rebuild the
+      # exporting modules themselves ("exported twice"); the external NVIDIA
+      # modules rebuild none of them. The NVIDIA conftest
+      # (module_symvers_sanity_check) also requires vmlinux exports in this
+      # file, in the kernel output tree.
       test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
         || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
-      awk -F'\t' '$3 == "vmlinux"' \
-        "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
-        > /tmp/nvidia-vmlinux-only.symvers
-      # The NVIDIA conftest (module_symvers_sanity_check) requires a
-      # Module.symvers carrying vmlinux exports in the kernel output tree, and
-      # modpost reads the same file to resolve the built-in kernel symbols.
-      cp /tmp/nvidia-vmlinux-only.symvers "${SRCDIR}/Module.symvers"
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" "${SRCDIR}/Module.symvers"
 
       # Upstream NVIDIA open kernel modules at the release of the user-space
       # the image installs, from NVIDIA's own APT repository (libcuda1 is
