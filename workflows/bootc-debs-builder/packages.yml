@@ -570,7 +570,7 @@ packages:
       - nvidia
       - kernel/patches.yml
     env:
-      HELPERS_VER: 8
+      HELPERS_VER: 9
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -657,6 +657,7 @@ packages:
         "${DESTDIR}/DEBIAN/control"
       sed -i \
         -e "s|Version: {{ VER }}|Version: ${BUILT_VER}+r1|g" \
+        -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ KVER }}|${KVER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
         "${DESTDIR}/DEBIAN/control"
