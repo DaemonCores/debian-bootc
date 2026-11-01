@@ -52,11 +52,11 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
 
 
-def test_both_images_install_the_same_project_kernel() -> None:
-    """Containerfile and Containerfile.minimal install the single kernel."""
+def test_image_installs_the_project_kernel() -> None:
+    """Containerfile installs the single project kernel."""
     root = MANIFEST.parents[2]
     kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}'
-    for name in ('Containerfile', 'Containerfile.minimal'):
+    for name in ('Containerfile',):
         text = (root / name).read_text()
         install = [
             ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
@@ -78,22 +78,22 @@ def _install_lines(text: str) -> list[str]:
     return [ln for ln in text.splitlines() if not ln.lstrip().startswith('#')]
 
 
-def test_both_images_install_the_same_modules() -> None:
-    """The standard image keeps the hardware support of the minimal one.
+def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
+    """The standard image lists only the per-arch hardware modules.
 
     The NVIDIA open modules (`linux-modules-nvidia`) live in the separate
-    NVIDIA image only, so the two base-derived images list the same modules.
+    NVIDIA image only.
     """
     root = MANIFEST.parents[2]
     modules = {}
-    for name in ('Containerfile', 'Containerfile.minimal'):
+    for name in ('Containerfile',):
         modules[name] = {
             tok
             for ln in _install_lines((root / name).read_text())
             for tok in ln.replace(';', ' ').replace('\\', ' ').split()
             if tok.startswith('linux-modules-')
         }
-    assert modules['Containerfile'] == modules['Containerfile.minimal']
+    assert 'linux-modules-nvidia' not in modules['Containerfile']
     assert not any(
         'x86' in tok or 'modules-arm' in tok for tok in modules['Containerfile']
     ), modules
@@ -183,12 +183,12 @@ def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
 
 
 def test_images_build_on_the_shared_base() -> None:
-    """Both images start from the base and install the kernel in its own RUN."""
+    """The image starts from the base and installs the kernel in its own RUN."""
     root = MANIFEST.parents[2]
     base = (root / 'Containerfile.base').read_text()
     assert 'FROM debian:trixie' in base
     assert 'KERNEL_SUFFIX' not in base
-    for name in ('Containerfile', 'Containerfile.minimal'):
+    for name in ('Containerfile',):
         text = (root / name).read_text()
         assert 'FROM ${BASE_IMAGE}' in text, name
         assert 'FROM debian:trixie' not in text, name

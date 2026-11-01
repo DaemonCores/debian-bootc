@@ -35,7 +35,7 @@ def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
         tmp_path: Scratch directory holding the fake Containerfiles.
     """
     for name in (
-        "Containerfile", "Containerfile.minimal", "Containerfile.iso",
+        "Containerfile", "Containerfile.nvidia", "Containerfile.iso",
         "Containerfile.base"
     ):
         (tmp_path / name).write_text("FROM scratch\n", encoding="utf-8")
@@ -43,11 +43,11 @@ def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
     assert [i["imgref"] for i in images] == [
         "reg/x:latest_amd64",
         "reg/x:latest_arm64",
-        "reg/x:minimal_amd64",
-        "reg/x:minimal_arm64",
+        "reg/x:nvidia_amd64",
+        "reg/x:nvidia_arm64",
     ]
     assert images[0]["name"] == "Deb Standard (amd64)"
-    assert images[2]["name"] == "Deb Minimal (amd64)"
+    assert images[2]["name"] == "Deb Nvidia (amd64)"
 
 
 def test_main_updates_only_images_fields(tmp_path: Path) -> None:
@@ -98,11 +98,11 @@ def test_build_images_lists_no_gpu_twins(tmp_path: Path) -> None:
     """
     (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
     (tmp_path /
-     "Containerfile.minimal").write_text("FROM scratch\n", encoding="utf-8")
+     "Containerfile.nvidia").write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "amd64")
     assert [i["imgref"] for i in images] == [
         "reg/x:latest_amd64",
-        "reg/x:minimal_amd64",
+        "reg/x:nvidia_amd64",
     ]
     assert all("gpu" not in i for i in images)
 

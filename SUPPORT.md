@@ -25,7 +25,7 @@ Provide:
 
 - image digest or commit;
 - `amd64` or `arm64` and the exact hardware or VM type;
-- full or minimal image variant;
+- image variant (standard or NVIDIA);
 - online ISO, offline ISO, raw image, or direct bootc installation;
 - relevant console, journal, `bootc status`, and failed-unit output;
 - reproduction steps and expected result.

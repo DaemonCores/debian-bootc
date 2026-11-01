@@ -140,9 +140,7 @@ def test_usage_errors(tmp_path: Path, args: tuple[str, ...]) -> None:
     assert run(tmp_path, *args).returncode == 2
 
 
-@pytest.mark.parametrize(
-    'containerfile', ['Containerfile', 'Containerfile.minimal']
-)
+@pytest.mark.parametrize('containerfile', ['Containerfile'])
 def test_dc_gpu_ships_in_the_images(containerfile: str) -> None:
     """Every image copies ``src/basepostinstall`` and the script is executable.
 

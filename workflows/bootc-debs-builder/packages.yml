@@ -945,7 +945,7 @@ packages:
   # GRUB binary signed for Secure Boot). On an arm64 runner the package is
   # SKIPPED via the `when:` arch gate below, so the arm64 build does not fail
   # on a missing SB_SIGNING_KEY or an amd64-only configure target. The main
-  # (non-minimal) Containerfile is x86_64-only and always runs this package
+  # Containerfile is x86_64-only and always runs this package
   # on an amd64 runner — zero regression.
   - name: grub-efi-amd64-signed
     when:
@@ -1621,7 +1621,7 @@ packages:
       git -C /build/fisherman-src checkout "${FISHERMAN_COMMIT}"
 
       # Recipe fields `autoUpdate: false` (masks the bootc update timer in the
-      # installed /etc, the opt-out documented in docs/minimal.md), and
+      # installed /etc, the opt-out documented in docs/building.md), and
       # `rootPassword` / `sshRootLogin` (replace the first-boot setup service).
       deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/fisherman-src" /build/fisherman-src
 

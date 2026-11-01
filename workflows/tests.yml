@@ -25,11 +25,6 @@
 #   tests[].category optional block list of category names: the test runs ONLY
 #                  on those. Absent = global test, run on the reference
 #                  category only (the most complete and most secured image).
-#   tests[].variant optional: `main` or `minimal` to run the test ONLY on that
-#                  image variant. Absent = run on all variants. Used for tests
-#                  that target packages present only in the full (main) image,
-#                  such as ifupdown2 or firstboot-user-setup. The harness skips
-#                  a test whose variant does not match (reports SKIP, not FAIL).
 
 boot_timeout: 60
 # Timeout for the VM to come back after the rollback reboot (shorter than
@@ -181,7 +176,7 @@ tests:
   # ── bootloader / secure boot ───────────────────────────────────────────
   - name: bootupd present
     # bootupd is x86_64-only in this repo's build (the grub-efi-amd64-signed
-    # package gates it). On arm64 the minimal image uses U-Boot, not bootupd.
+    # package gates it). On arm64 the image uses U-Boot, not bootupd.
     arch: amd64
     run: command -v bootupctl
     diag: |
@@ -375,8 +370,7 @@ tests:
       [ -n "$f" ] && lsinitrd "$f" 2>&1 | grep -i btrfs | head -n 10
 
   # ── filesystems ────────────────────────────────────────────────────────
-  # btrfs-progs is installed in the MAIN image (x86_64) but NOT in the minimal
-  # image (omitted to hit the RAM target). Gate to amd64 (main is x86_64-only).
+  # btrfs-progs is installed in the image on x86_64. Gate to amd64.
   - name: btrfs-progs present
     arch: amd64
     run: command -v mkfs.btrfs
@@ -394,9 +388,7 @@ tests:
       ls /usr/lib/modules/*/kernel/fs/btrfs/ 2>&1 || echo "no btrfs.ko (may be built-in)"
 
   # ── podman (bootc imgstorage on upgrade) ───────────────────────────────
-  # podman is installed in the MAIN image (x86_64) but NOT in the minimal
-  # image (omitted to hit the RAM target). Gate to amd64: the main image is
-  # x86_64-only today, and the minimal image (both arches) ships no podman.
+  # podman is installed in the image on x86_64 only today. Gate to amd64.
   - name: podman present
     arch: amd64
     run: command -v podman
@@ -409,10 +401,8 @@ tests:
       podman info 2>&1 | head -n 40
 
   # ── networking / repacked packages ─────────────────────────────────────
-  # ifupdown2 is repacked and installed in the MAIN image only; the minimal
-  # image uses systemd-networkd instead.
+  # ifupdown2 is repacked and installed in the image.
   - name: ifupdown2 repacked (+bootc)
-    variant: main
     run: dpkg-query -W -f='${Version}' ifupdown2
     expect: +bootc
     diag: |
@@ -428,8 +418,7 @@ tests:
       cat /etc/resolv.conf 2>&1
       getent hosts deb.debian.org 2>&1 || echo "resolution failed"
       systemctl status systemd-resolved --no-pager -l 2>&1 | tail -n 8
-  # sshd is installed in the MAIN image (x86_64) but NOT in the minimal image
-  # (omitted to hit the RAM target). Gate to amd64.
+  # sshd is installed in the image on x86_64. Gate to amd64.
   - name: sshd active
     arch: amd64
     run: systemctl is-active ssh
@@ -443,13 +432,11 @@ tests:
       systemctl status ssh-host-keygen --no-pager -l 2>&1 | tail -20
       journalctl -u ssh-host-keygen --no-pager -b 2>&1 | tail -10
   - name: ifupdown2-autoconf marker present
-    variant: main
     run: grep -q '^# ifupdown2-autoconf' /etc/network/interfaces
     diag: |
       cat /etc/network/interfaces 2>&1
       ls -la /etc/network/ 2>&1
   - name: main image interface has routable IP
-    variant: main
     run: ip -4 addr show scope global | grep -q inet
     diag: |
       ip addr 2>&1
@@ -460,27 +447,10 @@ tests:
       d=/usr/share/ifupdown2/ifupdown
       stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
       python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
-  - name: systemd-networkd active (minimal)
-    variant: minimal
-    run: systemctl is-active systemd-networkd
-    diag: |
-      systemctl status systemd-networkd --no-pager -l 2>&1 | tail -20
-      journalctl -u systemd-networkd --no-pager -b 2>&1 | tail -20
-      ip addr 2>&1
-  - name: minimal image interface has routable IP
-    variant: minimal
-    run: ip -4 addr show scope global | grep -q inet
-    diag: |
-      ip addr 2>&1
-      networkctl 2>&1 | head -20
-      systemctl status systemd-networkd --no-pager -l 2>&1 | tail -20
-      journalctl -u systemd-networkd --no-pager -b 2>&1 | tail -20
 
   # ── first-boot tooling shipped ─────────────────────────────────────────
-  # firstboot-user-setup is installed in the MAIN image only; the minimal image
-  # omits it to hit the RAM target.
+  # firstboot-user-setup is installed in the image.
   - name: firstboot wizard present
-    variant: main
     run: test -x /usr/local/bin/firstboot-user-setup
     diag: |
       ls -la /usr/local/bin/firstboot-user-setup 2>&1
