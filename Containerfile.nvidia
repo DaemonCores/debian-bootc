@@ -27,16 +27,24 @@ LABEL org.daemoncores.arches="amd64"
 # image (see src/buildisopreinstall/etc/bootc-installer/recipe.json).
 LABEL org.daemoncores.requires-eula="nvidia"
 
-# User-space from Debian (binary-only upstream: it cannot be recompiled, and
-# there is no DKMS). The kernel modules are the plan deb linux-modules-nvidia,
-# built in CI against the kernel of the parent image, so nothing compiles on
+# User-space from NVIDIA's own APT repository (binary-only upstream: it cannot
+# be recompiled, and there is no DKMS). Debian's user-space is too old for any
+# NVIDIA open module release that builds on the image kernel, and module and
+# user-space must be the same release; nvidia-apt-repo adds the repository of
+# this Debian release (signed-by the key of cuda-keyring) and the module deb is
+# built from the same repository (packages.yml). The kernel modules are the plan
+# deb linux-modules-nvidia, built in CI against the kernel of the parent image, so nothing compiles on
 # the target. Both usage profiles (gaming, ia) stay available: `dc-gpu`
 # activates the stored profile at boot, as for every other vendor.
-ARG GPU_NVIDIA_PKGS="firmware-nvidia-graphics nvidia-driver-libs libcuda1 nvidia-opencl-icd nvidia-vulkan-icd nvidia-smi nvidia-persistenced"
+ARG GPU_NVIDIA_PKGS="firmware-nvidia-gsp nvidia-driver-libs libcuda1 nvidia-opencl-icd nvidia-vulkan-icd nvidia-smi nvidia-persistenced"
 # The module and the user-space must be the same NVIDIA release: the module deb
-# is built at the release of the Debian user-space (packages.yml). A mismatch,
+# is built at the release of the user-space candidate (packages.yml). A mismatch,
 # or a second kernel directory, fails the build here.
+COPY ./src/nvidiapreinstall /
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && nvidia-apt-repo \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ${GPU_NVIDIA_PKGS} linux-modules-nvidia \
     && module_release=$(dpkg-query -W -f='${Version}' linux-modules-nvidia | sed 's/-.*//; s/+.*//') \
     && userspace_release=$(dpkg-query -W -f='${Version}' libcuda1 | sed 's/-.*//') \
