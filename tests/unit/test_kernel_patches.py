@@ -6,9 +6,6 @@ standard kernel helper, commit fb5b1a8); the debian-bootc manifests stay
 the declarative patches.yml consumed through ``kernel_patch_list``.
 """
 
-import hashlib
-import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -18,13 +15,8 @@ LIB = (
     Path(__file__).resolve().parents[3] / 'DaemonCores-CI' / 'scripts' /
     'kernel_helpers.sh'
 )
-GUARD = Path(
-    os.environ.get('CI_SCRIPTS')
-    or Path(__file__).resolve().parents[3] / 'DaemonCores-CI' / 'scripts'
-)
 pytestmark = pytest.mark.skipif(
-    not (GUARD / 'patch_guard.py').is_file(),
-    reason='DaemonCores-CI scripts not available'
+    not LIB.is_file(), reason='DaemonCores-CI scripts not available'
 )
 PATCH_ONE = """--- a/file
 +++ b/file
@@ -80,8 +72,6 @@ def _manifest(root: Path, entries: list[tuple[str, str, str, str]]) -> Path:
             f'  - name: {name}', f'    url: file://{root}/{file}',
             f'    stage: {stage}', f'    class: {klass}'
         ]
-    lock = {'file': hashlib.sha256(b'base\n').hexdigest()}
-    (root / 'patches.lock.json').write_text(json.dumps(lock))
     path = root / 'patches.yml'
     path.write_text('\n'.join(lines) + '\n')
     return path
@@ -101,7 +91,7 @@ def _apply(root: Path,
         The completed process.
     """
     script = (
-        f'set -euo pipefail; export CI_SCRIPTS={GUARD}; . {LIB}; '
+        f'set -euo pipefail; . {LIB}; '
         f'kernel_apply_patches {manifest} {arch} 7.2.11 {root}/tree kernel'
     )
     return subprocess.run(['bash', '-c', script],
@@ -133,9 +123,6 @@ def test_common_then_architecture_in_order(setup: Path) -> None:
         '+patched other\n'
     )
     (setup / 'indep.patch').write_text(patch_body)
-    lock = json.loads((setup / 'patches.lock.json').read_text())
-    lock['file2'] = hashlib.sha256(b'upstream other\n').hexdigest()
-    (setup / 'patches.lock.json').write_text(json.dumps(lock) + '\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
     out = result.stdout.splitlines()
@@ -180,15 +167,24 @@ def test_missing_patch_fails_hard(setup: Path) -> None:
     assert 'cannot download patch gone' in result.stderr
 
 
-def test_changed_touched_file_refuses_the_build(setup: Path) -> None:
-    """A touched file that differs from the lock refuses the build.
+def test_moved_context_is_refused_not_fuzzed(setup: Path) -> None:
+    """A hunk whose context changed upstream is refused, never fuzzed in.
+
+    The default ``patch`` fuzz of 2 would apply this hunk although two of its
+    context lines no longer match; the strict dry-run (--fuzz=0) refuses it
+    and leaves the tree untouched.
 
     Args:
         setup: Source tree and patch files.
     """
-    manifest = _manifest(setup, [('one', 'one.patch', 'common', 'kernel')])
-    (setup / 'tree' / 'file').write_text('changed upstream\n')
+    (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
+    (setup / 'fuzzy.patch').write_text(
+        '--- a/file\n+++ b/file\n@@ -1,7 +1,7 @@\n'
+        ' c1\n X2\n c3\n-old\n+new\n d1\n d2\n d3\n'
+    )
+    manifest = _manifest(setup, [('fuzzy', 'fuzzy.patch', 'common', 'kernel')])
     result = _apply(setup, manifest)
     assert result.returncode == 1
-    assert 'changed upstream' in result.stderr
-    assert (setup / 'tree' / 'file').read_text() == 'changed upstream\n'
+    assert 'patch fuzzy does not apply' in result.stderr
+    assert (setup / 'tree' /
+            'file').read_text() == 'c1\nc2\nc3\nold\nd1\nd2\nd3\n'
