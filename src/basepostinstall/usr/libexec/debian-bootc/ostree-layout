@@ -3,8 +3,7 @@
 #
 # /home, /root, /mnt, /srv and /opt must be symlinks into /var so the read-only
 # /usr tree can be swapped atomically while mutable state persists in /var.
-# Shared by Containerfile and Containerfile.minimal; do NOT change the layout
-# or bootc fails.
+# Do NOT change the layout or bootc fails.
 set -eu
 
 mkdir -p /var/home \

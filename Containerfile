@@ -168,7 +168,7 @@ RUN apt update \
 # -----------------------------------------------------------------------------
 # bootc/ostree requires /home, /root, /mnt, /srv, /opt as symlinks into /var so the
 # read-only /usr tree can be swapped atomically while mutable state persists in /var.
-# The scripts shared with Containerfile.minimal ship in src/basepostinstall.
+# The scripts shared by the images ship in src/basepostinstall.
 COPY ./src/debianpostinstall /
 COPY ./src/basepostinstall /
 RUN /usr/libexec/debian-bootc/ostree-layout \
@@ -230,7 +230,7 @@ RUN apt-get update \
 # Debian's own linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/
 # fails bootc lint. The standard image adds the same per-arch driver modules
 # (linux-modules-*) so its hardware support does not shrink.
-# Kernel variant: `minimal` (default) is the project kernel, the same as Containerfile.minimal.
+# Kernel variant: `minimal` (default) is the project kernel (the kernel flavour name, not an image).
 ARG KERNEL_VARIANT=minimal
 # arm64 only. The arm64 distribution ships two kernels because the page size is a
 # compile-time choice (docs/Handoff-Decisions.md, "Two arm64 kernels"): the 4 KB kernel

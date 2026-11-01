@@ -11,8 +11,7 @@
 #
 # Does nothing when the public key is empty: a repository that has not
 # generated its signing key yet (first CI run, or no PAT_SECRETS) ships images
-# without a policy rather than a policy no image can satisfy. Shared by
-# Containerfile and Containerfile.minimal.
+# without a policy rather than a policy no image can satisfy.
 set -eu
 
 # Prefix for every path written; empty in the image, set by the unit tests.

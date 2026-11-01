@@ -25,7 +25,7 @@ The repository is under active development. The amd64 path is the current instal
 
 - Debian packages for bootc, OSTree, composefs, bootupd, a BLS-capable GRUB build, first-boot setup, and bootc-specific service integration.
 - A signed APT repository published from the package manifest in `workflows/bootc-debs-builder/packages.yml`.
-- A full image and a reduced `minimal` image assembled from Debian Trixie.
+- A full image, plus an NVIDIA variant, assembled from Debian Trixie.
 - Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and cosign signing with a key owned by the repository.
 - Boot tests that install an image to a virtual disk, start it with QEMU/KVM, and execute `workflows/tests.yml` over SSH before publication.
 - Online and offline amd64 installer ISOs.
@@ -36,7 +36,6 @@ The repository is under active development. The amd64 path is the current instal
 | Source | Tag family | Purpose |
 | --- | --- | --- |
 | `Containerfile` | `latest` | General-purpose Debian bootc system with SSH, Podman, ifupdown2, firmware, troubleshooting tools, and the first-boot wizard. |
-| `Containerfile.minimal` | `minimal` | Reduced system using systemd-networkd, a smaller package set, non-persistent journald storage, and masked background services. |
 
 Each image is published once per tag, with automatic updates on by default (a symlink in `/etc` switches them off). The CI publishes architecture-specific tags and then creates manifest-list tags after successful builds.
 
@@ -65,7 +64,7 @@ podman build --format docker \
   -t debian-bootc:local .
 ```
 
-The build downloads the repository signing key, verifies its pinned SHA-256 digest, and consumes packages from the project's APT repository. See [`docs/minimal.md`](docs/minimal.md) for the minimal image's architecture-specific arguments.
+The build downloads the repository signing key, verifies its pinned SHA-256 digest, and consumes packages from the project's APT repository. See [`docs/building.md`](docs/building.md) for the architecture-specific build arguments.
 
 ## Installation
 
@@ -113,7 +112,7 @@ GitHub Pages must be configured for Actions deployment so the APT repository can
 
 - [Architecture](docs/Handoff-Architecture.md)
 - [Design decisions and security trade-offs](docs/Handoff-Decisions.md)
-- [Minimal image](docs/minimal.md)
+- [Building images and the kernel](docs/building.md)
 - [Support](SUPPORT.md)
 - [Security policy](SECURITY.md)
 
