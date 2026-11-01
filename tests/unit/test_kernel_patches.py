@@ -188,3 +188,23 @@ def test_moved_context_is_refused_not_fuzzed(setup: Path) -> None:
     assert 'patch fuzzy does not apply' in result.stderr
     assert (setup / 'tree' /
             'file').read_text() == 'c1\nc2\nc3\nold\nd1\nd2\nd3\n'
+
+
+def test_entry_fuzz_allows_a_moved_context_for_that_patch_only(
+    setup: Path
+) -> None:
+    """A manifest entry with ``fuzz: 2`` applies the moved-context hunk.
+
+    Args:
+        setup: Source tree and patch files.
+    """
+    (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
+    (setup / 'fuzzy.patch').write_text(
+        '--- a/file\n+++ b/file\n@@ -1,7 +1,7 @@\n'
+        ' c1\n X2\n c3\n-old\n+new\n d1\n d2\n d3\n'
+    )
+    manifest = _manifest(setup, [('fuzzy', 'fuzzy.patch', 'common', 'kernel')])
+    manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
+    result = _apply(setup, manifest)
+    assert result.returncode == 0, result.stderr
+    assert (setup / 'tree' / 'file').read_text().splitlines()[3] == 'new'
