@@ -1,0 +1,34 @@
+#!/bin/bash
+# Add NVIDIA's own APT repository for this Debian release and architecture.
+#
+# Why: the NVIDIA open kernel modules must be built at the same release as the
+# user-space libraries the image installs, and Debian's user-space (550.x) is
+# older than any upstream module release that builds on the current kernel.
+# NVIDIA publishes the matching user-space (libcuda1, nvidia-driver-libs, ...)
+# and GSP firmware in its CUDA repository, signed with a key shipped in the
+# cuda-keyring package (NVIDIA's documented installation method).
+#
+# Trust: cuda-keyring is fetched over TLS from NVIDIA and installs the signing
+# key of the repository; apt then verifies every index with that key
+# (signed-by). Nothing is pinned to a fixed key fingerprint, so a key rotation
+# by NVIDIA does not break the build.
+#
+# Environment (all optional, derived when unset):
+#   NVIDIA_REPO_BASE  repository root (default: the CUDA repos URL)
+set -euo pipefail
+
+base="${NVIDIA_REPO_BASE:-https://developer.download.nvidia.com/compute/cuda/repos}"
+
+# shellcheck disable=SC1091
+. /etc/os-release
+case "$(dpkg --print-architecture)" in
+  amd64) nv_arch=x86_64 ;;
+  arm64) nv_arch=sbsa ;;
+  *) echo "ERROR: no NVIDIA repository for architecture $(dpkg --print-architecture)" >&2; exit 1 ;;
+esac
+repo="${base}/${ID}${VERSION_ID}/${nv_arch}"
+
+work=$(mktemp -d)
+trap 'rm -rf "${work}"' EXIT
+curl -fsSL --retry 3 -o "${work}/cuda-keyring.deb" "${repo}/cuda-keyring_1.1-1_all.deb"
+dpkg -i "${work}/cuda-keyring.deb"

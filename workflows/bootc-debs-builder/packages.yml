@@ -609,9 +609,11 @@ packages:
       # modpost reads the same file to resolve the built-in kernel symbols.
       cp /tmp/nvidia-vmlinux-only.symvers "${SRCDIR}/Module.symvers"
 
-      # Upstream NVIDIA open kernel modules at the release of the Debian
-      # user-space the image installs (libcuda1 is versioned like the whole
-      # NVIDIA stack there, e.g. 550.163.01-2 -> tag 550.163.01).
+      # Upstream NVIDIA open kernel modules at the release of the user-space
+      # the image installs, from NVIDIA's own APT repository (libcuda1 is
+      # versioned like the whole NVIDIA stack there, e.g. 615.71.10-1 -> tag
+      # 615.71.10); Debian's user-space is too old for the image kernel.
+      "${SAVE_PWD}/src/nvidiapreinstall/usr/sbin/nvidia-apt-repo"
       apt-get update -qq
       NVIDIAOPEN_VER=$(apt-cache policy libcuda1 \
         | awk '/Candidate:/ { sub(/-[^-]*$/, "", $2); print $2 }')
