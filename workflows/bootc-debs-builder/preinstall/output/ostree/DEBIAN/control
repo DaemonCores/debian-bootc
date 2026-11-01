@@ -7,7 +7,7 @@ Homepage: https://github.com/DaemonCores/debian-bootc
 Section: libs
 Priority: required
 Depends: libcomposefs, {{ DEPS }}
-Provides: libostree-1-1, libostree-dev
+Provides: libostree-1-1 (= {{ VER }}), libostree-dev (= {{ VER }})
 Conflicts: libostree-1-1, libostree-dev
 Replaces: libostree-1-1, libostree-dev
 Description: content-addressed object store for bootable OS trees
