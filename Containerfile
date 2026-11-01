@@ -205,12 +205,20 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
 ARG GPU_COMMON_PKGS="libvulkan1 vulkan-tools vainfo clinfo libgl1 libegl1 libgles2 firmware-misc-nonfree"
 ARG GPU_AMD_PKGS="firmware-amd-graphics rocm-opencl-icd rocminfo rocm-smi libamdhip64-5"
 ARG GPU_INTEL_PKGS="firmware-intel-graphics intel-media-va-driver-non-free libze1"
+# Intel's media driver and Level Zero loader exist for the architectures listed
+# here only; on any other architecture the Intel stack is skipped, loudly.
+ARG GPU_INTEL_ARCHES="amd64"
 # The pattern matches every gpu-userspace deb the plan built for this
 # architecture (profiles and levels come from the manifest, not from here).
 # Nothing is active until dc-gpu-apply.service runs `dc-gpu apply` at boot, which
 # activates the stored profile (`auto` when the installer recorded none).
 RUN apt-get update \
-    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} ${GPU_INTEL_PKGS} 'gpu-userspace-*' \
+    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} 'gpu-userspace-*' \
+    && arch=$(dpkg --print-architecture) \
+    && case " ${GPU_INTEL_ARCHES} " in \
+         *" ${arch} "*) set -- "$@" ${GPU_INTEL_PKGS} ;; \
+         *) echo "Intel GPU packages are not available for ${arch}: skipped" ;; \
+       esac \
     && apt-get install -y --no-install-recommends "$@"
 
 # -----------------------------------------------------------------------------
