@@ -570,7 +570,7 @@ packages:
       - nvidia
       - kernel/patches.yml
     env:
-      HELPERS_VER: 9
+      HELPERS_VER: 10
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -655,8 +655,12 @@ packages:
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
+      # Package version = NVIDIA release (what Containerfile.nvidia compares to
+      # libcuda1) + the kernel deb version it was built against; Depends pins
+      # the kernel deb version exactly.
+      MOD_VER="${NVIDIAOPEN_VER}+${BUILT_VER}"
       sed -i \
-        -e "s|Version: {{ VER }}|Version: ${BUILT_VER}+r1|g" \
+        -e "s|Version: {{ VER }}|Version: ${MOD_VER}|g" \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ KVER }}|${KVER}|g" \
         -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
@@ -667,8 +671,8 @@ packages:
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-nvidia_${BUILT_VER}+r1_${DEB_ARCH}.deb"
-      test -s "/debs/linux-modules-nvidia_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
+        "/debs/linux-modules-nvidia_${MOD_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-modules-nvidia_${MOD_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-nvidia deb empty" >&2; exit 1; }
 
   # ===========================================================================
