@@ -74,7 +74,11 @@ def test_keyboard_validation() -> None:
 
 
 def test_supported_locales_keeps_valid_utf8_entries(tmp_path: Path) -> None:
-    """Non UTF-8 charsets, comments and malformed names are dropped."""
+    """Non UTF-8 charsets, comments and malformed names are dropped.
+
+    Args:
+        tmp_path: Pytest scratch directory.
+    """
     m = _module()
     listing = tmp_path / 'SUPPORTED'
     listing.write_text(SUPPORTED)
@@ -84,14 +88,22 @@ def test_supported_locales_keeps_valid_utf8_entries(tmp_path: Path) -> None:
 
 
 def test_missing_lists_give_no_choice(tmp_path: Path) -> None:
-    """An unreadable list leaves the image default, without an error."""
+    """An unreadable list leaves the image default, without an error.
+
+    Args:
+        tmp_path: Pytest scratch directory.
+    """
     m = _module()
     assert m.supported_locales(str(tmp_path / 'none')) == []
     assert m.keyboard_layouts(str(tmp_path / 'none')) == []
 
 
 def test_keyboard_layouts_join_variants_to_their_layout(tmp_path: Path) -> None:
-    """Layouts and variants are listed together, sorted by description."""
+    """Layouts and variants are listed together, sorted by description.
+
+    Args:
+        tmp_path: Pytest scratch directory.
+    """
     m = _module()
     listing = tmp_path / 'base.lst'
     listing.write_text(BASE_LST)
