@@ -208,3 +208,39 @@ def test_entry_fuzz_allows_a_moved_context_for_that_patch_only(
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
     assert (setup / 'tree' / 'file').read_text().splitlines()[3] == 'new'
+
+
+def test_fuzz_override_reports_drift_as_a_warning(setup: Path) -> None:
+    """A fuzz override that places a hunk by fuzz is reported, never silent.
+
+    Args:
+        setup: Source tree and patch files.
+    """
+    (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
+    (setup / 'fuzzy.patch').write_text(
+        '--- a/file\n+++ b/file\n@@ -1,7 +1,7 @@\n'
+        ' c1\n X2\n c3\n-old\n+new\n d1\n d2\n d3\n'
+    )
+    manifest = _manifest(setup, [('fuzzy', 'fuzzy.patch', 'common', 'kernel')])
+    manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
+    result = _apply(setup, manifest)
+    assert result.returncode == 0, result.stderr
+    assert '::warning::patch fuzzy applies' in result.stdout
+    assert 'only with fuzz 2' in result.stdout
+
+
+def test_unneeded_fuzz_override_is_reported(setup: Path) -> None:
+    """A fuzz override on a patch that applies strictly is flagged.
+
+    Args:
+        setup: Source tree and patch files.
+    """
+    (setup / 'tree' / 'file').write_text('c1\nold\nd1\n')
+    (setup / 'clean.patch').write_text(
+        '--- a/file\n+++ b/file\n@@ -1,3 +1,3 @@\n c1\n-old\n+new\n d1\n'
+    )
+    manifest = _manifest(setup, [('clean', 'clean.patch', 'common', 'kernel')])
+    manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
+    result = _apply(setup, manifest)
+    assert result.returncode == 0, result.stderr
+    assert 'fuzz 2 is no longer needed' in result.stdout
