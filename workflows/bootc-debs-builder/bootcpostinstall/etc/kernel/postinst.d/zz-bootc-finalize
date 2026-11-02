@@ -10,9 +10,9 @@
 # to call anything, the standard Debian kernel-install machinery
 # (run-parts /etc/kernel/postinst.d) fires this hook automatically.
 #
-# run-parts invokes us with: $1 = kernel version, $2 = kernel image path. We let
-# bootc-finalize pick the newest installed kernel (the one just installed on an
-# upgrade), so the args are informational only.
+# run-parts invokes us with: $1 = kernel version, $2 = kernel image path. The
+# version is handed to bootc-finalize so it finalizes exactly the kernel just
+# installed, never an older version directory left in /usr/lib/modules.
 #
 # Defensive by design: during the base image's own build this hook may fire
 # while the bootc toolchain is only partially unpacked. If the finalizer's tools
@@ -28,4 +28,4 @@ command -v dracut >/dev/null 2>&1 || exit 0
 command -v bootupctl >/dev/null 2>&1 || exit 0
 [ -x /usr/local/bin/bootc-finalize ] || exit 0
 
-exec /usr/local/bin/bootc-finalize
+exec /usr/local/bin/bootc-finalize "${1:-}"
