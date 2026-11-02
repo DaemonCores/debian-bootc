@@ -12,13 +12,17 @@ ARG BIB_UPSTREAM=quay.io/centos-bootc/bootc-image-builder@sha256:4d8a0d9d173a9f4
 
 FROM ${BIB_UPSTREAM} AS build
 SHELL ["/bin/bash", "-c"]
+# hadolint ignore=DL3041
 RUN dnf install -y --enablerepo=crb --setopt=install_weak_deps=False \
       git-core golang patch python3 gcc pkgconf-pkg-config \
       libvirt-devel gpgme-devel device-mapper-devel \
  && dnf clean all
+# hadolint ignore=DL3022
 COPY --from=ci deb_helpers.sh kernel_helpers.sh patch_guard.py /ci/
+# hadolint ignore=DL3022
 COPY --from=overlay . /overlay
 ENV CI_SCRIPTS=/ci
+# hadolint ignore=DL3003,SC3040
 RUN set -euo pipefail; \
     ver="$(rpm -q --qf '%{VERSION}' image-builder)"; \
     git clone --depth=1 --branch "v${ver}" https://github.com/osbuild/image-builder.git /src; \
@@ -32,6 +36,7 @@ LABEL org.daemoncores.extra-contexts=overlay:workflows/bootc-debs-builder/bootc-
 COPY --from=build /out/image-builder /usr/bin/image-builder
 RUN ln -f /usr/bin/image-builder /usr/bin/bootc-image-builder
 # lorax-script stage (container-based anaconda-tree) needs python3-mako at runtime.
+# hadolint ignore=DL3041
 RUN dnf install -y --setopt=install_weak_deps=False python3-mako && dnf clean all
 # Cross-distro fix: the tree may ship file_contexts.bin / file_contexts.homedirs.bin
 # precompiled against a different PCRE2 than the setfiles shipped here, which makes
