@@ -160,15 +160,35 @@ def test_autoconf_skips_without_marker(sandbox: Path) -> None:
     assert interfaces.read_text() == 'custom\n'
 
 
-@pytest.mark.parametrize(('dhcp4', 'dhcp6', 'expect_v4', 'expect_v6'), [
-    ('1', '1', 'inet dhcp', 'inet6 auto'),
-    ('1', '0', 'inet dhcp', None),
-    ('0', '0', 'inet manual', None),
-])
+def _default_resolver(var: str) -> str:
+    """Read one default resolver definition from the autoconf script.
+
+    Args:
+        var: Name of the ``DNS_DEFAULT_*`` variable carried by
+             ``ifupdown2-autoconf``.
+
+    Returns:
+        The resolver list defined by that variable.
+    """
+    text = (SBIN / 'ifupdown2-autoconf').read_text()
+    assert text.count(f'{var}=') == 1, f'{var} must be defined exactly once'
+    match = re.search(rf'^{var}="([^"]+)"$', text, re.M)
+    assert match is not None, f'{var} must hold a quoted one-line value'
+    return match.group(1)
+
+
+@pytest.mark.parametrize(
+    ('dhcp4', 'dhcp6', 'expect_v4', 'expect_v6', 'expect_dns'), [
+        ('1', '1', 'inet dhcp', 'inet6 auto', 'both'),
+        ('1', '0', 'inet dhcp', None, 'v4'),
+        ('0', '0', 'inet manual', None, None),
+    ]
+)
 def test_autoconf_stanzas(
-    sandbox: Path, dhcp4: str, dhcp6: str, expect_v4: str, expect_v6: str | None
+    sandbox: Path, dhcp4: str, dhcp6: str, expect_v4: str,
+    expect_v6: str | None, expect_dns: str | None
 ) -> None:
-    """Stanzas follow which DHCP probes answered; the domain is handed over.
+    """Stanzas follow which DHCP probes answered; resolvers ride the answer.
 
     Args:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
@@ -176,6 +196,8 @@ def test_autoconf_stanzas(
         dhcp6: ``1`` when the stub DHCPv6 probe answers.
         expect_v4: Stanza expected for the IPv4 family.
         expect_v6: Stanza expected for IPv6, or ``None`` when absent.
+        expect_dns: ``both`` when both families carry ``dns-nameservers``,
+                    ``v4`` when only IPv4 does, ``None`` when none does.
     """
     interfaces = sandbox / 'etc' / 'network' / 'interfaces'
     interfaces.write_text('# ifupdown2-autoconf\n')
@@ -187,5 +209,14 @@ def test_autoconf_stanzas(
     assert f'iface eth0 {expect_v4}' in content
     assert ('iface eth0 inet6 auto' in content) == (expect_v6 is not None)
     assert content.startswith('# ifupdown2-autoconf')
+    if expect_dns is None:
+        assert 'dns-nameservers' not in content
+    else:
+        dns4 = _default_resolver('DNS_DEFAULT_V4')
+        assert f'iface eth0 {expect_v4}\n    dns-nameservers {dns4}' in content
+        if expect_dns == 'both':
+            dns6 = _default_resolver('DNS_DEFAULT_V6')
+            assert f'iface eth0 {expect_v6}\n    dns-nameservers {dns6}' \
+                in content
     domain = (sandbox / 'run' / 'ifupdown2-dhcp-domain').read_text().strip()
     assert domain == ('lab.example' if dhcp4 == '1' else '')
