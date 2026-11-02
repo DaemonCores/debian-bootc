@@ -45,5 +45,6 @@ RUN dnf install -y --setopt=install_weak_deps=False python3-mako && dnf clean al
 # fails on --add'ed modules the Debian installer tree does not ship. The patch
 # scripts come from the overlay context (this stage does not mount it): heredoc
 # instructions would not parse on the CI runner's dockerfile lexer.
+# hadolint ignore=DL3022
 COPY --from=overlay patch_selinux.py patch_dracut.py /tmp/
 RUN python3 /tmp/patch_selinux.py && python3 /tmp/patch_dracut.py
