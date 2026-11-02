@@ -5,14 +5,6 @@
 # when a server answers. Runs only while the marker line at the top is present.
 set -euo pipefail
 
-# Default DNS resolvers of the image, emitted only in the auto-configured
-# stanzas whose DHCP probe answered (a static configuration or a DHCP-less
-# environment is never touched).  Cloudflare primary, Google secondary:
-# Mullvad's public DNS service closed.  Defined once here; the IPv4 and IPv6
-# stanza emission and the runtime resolver assertions all derive from them.
-DNS_DEFAULT_V4="1.1.1.1 8.8.8.8"
-DNS_DEFAULT_V6="2606:4700:4700::1111 2001:4860:4860::8888"
-
 # Write to both stderr (journal) and ttyS0 (serial capture) so diagnostics
 # appear in CI serial logs regardless of journald forwarding.
 tty_log() { echo "ifupdown2-autoconf: $*" | tee /dev/ttyS0 >&2 || true; }
@@ -46,8 +38,7 @@ if timeout 8 dhclient -4 -1 \
   -pf /run/dhcp4-probe.pid \
   -lf /run/dhcp4-probe.leases \
   "$IFACE" >/run/dhcp4-probe.log 2>&1; then
-  IPV4_STANZA="iface ${IFACE} inet dhcp
-    dns-nameservers ${DNS_DEFAULT_V4}"
+  IPV4_STANZA="iface ${IFACE} inet dhcp"
 else
   _rc=$?
   tty_log "DHCPv4 probe exit ${_rc} on ${IFACE} (inet manual):"
@@ -70,8 +61,7 @@ rm -f /run/dhcp4-probe.pid /run/dhcp4-probe.leases /run/dhcp4-probe.log
 IPV6_STANZA=""
 if timeout 5 dhclient -6 -1 -q -pf /run/dhcp6-probe.pid \
   -lf /run/dhcp6-probe.leases "$IFACE" >/dev/null 2>&1; then
-  IPV6_STANZA="iface ${IFACE} inet6 auto
-    dns-nameservers ${DNS_DEFAULT_V6}"
+  IPV6_STANZA="iface ${IFACE} inet6 auto"
 fi
 dhclient -6 -x -pf /run/dhcp6-probe.pid "$IFACE" >/dev/null 2>&1 || true
 rm -f /run/dhcp6-probe.pid /run/dhcp6-probe.leases
