@@ -33,22 +33,26 @@ reboot_timeout: 60
 
 # The signed image is the reference: the most complete and the most secured, so
 # the global tests run there once. The other categories boot with their own
-# security profile and run only the tests listed for them.
+# security profile and run only the tests listed for them. ONE kernel per
+# (arch, page size): a category chooses enforcement through the install-time
+# `kargs:` list, not through a second kernel package.
 categories:
   - name: signed
     arch: amd64
     suffix: ""
     secure_boot: 1
     reference: true
+    kargs: ["module.sig_enforce=1"]
   - name: unsigned-kernel
     arch: amd64
-    suffix: "-nosign"
+    suffix: ""
     secure_boot: 1
   - name: signed
     arch: arm64
     suffix: ""
     secure_boot: 1
     reference: true
+    kargs: ["module.sig_enforce=1"]
   # U-Boot devices have no secure boot (see packages.yml, kernel -4k).
   - name: uboot
     arch: arm64
@@ -56,7 +60,7 @@ categories:
     secure_boot: 0
   - name: unsigned-kernel
     arch: arm64
-    suffix: "-nosign"
+    suffix: ""
     secure_boot: 1
 
 tests:
@@ -279,19 +283,20 @@ tests:
     diag: |
       modinfo -F signer "$(find /usr/lib/modules -name '*.ko*' | head -1)" 2>&1
       find /usr/lib/modules -name '*.ko*' | wc -l
-  # The kernel exists in a signed (enforcing) and an unsigned twin, both
-  # installed from the same APT suite; the modules are the same signed package.
-  # The installed kernel package tells which one this image carries.
-  - name: signature enforcement follows the installed kernel
+  # One kernel image, no twin: enforcement is the install-time karg
+  # `module.sig_enforce=1` (the signed category installs it, the
+  # unsigned-kernel category does not); the install-time choice alone decides,
+  # the kernel package is the same one.
+  - name: signature enforcement follows the installed kernel arguments
     run: |
       m=$(find /usr/lib/modules -name '*.ko*' | head -1)
       enforce=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null || echo absent)
-      if dpkg-query -W -f '${db:Status-Abbrev}${Package}\n' 'daemoncores-kernel-*' | grep -q -- '^ii .*-nosign$'; then
-        echo "unsigned kernel, sig_enforce=${enforce}"
-        [ "${enforce}" = N ]
-      elif [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
-        echo "signed kernel, sig_enforce=${enforce}"
+      if grep -q 'module.sig_enforce=1' /proc/cmdline; then
+        echo "enforcing install karg, sig_enforce=${enforce}"
         [ "${enforce}" = Y ] && grep -q '\.machine' /proc/keys
+      elif [ -n "$(modinfo -F signer "$m" 2>/dev/null)" ]; then
+        echo "signed kernel without the karg, sig_enforce=${enforce}"
+        [ "${enforce}" = N ]
       else
         echo "no signing key in this build, sig_enforce=${enforce}"
         [ "${enforce}" != Y ]

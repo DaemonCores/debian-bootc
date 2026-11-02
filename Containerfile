@@ -14,17 +14,17 @@ LABEL org.opencontainers.image.description="Debian 13 Trixie bootable bootc/ostr
 # plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
 # `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
 LABEL org.daemoncores.arm64-4k-image="true"
-# Asks the CI (both signing mode) for the unsigned-kernel twin of this image,
-# tagged `<tag>-nosign`: the same image on the -nosign kernel package, for amd64
-# and the plain-tag arm64 kernel only. The 4 KB image has no twin.
-LABEL org.daemoncores.unsigned-kernel-image="true"
+# Module-signature enforcement is NOT an image property: one kernel per
+# (arch, page size) is built with MODULE_SIG_FORCE off, and the bootc-installer
+# writes `module.sig_enforce=1` as an install karg (default on, switch in the
+# GPU/security step). Secure Boot and the EFI signatures are identical here.
 
 
 # -----------------------------------------------------------------------------
 # Phase 3: Install the package set, kernel excluded (arch-conditional via ARG)
 # -----------------------------------------------------------------------------
-# The kernel is NOT in this list: it is installed by the next RUN, so the signed image
-# and its -nosign twin share every layer up to here.
+# The kernel is NOT in this list: it is installed by the next RUN, in a layer of
+# its own so every image of a Containerfile shares the layers before it.
 # The standard image adds the same per-arch driver modules (linux-modules-*, see the
 # block after this RUN) so its hardware support does not shrink. Debian's own
 # linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/ fails bootc lint.
@@ -178,7 +178,7 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
 # GPU stack — every open vendor stack, both usages
 #####################################################################################
 # Placed BEFORE the kernel layer: the user-space does not depend on the kernel,
-# so the signed and -nosign images share this layer.
+# so every image of a Containerfile shares this layer.
 # The image carries the open drivers of EVERY vendor (AMD, Intel, NVIDIA via
 # nouveau) for the display (gaming) and compute (ia) usages. What differs
 # between the usages is the BUILD of the open stack, not its content: the plan debs
@@ -224,8 +224,8 @@ RUN apt-get update \
 # -----------------------------------------------------------------------------
 # Phase 3.1: Kernel and its device modules
 # -----------------------------------------------------------------------------
-# The only layer that differs between the signed image and its `-nosign` twin: the
-# project kernel (daemoncores-kernel-<kver>, built from kernel.org) is installed
+# The kernel is the last heavy layer: the project kernel
+# (daemoncores-kernel-<kver>, built from kernel.org) is installed
 # through the virtual name linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}.
 # Debian's own linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/
 # fails bootc lint. The standard image adds the same per-arch driver modules
@@ -236,7 +236,7 @@ ARG KERNEL_VARIANT=minimal
 # compile-time choice (docs/Handoff-Decisions.md, "Two arm64 kernels"): the 4 KB kernel
 # (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
 # `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name
-# (`-nosign` selects the unsigned-kernel twin) and ARM_DEVICES lists the device
+# (page size only: `-16k`; there is no unsigned twin) and ARM_DEVICES lists the device
 # module packages that kernel serves. The CI passes the values per image; the
 # defaults build the 4 KB one.
 ARG ARM_DEVICES="rpi3 rpi4"
