@@ -10,8 +10,6 @@
 # covers it (context_hash.py) and build-arch.sh passes it to podman build.
 ARG BIB_UPSTREAM=quay.io/centos-bootc/bootc-image-builder@sha256:4d8a0d9d173a9f450ff42d70777e1e0a6681a68f5c0f5084b65222eceb1f4d05
 
-LABEL org.daemoncores.extra-contexts=overlay:workflows/bootc-debs-builder/bootc-image-builder-src
-
 FROM ${BIB_UPSTREAM} AS build
 SHELL ["/bin/bash", "-c"]
 RUN dnf install -y --enablerepo=crb --setopt=install_weak_deps=False \
@@ -28,6 +26,9 @@ RUN set -euo pipefail; \
     cd /src && go build -tags exclude_graphdriver_btrfs -o /out/image-builder ./cmd/image-builder/
 
 FROM ${BIB_UPSTREAM}
+# Podman (and Docker) reject instructions other than ARG before the first FROM,
+# so the extra-contexts label lives in the final stage instead of the header.
+LABEL org.daemoncores.extra-contexts=overlay:workflows/bootc-debs-builder/bootc-image-builder-src
 COPY --from=build /out/image-builder /usr/bin/image-builder
 RUN ln -f /usr/bin/image-builder /usr/bin/bootc-image-builder
 # lorax-script stage (container-based anaconda-tree) needs python3-mako at runtime.
