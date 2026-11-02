@@ -13,7 +13,7 @@
 #   - polkit rule: live user runs fisherman via pkexec without password prompt
 #   - DaemonCores recipe.json (image catalog for bootc-installer)
 #
-# bootc-image-builder is invoked with --bootc-installer-payload-ref pointing to
+# bootc-image-builder is invoked with --installer-payload-ref pointing to
 # the clean base image (no installer layer), so the payload installed on disk
 # is the base image only.
 #
