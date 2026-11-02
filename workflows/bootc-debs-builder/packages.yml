@@ -983,7 +983,15 @@ packages:
       GRUB_VER="1+${GRUB_UPSTREAM}+${GRUB_DATE}+${GRUB_BRANCH//-/}"
       echo "GRUB ${GRUB_VER} from ${GRUB_BRANCH}@${GRUB_COMMIT}"
 
-      ./bootstrap
+      # bootstrap clones gnulib from git.savannah.gnu.org, which answers HTTP 500
+      # now and then (run 41382456261, arm64). Retry with a growing pause on a
+      # clean gnulib directory; a persistent failure still fails the build.
+      for attempt in 1 2 3 4; do
+        ./bootstrap && break
+        [ "${attempt}" -lt 4 ] || exit 1
+        rm -rf gnulib
+        sleep $((attempt * 30))
+      done
 
       # --program-transform-name renames the userspace tools grub-* -> grub2-*.
       # The Fedora source's own mkconfig scripts call grub2-probe/grub2-mkrelpath
@@ -1184,7 +1192,15 @@ packages:
       GRUB_VER="1+${GRUB_UPSTREAM}+${GRUB_DATE}+${GRUB_BRANCH//-/}"
       echo "GRUB ${GRUB_VER} from ${GRUB_BRANCH}@${GRUB_COMMIT}"
 
-      ./bootstrap
+      # bootstrap clones gnulib from git.savannah.gnu.org, which answers HTTP 500
+      # now and then (run 41382456261, arm64). Retry with a growing pause on a
+      # clean gnulib directory; a persistent failure still fails the build.
+      for attempt in 1 2 3 4; do
+        ./bootstrap && break
+        [ "${attempt}" -lt 4 ] || exit 1
+        rm -rf gnulib
+        sleep $((attempt * 30))
+      done
 
       ./configure \
         --target=aarch64 \
