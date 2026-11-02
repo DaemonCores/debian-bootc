@@ -1,0 +1,4 @@
+# Default root filesystem of installs made from this image: bootc-image-builder
+# and `bootc install` read it when no explicit filesystem is given.
+[install.filesystem.root]
+type = "btrfs"
