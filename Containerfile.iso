@@ -78,7 +78,8 @@ RUN apt update \
         adwaita-icon-theme \
         mokutil \
         openssl \
-        pciutils
+        pciutils \
+        selinux-policy-default
 
 # Placed after the apt layer: editing a Containerfile* or the generator must not
 # invalidate the cached installer-stack install.
@@ -95,6 +96,44 @@ RUN IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
         /tmp/recipe-gen \
         /etc/bootc-installer/recipe.json \
     && rm -rf /tmp/recipe-gen /usr/libexec/debian-bootc/gen-recipe.py
+
+# -----------------------------------------------------------------------------
+# Phase 1.5: osbuild stage prerequisites on the deployed tree
+#
+# (1) org.osbuild.selinux reads etc/selinux/targeted/contexts/files/
+#     file_contexts from the deployed installer-image tree. Debian ships the
+#     reference policy as SELINUXTYPE=default (strict and targeted variants
+#     combined, file_contexts prebuilt in the package), and there is no
+#     selinux-policy-targeted in Debian since the policy was renamed — so the
+#     default policy is exposed under the targeted name the stages expect.
+# (2) org.osbuild.grub2.iso copies /boot/efi/EFI/<vendor>/{shim,mm,gcd}<tok>.efi
+#     out of the same tree. Debian stages nothing under /boot/efi inside a
+#     container (no ESP), so the trio is taken from the grub-efi-*-signed deb
+#     (staged at /usr/lib/debian-bootc/iso-efi) — shim, the MokManager and the
+#     grub core are all signed with the project Secure Boot key there.
+# The symlink is relative within /etc so the installed target resolves it the
+# same way; file_contexts itself is never regenerated here, it ships in the
+# policy package.
+# -----------------------------------------------------------------------------
+RUN ln -s default /etc/selinux/targeted \
+    && test -f /etc/selinux/targeted/contexts/files/file_contexts \
+    || { echo "ERROR: no file_contexts under the targeted name" >&2; exit 1; }
+
+RUN _arch=$(dpkg --print-architecture) \
+    && case "${_arch}" in \
+         amd64) _tok=x64 ;; \
+         arm64) _tok=aa64 ;; \
+         *) echo "ERROR: no ISO EFI triplet for ${_arch}" >&2; exit 1 ;; \
+       esac \
+    && _iso=/usr/lib/debian-bootc/iso-efi/EFI/debian \
+    && for _f in shim${_tok}.efi mm${_tok}.efi gcd${_tok}.efi; do \
+         test -f "${_iso}/${_f}" \
+           || { echo "ERROR: iso-efi missing ${_iso}/${_f}" >&2; exit 1; }; \
+       done \
+    && test -f /usr/share/grub/unicode.pf2 \
+    && mkdir -p /boot/efi/EFI/debian \
+    && cp -a "${_iso}"/shim${_tok}.efi "${_iso}"/mm${_tok}.efi "${_iso}"/gcd${_tok}.efi \
+         /boot/efi/EFI/debian/
 
 # -----------------------------------------------------------------------------
 # Phase 2: Live user config, autologin, polkit rule, image catalog
