@@ -45,6 +45,17 @@ fi
 rm -rf /boot/*
 dracut --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"
 
+# Drop leftovers of removed kernels: a /usr/lib/modules/<kver>/ without a module
+# tree (vmlinuz/initramfs generated here, files the package no longer owns) is
+# not bootable, yet bootc would still pick it as the image's kernel.
+for d in /usr/lib/modules/*/; do
+  d="${d%/}"
+  [ "${d##*/}" = "${KVER}" ] && continue
+  if [ ! -d "${d}/kernel" ] && [ ! -f "${d}/modules.dep" ]; then
+    rm -rf -- "${d}"
+  fi
+done
+
 # Structure for bootupd.
 # This block is idempotent / re-entrant: the base image stages the shim and
 # GRUB EFI binaries here once, consuming the package-provided sources with `mv`.
