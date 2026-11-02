@@ -1,0 +1,12 @@
+diff --git a/cmd/image-builder/bib_main.go b/cmd/image-builder/bib_main.go
+index 318553a..48a3c94 100644
+--- a/cmd/image-builder/bib_main.go
++++ b/cmd/image-builder/bib_main.go
+@@ -124,6 +124,7 @@ func bibManifestFromCobra(cmd *cobra.Command, args []string, pbar progress.Progr
+ 		return nil, nil, fmt.Errorf("could not access container storage, did you forget -v /var/lib/containers/storage:/var/lib/containers/storage? (%w)", err)
+ 	}
+ 
++	imgTypes = isoTypeForBase(imgref, buildImgref, imgTypes)
+ 	imageTypes, err := bibimg.New(imgTypes...)
+ 	if err != nil {
+ 		return nil, nil, fmt.Errorf("cannot detect build types %v: %w", imgTypes, err)

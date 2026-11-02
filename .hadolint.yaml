@@ -27,3 +27,7 @@ ignored:
   # SC2086: Double-quote to prevent globbing — these fire inside RUN
   # heredocs/scripts that hadolint analyses; real suppressions are inline.
   - SC2086
+  # DL3038: Pin versions in dnf install — Containerfile.bib installs build
+  # tools on the CentOS-based bootc-image-builder base; the version policy is
+  # the project's APT-repo one (no pinning, drift tracked in packages.yml).
+  - DL3038

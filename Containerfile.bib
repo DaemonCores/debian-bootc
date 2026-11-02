@@ -1,0 +1,56 @@
+# bootc-image-builder with the Debian-capable ISO selection.
+#
+# The upstream image is the runtime (osbuild, podman helpers); only the
+# image-builder binary is rebuilt, from the source tag matching the rpm it
+# ships, with the overlay in workflows/bootc-debs-builder/bootc-image-builder-src.
+# Build contexts: `overlay` is workflows/bootc-debs-builder/bootc-image-builder-src,
+# `ci` is the scripts directory of DaemonCores-CI (.ci-tooling/scripts in CI:
+# deb_helpers.sh, kernel_helpers.sh, patch_guard.py). The `overlay` root is
+# declared with the org.daemoncores.extra-contexts label so the content hash
+# covers it (context_hash.py) and build-arch.sh passes it to podman build.
+ARG BIB_UPSTREAM=quay.io/centos-bootc/bootc-image-builder@sha256:4d8a0d9d173a9f450ff42d70777e1e0a6681a68f5c0f5084b65222eceb1f4d05
+
+LABEL org.daemoncores.extra-contexts=overlay:workflows/bootc-debs-builder/bootc-image-builder-src
+
+FROM ${BIB_UPSTREAM} AS build
+SHELL ["/bin/bash", "-c"]
+RUN dnf install -y --enablerepo=crb --setopt=install_weak_deps=False \
+      git-core golang patch python3 gcc pkgconf-pkg-config \
+      libvirt-devel gpgme-devel device-mapper-devel \
+ && dnf clean all
+COPY --from=ci deb_helpers.sh kernel_helpers.sh patch_guard.py /ci/
+COPY --from=overlay . /overlay
+ENV CI_SCRIPTS=/ci
+RUN set -euo pipefail; \
+    ver="$(rpm -q --qf '%{VERSION}' image-builder)"; \
+    git clone --depth=1 --branch "v${ver}" https://github.com/osbuild/image-builder.git /src; \
+    bash -c '. /ci/deb_helpers.sh && deb_src_overlay /overlay /src'; \
+    cd /src && go build -tags exclude_graphdriver_btrfs -o /out/image-builder ./cmd/image-builder/
+
+FROM ${BIB_UPSTREAM}
+COPY --from=build /out/image-builder /usr/bin/image-builder
+RUN ln -f /usr/bin/image-builder /usr/bin/bootc-image-builder
+# lorax-script stage (container-based anaconda-tree) needs python3-mako at runtime.
+RUN dnf install -y --setopt=install_weak_deps=False python3-mako && dnf clean all
+# Cross-distro fix: the tree may ship file_contexts.bin / file_contexts.homedirs.bin
+# precompiled against a different PCRE2 than the setfiles shipped here, which makes
+# setfiles fail with "Regex version mismatch". Drop the precompiled binaries so
+# setfiles recompiles from the text file_contexts.
+RUN python3 - <<'EOF'
+import glob
+p = glob.glob('/usr/lib*/python3*/site-packages/osbuild/util/selinux.py')[0]
+src = open(p).read()
+old = "    for path in paths:\n        subprocess.run([\"setfiles\", \"-F\","
+new = """    for _bin in (*__import__('glob').glob(spec_file + '.bin'),
+                 *__import__('glob').glob(spec_file + '.homedirs.bin')):
+        try:
+            os.remove(_bin)
+        except OSError:
+            pass
+
+    for path in paths:
+        subprocess.run(["setfiles", "-F","""
+assert old in src, 'selinux.py shape changed'
+open(p, 'w').write(src.replace(old, new, 1))
+print('patched', p)
+EOF
