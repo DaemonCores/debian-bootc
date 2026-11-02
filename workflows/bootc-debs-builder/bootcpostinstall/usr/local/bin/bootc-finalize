@@ -13,13 +13,12 @@ set -euo pipefail
 # never win a version sort over the kernel actually installed.
 KVER="${1:-}"
 if [ -z "${KVER}" ]; then
-  # ls -1v version-sorts; find cannot sort by version.
-  # shellcheck disable=SC2012
-  for k in $(ls -1v /usr/lib/modules 2>/dev/null); do
-    if [ -d "/usr/lib/modules/${k}/kernel" ] || [ -f "/usr/lib/modules/${k}/modules.dep" ]; then
-      KVER="${k}"
+  # Version-sorted (sort -V); a plain glob would sort lexically.
+  while IFS= read -r d; do
+    if [ -d "${d}/kernel" ] || [ -f "${d}/modules.dep" ]; then
+      KVER="${d##*/}"
     fi
-  done
+  done < <(printf '%s\n' /usr/lib/modules/* | sort -V)
 fi
 [ -z "${KVER}" ] && exit 0
 
