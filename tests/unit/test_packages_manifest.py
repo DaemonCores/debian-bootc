@@ -173,7 +173,8 @@ def test_there_is_no_unsigned_twin_anymore() -> None:
     # kernel itself is built without MODULE_SIG_FORCE.
     assert _packages()['linux-image']['env']['KERNEL_SIGNING_ENFORCE'] == 'no'
     assert 'unsigned-kernel' not in (
-        variants[''].get('when') or variants['-16k'].get('when') or {})
+        variants[''].get('when') or variants['-16k'].get('when') or {}
+    )
 
 
 def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
@@ -186,9 +187,10 @@ def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
 
 def test_the_installer_carries_the_enforcement_switch() -> None:
     """The bootc-installer writes module.sig_enforce=1 by default."""
-    fisherman = (MANIFEST.parents[1] / 'bootc-debs-builder'
-                 / 'fisherman-src' / 'fisherman' / 'internal' / 'recipe'
-                 / 'recipe.go.patch').read_text()
+    fisherman = (
+        MANIFEST.parents[1] / 'bootc-debs-builder' / 'fisherman-src' /
+        'fisherman' / 'internal' / 'recipe' / 'recipe.go.patch'
+    ).read_text()
     assert 'module.sig_enforce=1' in fisherman
 
 
@@ -199,7 +201,8 @@ def test_the_boot_manifest_has_no_nosign_category_suffix() -> None:
     assert 'kargs: ["module.sig_enforce=1"]' in text
     assert '-nosign' not in text
     assert 'unsigned-kernel' not in str(
-        _variants('linux-image')['-16k'].get('when', {}))
+        _variants('linux-image')['-16k'].get('when', {})
+    )
 
 
 def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
