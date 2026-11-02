@@ -1068,6 +1068,69 @@ packages:
           "/output/grub-efi-amd64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/${_sub}/grubx64.efi"
       done
 
+      # -----------------------------------------------------------
+      # ISO EFI trio for the osbuild org.osbuild.grub2.iso stage of
+      # bootc-image-builder: the stage copies /boot/efi/EFI/<vendor>/
+      # {shim,mm,gcd}x64.efi and reads /usr/share/grub/unicode.pf2 out
+      # of the deployed installer-image tree. Debian stages nothing
+      # under /boot/efi inside a container (no ESP) and ships shim and
+      # the MokManager UNSIGNED (shim-unsigned), so the trio is
+      # assembled here: gcd is a second signed mkimage build of this
+      # same source, shim and mm are the downloaded shim-unsigned
+      # binaries signed with our Secure Boot key, and unicode.pf2 is
+      # extracted from Debian grub-common (this build generates no
+      # font). Staged under /usr/lib/debian-bootc/iso-efi — deliberately
+      # NOT /usr/lib/efi, where a grub2-named directory is a bootupd
+      # component and would clash with the real shim component when the
+      # ESP content updates — and wired into /boot/efi/EFI/debian by
+      # Containerfile.iso.
+      # -----------------------------------------------------------
+      _iso=/output/grub-efi-amd64-signed/usr/lib/debian-bootc/iso-efi/${GRUB_VER}/EFI/debian
+      cd /build/grub2-fedora
+      ./grub-mkimage \
+        -O x86_64-efi \
+        -o /tmp/gcdx64.efi \
+        -d grub-core \
+        -p /EFI/debian \
+        --sbat /tmp/sbat.csv \
+        ${GRUB_MODULES}
+      sbsign \
+        --key /tmp/sb.key \
+        --cert /tmp/sb.crt \
+        --output /tmp/gcdx64.efi \
+        /tmp/gcdx64.efi
+      sbverify \
+        --cert /tmp/sb.crt \
+        /tmp/gcdx64.efi \
+        || { echo "ERROR: gcdx64.efi signature verification failed" >&2; exit 1; }
+
+      mkdir -p /tmp/iso-efi
+      apt-get update >/dev/null
+      cd /tmp
+      apt-get download grub-common shim-unsigned
+      set -- ./grub-common_*.deb && dpkg-deb -x "$1" /tmp/iso-efi/font
+      set -- ./shim-unsigned_*.deb && dpkg-deb -x "$1" /tmp/iso-efi/shim
+      cd /build/grub2-fedora
+      test -f /tmp/iso-efi/font/usr/share/grub/unicode.pf2 \
+        || { echo "ERROR: grub-common carries no unicode.pf2" >&2; exit 1; }
+      for _f in shimx64 mmx64; do
+        sbsign \
+          --key /tmp/sb.key \
+          --cert /tmp/sb.crt \
+          --output "/tmp/iso-efi/${_f}.efi" \
+          "/tmp/iso-efi/shim/usr/lib/shim/${_f}.efi"
+        sbverify \
+          --cert /tmp/sb.crt \
+          "/tmp/iso-efi/${_f}.efi" \
+          || { echo "ERROR: ${_f}.efi signature verification failed" >&2; exit 1; }
+      done
+      install -Dm0644 /tmp/gcdx64.efi "${_iso}/gcdx64.efi"
+      install -Dm0644 /tmp/iso-efi/shimx64.efi "${_iso}/shimx64.efi"
+      install -Dm0644 /tmp/iso-efi/mmx64.efi "${_iso}/mmx64.efi"
+      install -Dm0644 /tmp/iso-efi/font/usr/share/grub/unicode.pf2 \
+        /output/grub-efi-amd64-signed/usr/share/grub/unicode.pf2
+      rm -rf /tmp/iso-efi /tmp/gcdx64.efi
+
       # BIOS (i386-pc) platform. bootupd's BIOS component runs
       # `grub2-install --target i386-pc` guarded on /usr/lib/grub/i386-pc, so
       # build and install that platform's modules too (a second, out-of-tree
@@ -1253,6 +1316,63 @@ packages:
           /output/grub-efi-arm64-signed/usr/lib/grub/arm64-efi-signed/grubaa64.efi.signed \
           "/output/grub-efi-arm64-signed/usr/lib/efi/grub2/${GRUB_VER}/EFI/${_sub}/grubaa64.efi"
       done
+
+      # -----------------------------------------------------------
+      # ISO EFI trio for the osbuild org.osbuild.grub2.iso stage (same
+      # rationale as the amd64 entry): gcd is a second signed mkimage
+      # build of this source, the shim-unsigned deb (arm64) provides
+      # unsigned shimaa64.efi and mmaa64.efi signed here with our
+      # Secure Boot key, and unicode.pf2 comes from Debian grub-common. Staged
+      # under /usr/lib/debian-bootc/iso-efi (NOT /usr/lib/efi — bootupd
+      # component clash) and wired into /boot/efi/EFI/debian by
+      # Containerfile.iso.
+      # -----------------------------------------------------------
+      _iso=/output/grub-efi-arm64-signed/usr/lib/debian-bootc/iso-efi/${GRUB_VER}/EFI/debian
+      cd /build/grub2-fedora
+      ./grub-mkimage \
+        -O arm64-efi \
+        -o /tmp/gcdaa64.efi \
+        -d grub-core \
+        -p /EFI/debian \
+        --sbat /tmp/sbat.csv \
+        ${GRUB_MODULES}
+      sbsign \
+        --key /tmp/sb.key \
+        --cert /tmp/sb.crt \
+        --output /tmp/gcdaa64.efi \
+        /tmp/gcdaa64.efi
+      sbverify \
+        --cert /tmp/sb.crt \
+        /tmp/gcdaa64.efi \
+        || { echo "ERROR: gcdaa64.efi signature verification failed" >&2; exit 1; }
+
+      mkdir -p /tmp/iso-efi
+      apt-get update >/dev/null
+      cd /tmp
+      apt-get download grub-common shim-unsigned
+      set -- ./grub-common_*.deb && dpkg-deb -x "$1" /tmp/iso-efi/font
+      set -- ./shim-unsigned_*.deb && dpkg-deb -x "$1" /tmp/iso-efi/shim
+      cd /build/grub2-fedora
+      test -f /tmp/iso-efi/font/usr/share/grub/unicode.pf2 \
+        || { echo "ERROR: grub-common carries no unicode.pf2" >&2; exit 1; }
+      for _f in shimaa64 mmaa64; do
+        sbsign \
+          --key /tmp/sb.key \
+          --cert /tmp/sb.crt \
+          --output "/tmp/iso-efi/${_f}.efi" \
+          "/tmp/iso-efi/shim/usr/lib/shim/${_f}.efi"
+        sbverify \
+          --cert /tmp/sb.crt \
+          "/tmp/iso-efi/${_f}.efi" \
+          || { echo "ERROR: ${_f}.efi signature verification failed" >&2; exit 1; }
+      done
+      install -Dm0644 /tmp/gcdaa64.efi "${_iso}/gcdaa64.efi"
+      install -Dm0644 /tmp/iso-efi/shimaa64.efi "${_iso}/shimaa64.efi"
+      install -Dm0644 /tmp/iso-efi/mmaa64.efi "${_iso}/mmaa64.efi"
+      install -Dm0644 /tmp/iso-efi/font/usr/share/grub/unicode.pf2 \
+        /output/grub-efi-arm64-signed/usr/share/grub/unicode.pf2
+      rm -rf /tmp/iso-efi /tmp/gcdaa64.efi
+
       # EFI/BOOT/BOOTAA64.EFI is NOT staged here: it is the shim (staged by the
       # bootupd postinst), which loads grubaa64.efi from its own directory.
       # Putting grub there too would make the two components own the same path
@@ -1755,3 +1875,151 @@ packages:
 
       test -s "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb" \
         || { echo "ERROR: bootc-installer deb empty or missing" >&2; exit 1; }
+
+  # ===========================================================================
+  # podman — the bootc-image-builder type `bootc-installer` runs osbuild INSIDE
+  # the installer image and drives the payload image with the podman of that
+  # build root: `podman image mount` needs podman >= 5.8, and trixie ships
+  # 5.4.2 only (DEBUG.md Tick 35, proven with trixie 5.4.2 failing the same
+  # command that Debian sid 5.8.6 runs). Built from the upstream source tag
+  # (vendored tree) with the Go 1.25 toolchain of trixie-backports — the
+  # vendored gvisor-tap-vsock requires go >= 1.25. The libsubid cgo of
+  # containers/storage is NOT enabled (no `libsubid` build tag), so the binary
+  # parses /etc/subuid and /etc/subgid itself: the libsubid6 that the sid
+  # binary depends on needs glibc 2.43 and cannot run in trixie (glibc 2.41,
+  # `__memset_explicit_chk@GLIBC_2.43` unresolved — proven by link test). The
+  # sid PODMAN binary itself is glibc-compatible (2.38) and was the base of
+  # the local rootful proof; this entry makes it a reproducible CI build.
+  # ===========================================================================
+  - name: podman
+    sources:
+      - preinstall/output/podman
+    env:
+      PODMAN_TAG: v5.8.6
+      PODMAN_VER: 1:5.8.6+bootc1
+    build: |
+      set -euo pipefail
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      SUITE=$(. /etc/os-release && echo "${VERSION_CODENAME:?}")
+      GO_BIN=/usr/lib/go-1.25/bin/go
+
+      git clone --depth 1 --branch "${PODMAN_TAG}" \
+        https://github.com/containers/podman.git /build/podman
+      test -d /build/podman/vendor \
+        || { echo "ERROR: podman tag ${PODMAN_TAG} carries no vendor tree" >&2; exit 1; }
+
+      # The vendored modules require go >= 1.25; trixie ships 1.24. The 1.25
+      # toolchain lives in trixie-backports (kept out of the default solve:
+      # -t, exactly like every other backport consumer).
+      echo "deb http://deb.debian.org/debian ${SUITE}-backports main" \
+        >/etc/apt/sources.list.d/backports.list
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        -t "${SUITE}-backports" golang-1.25-go \
+        libgpgme-dev
+      test -x "${GO_BIN}" \
+        || { echo "ERROR: golang-1.25-go did not install" >&2; exit 1; }
+      "${GO_BIN}" version
+
+      PATH=/usr/lib/go-1.25/bin:"${PATH}" go build \
+        -C /build/podman \
+        -mod=vendor \
+        -tags "exclude_graphdriver_btrfs" \
+        -trimpath \
+        -ldflags "-s -w" \
+        -o /tmp/podman-bin \
+        ./cmd/podman \
+        || { echo "ERROR: podman build failed" >&2; exit 1; }
+
+      cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/preinstall/output/podman \
+        /output/podman
+      install -Dm755 /tmp/podman-bin /output/podman/usr/bin/podman
+      install -Dm644 /build/podman/LICENSE \
+        /output/podman/usr/share/doc/podman/copyright
+      rm -rf /build/podman /tmp/podman-bin
+
+      # Functional check: the binary runs and reports the tag version.
+      test -x /output/podman/usr/bin/podman \
+        && /output/podman/usr/bin/podman --version 2>/dev/null \
+        | grep -qF "5.8.6" \
+        || { echo "ERROR: podman binary broken or wrong version" >&2; exit 1; }
+
+      sed -i \
+        -e "s|{{ VER }}|${PODMAN_VER}|g" \
+        -e "s|{{ ARCH }}|${ARCH}|g" \
+        /output/podman/DEBIAN/control
+      grep -qF "Version: ${PODMAN_VER}" /output/podman/DEBIAN/control \
+        || { echo "ERROR: podman rewritten Version missing/wrong" >&2; exit 1; }
+
+      find /output/podman -not -path '*/DEBIAN/*' -type f \
+        | xargs md5sum \
+        | sed "s|/output/podman/||" \
+        > /output/podman/DEBIAN/md5sums
+      dpkg-deb --build /output/podman \
+        "/debs/podman_${PODMAN_VER}_${ARCH}.deb"
+      test -s "/debs/podman_${PODMAN_VER}_${ARCH}.deb" \
+        || { echo "ERROR: podman deb empty or missing" >&2; exit 1; }
+
+      # Library sanity: the built binary must only need trixie-shippable
+      # libraries (no libsubid6, no btrfs cgo).
+      rm -rf /tmp/podman-check
+      dpkg-deb -x "/debs/podman_${PODMAN_VER}_${ARCH}.deb" /tmp/podman-check
+      _needed=$(objdump -p /tmp/podman-check/usr/bin/podman | grep NEEDED)
+      echo "${_needed}" | grep -E "libgpgme.so.11|libc.so.6" >/dev/null \
+        || { echo "ERROR: unexpected link map: ${_needed}" >&2; exit 1; }
+      if echo "${_needed}" | grep libsubid; then
+        echo "ERROR: libsubid must not be linked" >&2
+        exit 1
+      fi
+      rm -rf /tmp/podman-check
+
+  # ===========================================================================
+  # netavark — podman 5.8 pairs with a netavark of the 1.15+ line (the network
+  # stack is spawned per network and talks its own versioned protocol; trixie
+  # ships 1.14 only). The sid binary is glibc-compatible with trixie (its
+  # build needs 2.39, trixie has 2.41 — unlike shadow's libsubid6), so it is
+  # REPACKED from the sid lane and retagged, not rebuilt. Rolling like the
+  # grub entries: the sid candidate is resolved at each build, a version
+  # regression is refused, and the epoch keeps our deb above the sid rebuilds.
+  # ===========================================================================
+  - name: netavark
+    build: |
+      set -euo pipefail
+      SAVE_PWD=$(pwd)
+      ARCH=$(dpkg --print-architecture)
+      mkdir -p /output/netavark /tmp/netavark-dl
+
+      echo "deb http://deb.debian.org/debian sid main" \
+        >/etc/apt/sources.list.d/sid-download.list
+      apt-get update
+      cd /tmp/netavark-dl
+      apt-get download netavark/sid
+      rm -f /etc/apt/sources.list.d/sid-download.list
+      set -- ./netavark_*.deb
+      [ -f "${1:-}" ] \
+        || { echo "ERROR: no sid netavark deb left in /tmp/netavark-dl" >&2; exit 1; }
+      UP_DEB="$1"
+      ORIG_VER=$(dpkg-deb -f "${UP_DEB}" Version)
+      case "${ORIG_VER}" in
+        1.1[5-9]*|1.[2-9]*|2.*|3.*) : ;;
+        *) echo "ERROR: sid netavark ${ORIG_VER} is below the 1.15 podman-5.8 baseline" >&2; exit 1 ;;
+      esac
+      echo "netavark ${ORIG_VER} repacked from sid"
+
+      dpkg-deb -R "${UP_DEB}" /output/netavark
+      rm -rf /tmp/netavark-dl
+      find /output/netavark -not -path '*/DEBIAN/*' -type f \
+        | xargs md5sum \
+        | sed "s|/output/netavark/||" \
+        > /output/netavark/DEBIAN/md5sums
+      sed -i "s/^Version: .*/Version: 1:${ORIG_VER}+bootc1/" \
+        /output/netavark/DEBIAN/control
+      grep -qF "Version: 1:${ORIG_VER}+bootc1" /output/netavark/DEBIAN/control \
+        || { echo "ERROR: netavark rewritten Version missing/wrong" >&2; exit 1; }
+
+      cd "${SAVE_PWD}"
+      dpkg-deb --build /output/netavark \
+        "/debs/netavark_${ORIG_VER}+bootc1_${ARCH}.deb"
+      test -s "/debs/netavark_${ORIG_VER}+bootc1_${ARCH}.deb" \
+        || { echo "ERROR: netavark deb empty or missing" >&2; exit 1; }

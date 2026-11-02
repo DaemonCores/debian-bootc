@@ -1,0 +1,17 @@
+Package: podman
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
+Homepage: https://github.com/DaemonCores/debian-bootc
+Section: admin
+Priority: optional
+Depends: conmon, crun | runc, golang-github-containers-common, netavark (>= 1.15), init-system-helpers (>= 1.52), libc6 (>= 2.38), libgpgme11t64 (>= 1.23.2)
+Recommends: catatonit, passt, aardvark-dns, nftables, uidmap, fuse-overlayfs, containers-storage
+Description: podman 5.8 built for trixie (no libsubid linkage)
+ Built from the upstream source tag (vendored tree) with the Go 1.25
+ toolchain shipped in trixie-backports. The ISO builder drives the
+ payload image with the podman of its build root and needs >= 5.8 for
+ `podman image mount`, while trixie only ships 5.4.2 (DEBUG.md Tick 35).
+ The libsubid cgo of containers/storage is NOT enabled, so the binary
+ parses /etc/subuid and /etc/subgid itself instead of depending on
+ shadow's libsubid6: the sid library needs glibc 2.43, trixie has 2.41.
