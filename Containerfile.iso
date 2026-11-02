@@ -79,7 +79,11 @@ RUN apt update \
         mokutil \
         openssl \
         pciutils \
-        selinux-policy-default
+        selinux-policy-default \
+        python3-mako \
+        squashfs-tools \
+        xorriso \
+        isomd5sum
 
 # Placed after the apt layer: editing a Containerfile* or the generator must not
 # invalidate the cached installer-stack install.

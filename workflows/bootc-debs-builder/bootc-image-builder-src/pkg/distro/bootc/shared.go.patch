@@ -1,0 +1,16 @@
+diff --git a/pkg/distro/bootc/shared.go b/pkg/distro/bootc/shared.go
+index a538dbb..2ec07cb 100644
+--- a/pkg/distro/bootc/shared.go
++++ b/pkg/distro/bootc/shared.go
+@@ -41,6 +41,11 @@ func LoraxTemplates(si osinfo.OSRelease) []manifest.InstallerLoraxTemplate {
+ 	switch {
+ 	case si.ID == "rhel" || slices.Contains(si.IDLike, "rhel") || si.VersionID == "eln":
+ 		return loraxRhelTemplates
++	case si.ID == "debian" || slices.Contains(si.IDLike, "debian"):
++		// Debian installer trees ship no lorax templates: the container-based
++		// installer env has no lorax package and no templates directory, so
++		// LoraxScript stages would just hit a missing-file error.
++		return nil
+ 	default:
+ 		return loraxFedoraTemplates
+ 	}
