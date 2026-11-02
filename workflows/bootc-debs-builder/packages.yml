@@ -1903,6 +1903,9 @@ packages:
       ARCH=$(dpkg --print-architecture)
       SUITE=$(. /etc/os-release && echo "${VERSION_CODENAME:?}")
       GO_BIN=/usr/lib/go-1.25/bin/go
+      # Epoch kept out of the filename (Debian convention); the artifact
+      # uploader rejects colons anyway.
+      FILE_VER="${PODMAN_VER#1:}"
 
       git clone --depth 1 --branch "${PODMAN_TAG}" \
         https://github.com/containers/podman.git /build/podman
@@ -1957,14 +1960,14 @@ packages:
         | sed "s|/output/podman/||" \
         > /output/podman/DEBIAN/md5sums
       dpkg-deb --build /output/podman \
-        "/debs/podman_${PODMAN_VER}_${ARCH}.deb"
-      test -s "/debs/podman_${PODMAN_VER}_${ARCH}.deb" \
+        "/debs/podman_${FILE_VER}_${ARCH}.deb"
+      test -s "/debs/podman_${FILE_VER}_${ARCH}.deb" \
         || { echo "ERROR: podman deb empty or missing" >&2; exit 1; }
 
       # Library sanity: the built binary must only need trixie-shippable
       # libraries (no libsubid6, no btrfs cgo).
       rm -rf /tmp/podman-check
-      dpkg-deb -x "/debs/podman_${PODMAN_VER}_${ARCH}.deb" /tmp/podman-check
+      dpkg-deb -x "/debs/podman_${FILE_VER}_${ARCH}.deb" /tmp/podman-check
       _needed=$(objdump -p /tmp/podman-check/usr/bin/podman | grep NEEDED)
       echo "${_needed}" | grep -E "libgpgme.so.11|libc.so.6" >/dev/null \
         || { echo "ERROR: unexpected link map: ${_needed}" >&2; exit 1; }
