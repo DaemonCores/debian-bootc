@@ -109,7 +109,7 @@ RUN IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
 # (2) org.osbuild.grub2.iso copies /boot/efi/EFI/<vendor>/{shim,mm,gcd}<tok>.efi
 #     out of the same tree. Debian stages nothing under /boot/efi inside a
 #     container (no ESP), so the trio is taken from the grub-efi-*-signed deb
-#     (staged at /usr/lib/debian-bootc/iso-efi) — shim, the MokManager and the
+#     (staged at /usr/lib/debian-bootc/iso-efi/<version>) — shim, the MokManager and the
 #     grub core are all signed with the project Secure Boot key there.
 # The symlink is relative within /etc so the installed target resolves it the
 # same way; file_contexts itself is never regenerated here, it ships in the
@@ -125,7 +125,7 @@ RUN _arch=$(dpkg --print-architecture) \
          arm64) _tok=aa64 ;; \
          *) echo "ERROR: no ISO EFI triplet for ${_arch}" >&2; exit 1 ;; \
        esac \
-    && _iso=/usr/lib/debian-bootc/iso-efi/EFI/debian \
+    && _iso=$(ls -d /usr/lib/debian-bootc/iso-efi/*/EFI/debian | sort -V | tail -1) \
     && for _f in shim${_tok}.efi mm${_tok}.efi gcd${_tok}.efi; do \
          test -f "${_iso}/${_f}" \
            || { echo "ERROR: iso-efi missing ${_iso}/${_f}" >&2; exit 1; }; \
