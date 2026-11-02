@@ -6,9 +6,21 @@
 # bootupd expects them. Invoked from the bootc package postinst during build.
 set -euo pipefail
 
-# ls -1v version-sorts to select the newest kernel; find cannot sort by version.
-# shellcheck disable=SC2012
-KVER=$(ls -1v /usr/lib/modules 2>/dev/null | tail -1)
+# The kernel to finalize: the version passed by the caller (kernel postinst.d
+# hooks pass the version they just installed), otherwise the newest version
+# directory that still holds a module tree. A stale /usr/lib/modules/<kver>/
+# left behind by a removed kernel (vmlinuz and initramfs but no modules) must
+# never win a version sort over the kernel actually installed.
+KVER="${1:-}"
+if [ -z "${KVER}" ]; then
+  # ls -1v version-sorts; find cannot sort by version.
+  # shellcheck disable=SC2012
+  for k in $(ls -1v /usr/lib/modules 2>/dev/null); do
+    if [ -d "/usr/lib/modules/${k}/kernel" ] || [ -f "/usr/lib/modules/${k}/modules.dep" ]; then
+      KVER="${k}"
+    fi
+  done
+fi
 [ -z "${KVER}" ] && exit 0
 
 # Support both Debian-standard kernels (in /boot/vmlinuz-${KVER}) and kernels
