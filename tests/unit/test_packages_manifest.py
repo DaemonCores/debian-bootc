@@ -44,10 +44,10 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     """The project kernel has its own name and Provides only the minimal one."""
     lines = _packages()['linux-image']['build'].splitlines()
     build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
-    assert 'PKG_NAME="${KERNEL_PKG}"' in build
+    assert 'Package: ${KERNEL_PKG}/' in build
     assert 'KERNEL_PKG="daemoncores-kernel-' in build
-    provides = 'PROVIDES="linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}"'
-    assert provides in build
+    assert 'linux-image-minimal' in build
+    assert 'Conflicts' in build and 'Replaces' in build
     assert 'linux-image-stock' not in build
     assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
 
@@ -56,6 +56,8 @@ def test_image_installs_the_project_kernel() -> None:
     """Containerfile installs the single project kernel."""
     root = MANIFEST.parents[2]
     kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}'
+    build = _packages()['linux-image']['build']
+    provides = "printf 'Provides: %s\\nConflicts: %s, linux-image-%s\\nReplaces: %s\\n'"
     for name in ('Containerfile', ):
         text = (root / name).read_text()
         install = [
@@ -140,7 +142,7 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
     """The kernel entry builds a 4 KB kernel and an arm64-only 16 KB one."""
     entry = _packages()['linux-image']
     variants = _variants('linux-image')
-    assert set(variants) == {'', '-16k', '-nosign', '-16k-nosign'}
+    assert set(variants) == {'', '-16k'}
     assert entry['env']['KERNEL_PAGES'] == '4k'
     assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
     assert variants['-16k']['when'] == {'arch': 'arm64'}
@@ -162,24 +164,50 @@ def test_each_arm_module_follows_its_kernel() -> None:
         assert devices[recent]['env'] == {'KERNEL_SUFFIX': '-16k'}, recent
 
 
-def test_only_the_generic_kernels_have_an_unsigned_twin() -> None:
-    """The unsigned kernel exists for amd64 and the 16 KB arm64 kernel only."""
+def test_there_is_no_unsigned_twin_anymore() -> None:
+    """L1: one kernel per (arch, page size); enforcement is not a variant."""
     variants = _variants('linux-image')
-    for key, arch, pages in (('-nosign', 'amd64', None),
-                             ('-16k-nosign', 'arm64', '16k')):
-        variant = variants[key]
-        assert variant['when'] == {'arch': arch, 'unsigned-kernel': True}, key
-        assert variant['env']['KERNEL_SIGNING_ENFORCE'] == 'no', key
-        assert variant['deb-glob'] == f'linux-image-common{key}_*', key
-        assert variant['env'].get('KERNEL_PAGES') == pages, key
-    assert 'KERNEL_SIGNING_ENFORCE' not in variants['-16k'].get('env', {})
+    assert '-nosign' not in variants
+    assert '-16k-nosign' not in variants
+    # The enforcement is decided at install (module.sig_enforce=1 karg), so the
+    # kernel itself is built without MODULE_SIG_FORCE.
+    assert _packages()['linux-image']['env']['KERNEL_SIGNING_ENFORCE'] == 'no'
+    assert 'unsigned-kernel' not in (
+        variants[''].get('when') or variants['-16k'].get('when') or {})
 
 
 def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
-    """The twin Provides the signed name the device modules Depend on."""
+    """The kernel Provides the names the images and modules install by."""
     build = _packages()['linux-image']['build']
-    assert 'PROVIDES="${PROVIDES}, ${KERNEL_PKG} (= ${BUILT_VER})"' in build
-    assert 'Conflicts: %s, %s, linux-image-%s' in build
+    assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
+    assert 'OTHER_PKG' not in build
+    assert 'daemoncores-kernel-${ORIG_PKG#linux-image-}' in build
+
+
+def test_the_installer_carries_the_enforcement_switch() -> None:
+    """The bootc-installer writes module.sig_enforce=1 by default."""
+    fisherman = (MANIFEST.parents[1] / 'bootc-debs-builder'
+                 / 'fisherman-src' / 'fisherman' / 'internal' / 'recipe'
+                 / 'recipe.go.patch').read_text()
+    assert 'module.sig_enforce=1' in fisherman
+
+
+def test_the_boot_manifest_has_no_nosign_category_suffix() -> None:
+    """The categories choose enforcement via kargs, not by kernel package."""
+    tests = MANIFEST.parents[1] / 'tests.yml'
+    text = tests.read_text()
+    assert 'kargs: ["module.sig_enforce=1"]' in text
+    assert '-nosign' not in text
+    assert 'unsigned-kernel' not in str(
+        _variants('linux-image')['-16k'].get('when', {}))
+
+
+def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
+    """The kernel Provides the names the images and modules install by."""
+    build = _packages()['linux-image']['build']
+    assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
+    assert 'daemoncores-kernel-${ORIG_PKG#linux-image-}' in build
+    assert 'OTHER_PKG' not in build
 
 
 def test_images_build_on_the_shared_base() -> None:

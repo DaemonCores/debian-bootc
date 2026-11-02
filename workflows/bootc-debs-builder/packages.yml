@@ -106,28 +106,6 @@ packages:
           KERNEL_PAGES: "16k"
         sources:
           - kernel/pages/16k
-      # Unsigned-kernel twins of the generic images (amd64, and the plain-tag
-      # arm64 16 KB kernel): same build, MODULE_SIG_FORCE off. The 4 KB kernel
-      # serves the U-Boot devices, which have no secure boot, so it has no twin.
-      # `unsigned-kernel: true` keeps them out of the plan unless the CI runs the
-      # both signing mode.
-      "-nosign":
-        when:
-          arch: amd64
-          unsigned-kernel: true
-        deb-glob: "linux-image-common-nosign_*"
-        env:
-          KERNEL_SIGNING_ENFORCE: "no"
-      "-16k-nosign":
-        when:
-          arch: arm64
-          unsigned-kernel: true
-        deb-glob: "linux-image-common-16k-nosign_*"
-        env:
-          KERNEL_PAGES: "16k"
-          KERNEL_SIGNING_ENFORCE: "no"
-        sources:
-          - kernel/pages/16k
     env:
       # Kernel build primitives come from DaemonCores-CI scripts/
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
@@ -135,6 +113,12 @@ packages:
       # content hash of the lib files).
       HELPERS_VER: 7
       KERNEL_PAGES: "4k"
+      # ONE kernel per (arch, page size), shared by the enforcing and the lax
+      # install: MODULE_SIG_FORCE stays off in the kernel image. Enforcement
+      # is an install-time choice (`module.sig_enforce=1` kernel argument,
+      # written by the bootc-installer, default on) — never a second kernel
+      # package. Secure Boot and the EFI signatures apply to every build.
+      KERNEL_SIGNING_ENFORCE: "no"
     deb-glob: "linux-image-common_*"
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
@@ -271,25 +255,9 @@ packages:
         ! -name '*-dbg*' | head -1)
       if test -n "${HEADERS_DEB}"; then
         HEADERS_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
-        # The unsigned twin builds the same kernel version, so bindeb-pkg names
-        # its headers deb exactly like the signed one while the content differs
-        # (signing key setup): both would land on the same APT pool file and
-        # reprepro refuses the second. Same model as the image deb: a distinct
-        # package name that Conflicts with the signed one.
-        case "${KERNEL_SUFFIX:-}" in
-          *-nosign)
-            HEADERS_ORIG=$(dpkg-deb -f "${HEADERS_DEB}" Package)
-            HEADERS_DIR=/tmp/linux-headers-repack
-            rm -rf "${HEADERS_DIR}"
-            dpkg-deb -R "${HEADERS_DEB}" "${HEADERS_DIR}"
-            sed -i -e "s/^Package: .*/Package: ${HEADERS_ORIG}-nosign/" \
-              -e '/^\(Conflicts\|Replaces\):/d' "${HEADERS_DIR}/DEBIAN/control"
-            printf 'Conflicts: %s\nReplaces: %s\n' "${HEADERS_ORIG}" "${HEADERS_ORIG}" \
-              >> "${HEADERS_DIR}/DEBIAN/control"
-            dpkg-deb -b "${HEADERS_DIR}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb"
-            ;;
-          *) cp "${HEADERS_DEB}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb" ;;
-        esac
+        # The headers of the kernel image deb are copied as built (one kernel
+        # build per arch and page size, no name split).
+        cp "${HEADERS_DEB}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb"
         test -s "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb" \
           || { echo "ERROR: output linux-headers deb empty" >&2; exit 1; }
       fi
@@ -301,15 +269,15 @@ packages:
       # the versions match, so the repack renames it daemoncores-kernel-<KVER>.
       # It Provides the virtual name linux-image-minimal-<arch> (linux-image-
       # minimal-16k-<arch> for the 16 KB kernel), which the images install
-      # through linux-image-${KERNEL_VARIANT}-${ARCH}.
+      # through linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}.
       # It must NOT Provide linux-image-<arch> or linux-image-stock-<arch>: those
       # are Debian's names, and both images select this kernel by the variant
-      # name instead.
-      # Only the CURRENT arch is Provided/Conflicted: a deb built on arm64
-      # must not Conflict with linux-image-amd64, otherwise apt refuses to
-      # install it on an arm64 runner that also has the amd64 deb available in
-      # /tmp/prior (the cross-arch Conflicts creates an unsolvable solver
-      # conflict).
+      # name instead. Only the CURRENT arch is Provided/Conflicted: a deb built
+      # on arm64 must not Conflict with linux-image-amd64, otherwise apt refuses
+      # to install it on an arm64 runner that also has the amd64 deb available.
+      # ONE kernel per (arch, page size): no -nosign twin — module-signature
+      # enforcement is the install-time `module.sig_enforce=1` karg, so the
+      # device modules Depend on daemoncores-kernel-<KVER> and always install.
       REPACK_DIR=/tmp/linux-image-common-repack
       rm -rf "${REPACK_DIR}"
       dpkg-deb -R "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
@@ -339,26 +307,16 @@ packages:
       cp /tmp/linux-kernel.config "${REPACK_DIR}/usr/lib/linux-kernel-build/config"
       cp Module.symvers "${REPACK_DIR}/usr/lib/linux-kernel-build/Module.symvers"
 
-      # The unsigned-kernel variant (KERNEL_SUFFIX ending in -nosign) is a second
-      # package of the same kernel: a distinct name so both live in the APT pool,
-      # a Conflicts with the signed one (they ship the same files), and a
-      # Provides of the signed name, because the always-signed device modules
-      # Depend on daemoncores-kernel-<KVER> and must install on either.
+      # The device modules Depend on daemoncores-kernel-<KVER>, which the
+      # Provides above satisfies for each (arch, page size).
       ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
       KERNEL_PKG="daemoncores-kernel-${ORIG_PKG#linux-image-}"
-      case "${KERNEL_SUFFIX:-}" in
-        *-nosign) PKG_NAME="${KERNEL_PKG}-nosign"; OTHER_PKG="${KERNEL_PKG}" ;;
-        *) PKG_NAME="${KERNEL_PKG}"; OTHER_PKG="${KERNEL_PKG}-nosign" ;;
-      esac
-      sed -i -e "s/^Package: .*/Package: ${PKG_NAME}/" \
+      sed -i -e "s/^Package: .*/Package: ${KERNEL_PKG}/" \
         -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
         "${REPACK_DIR}/DEBIAN/control"
-      PROVIDES="linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}"
-      if [ "${PKG_NAME}" != "${KERNEL_PKG}" ]; then
-        PROVIDES="${PROVIDES}, ${KERNEL_PKG} (= ${BUILT_VER})"
-      fi
-      printf 'Provides: %s\nConflicts: %s, %s, linux-image-%s\nReplaces: %s\n' \
-        "${PROVIDES}" "${ORIG_PKG}" "${OTHER_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
+      printf 'Provides: %s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
+        "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
+        "${ORIG_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
         >> "${REPACK_DIR}/DEBIAN/control"
       dpkg-deb -b "${REPACK_DIR}" \
         "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
