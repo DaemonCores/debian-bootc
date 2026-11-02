@@ -279,3 +279,5 @@ ARG IMAGE_VERSION=unversioned
 ARG IMAGE_CREATED=2026-10-30T00:00:00Z
 LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
 LABEL org.opencontainers.image.created="${IMAGE_CREATED}"
+
+# Calibrated boot-timeout harness tick: rebuild for a proof run of the boot-test calibration (image-test lib.sh a732787).
