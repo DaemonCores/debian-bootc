@@ -154,7 +154,9 @@ tests:
       echo '--- ifupdown2 bytecode validity (source mtime vs pyc header) ---'
       d=/usr/share/ifupdown2/ifupdown
       stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
-      python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
+      python3 -c "import glob,struct
+      for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc'):
+          print(p, struct.unpack('<I', open(p, 'rb').read(12)[8:12])[0])" 2>&1
       echo '--- ld.so.cache state and every ldconfig run of this boot ---'
       ls -la --time-style=full-iso /etc/ld.so.cache* 2>&1
       findmnt -no TARGET,FSTYPE,OPTIONS /etc 2>&1
@@ -457,7 +459,9 @@ tests:
       echo '--- ifupdown2 bytecode validity (source mtime vs pyc header) ---'
       d=/usr/share/ifupdown2/ifupdown
       stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
-      python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
+      python3 -c "import glob,struct
+      for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc'):
+          print(p, struct.unpack('<I', open(p, 'rb').read(12)[8:12])[0])" 2>&1
 
   # ── first-boot tooling shipped ─────────────────────────────────────────
   # firstboot-user-setup is installed in the image.
@@ -532,7 +536,9 @@ reboot_tests:
       echo '--- ifupdown2 bytecode validity (source mtime vs pyc header) ---'
       d=/usr/share/ifupdown2/ifupdown
       stat -c '%Y %n' "${d}/utils.py" "${d}"/__pycache__/utils.cpython-*.pyc 2>&1
-      python3 -c "import glob,struct;[print(p,struct.unpack('<I',open(p,'rb').read(12)[8:12])[0]) for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc')]" 2>&1
+      python3 -c "import glob,struct
+      for p in glob.glob('${d}/__pycache__/utils.cpython-*.pyc'):
+          print(p, struct.unpack('<I', open(p, 'rb').read(12)[8:12])[0])" 2>&1
 
   - name: booted through bootc after rollback
     run: bootc status --format json
