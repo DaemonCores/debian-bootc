@@ -43,6 +43,7 @@ RUN dnf install -y --setopt=install_weak_deps=False python3-mako && dnf clean al
 # setfiles fail with "Regex version mismatch". Drop the precompiled binaries so
 # setfiles recompiles from the text file_contexts. Same for the dracut stage: it
 # fails on --add'ed modules the Debian installer tree does not ship. The patch
-# scripts live in the overlay context: heredoc instructions would not parse on
-# the CI runner's dockerfile lexer.
-RUN python3 /overlay/patch_selinux.py && python3 /overlay/patch_dracut.py
+# scripts come from the overlay context (this stage does not mount it): heredoc
+# instructions would not parse on the CI runner's dockerfile lexer.
+COPY --from=overlay patch_selinux.py patch_dracut.py /tmp/
+RUN python3 /tmp/patch_selinux.py && python3 /tmp/patch_dracut.py
