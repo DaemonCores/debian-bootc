@@ -47,7 +47,8 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     assert 'Package: ${KERNEL_PKG}/' in build
     assert 'KERNEL_PKG="daemoncores-kernel-' in build
     assert 'linux-image-minimal' in build
-    assert 'Conflicts' in build and 'Replaces' in build
+    assert 'Conflicts' in build
+    assert 'Replaces' in build
     assert 'linux-image-stock' not in build
     assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
 
@@ -56,8 +57,6 @@ def test_image_installs_the_project_kernel() -> None:
     """Containerfile installs the single project kernel."""
     root = MANIFEST.parents[2]
     kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}'
-    build = _packages()['linux-image']['build']
-    provides = "printf 'Provides: %s\\nConflicts: %s, linux-image-%s\\nReplaces: %s\\n'"
     for name in ('Containerfile', ):
         text = (root / name).read_text()
         install = [
@@ -177,7 +176,7 @@ def test_there_is_no_unsigned_twin_anymore() -> None:
     )
 
 
-def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
+def test_kernel_build_provides_the_signed_names() -> None:
     """The kernel Provides the names the images and modules install by."""
     build = _packages()['linux-image']['build']
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
