@@ -436,6 +436,17 @@ tests:
     diag: |
       cat /etc/network/interfaces 2>&1
       ls -la /etc/network/ 2>&1
+  - name: autoconfigured stanza carries the default resolvers
+    run: |
+      v4=$(sed -n 's/^DNS_DEFAULT_V4="\(.*\)"$/\1/p' /usr/sbin/ifupdown2-autoconf)
+      grep -E '^iface .+ inet dhcp$' /etc/network/interfaces
+      grep -A1 -E '^iface .+ inet dhcp$' /etc/network/interfaces |
+        grep -q "dns-nameservers ${v4}"
+    diag: |
+      cat /etc/network/interfaces 2>&1
+      cat /etc/resolv.conf 2>&1
+      echo "DNS_DEFAULT_V4 from the installed script: $(
+        sed -n 's/^DNS_DEFAULT_V4="\(.*\)"$/\1/p' /usr/sbin/ifupdown2-autoconf 2>&1)"
   - name: main image interface has routable IP
     run: ip -4 addr show scope global | grep -q inet
     diag: |
