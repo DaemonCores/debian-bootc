@@ -36,50 +36,8 @@ RUN dnf install -y --setopt=install_weak_deps=False python3-mako && dnf clean al
 # Cross-distro fix: the tree may ship file_contexts.bin / file_contexts.homedirs.bin
 # precompiled against a different PCRE2 than the setfiles shipped here, which makes
 # setfiles fail with "Regex version mismatch". Drop the precompiled binaries so
-# setfiles recompiles from the text file_contexts.
-RUN python3 - <<'EOF'
-import glob
-p = glob.glob('/usr/lib*/python3*/site-packages/osbuild/util/selinux.py')[0]
-src = open(p).read()
-old = "    for path in paths:\n        subprocess.run([\"setfiles\", \"-F\","
-new = """    for _bin in (*__import__('glob').glob(spec_file + '.bin'),
-                 *__import__('glob').glob(spec_file + '.homedirs.bin')):
-        try:
-            os.remove(_bin)
-        except OSError:
-            pass
-
-    for path in paths:
-        subprocess.run(["setfiles", "-F","""
-assert old in src, 'selinux.py shape changed'
-open(p, 'w').write(src.replace(old, new, 1))
-print('patched', p)
-EOF
-# dracut guard: dracut exits non-zero on explicitly --add'ed modules the tree's
-# dracut does not ship (Fedora-only modules like anaconda / qemu-net on a Debian
-# installer tree). Filter the stage options down to what the tree actually has.
-RUN python3 - <<'EOF'
-import glob
-p = glob.glob('/usr/lib/osbuild/stages/org.osbuild.dracut')[0]
-src = open(p).read()
-old = "    extra = options.get(\"extra\", [])"
-new = """    extra = options.get("extra", [])
-
-    # Cross-distro guard: drop --add/-m names whose module does not exist in
-    # the tree (module dirs are <nn>-<name> under usr/lib/dracut/modules.d).
-    _md = _os.path.join(tree, "usr/lib/dracut/modules.d")
-    if add_modules or modules:
-        _have = set()
-        if _os.path.isdir(_md):
-            for _n in _os.listdir(_md):
-                _have.add(_n.split("-", 1)[-1].lower())
-        add_modules = [m for m in add_modules if m.lower() in _have]
-        modules = [m for m in modules if m.lower() in _have]"""
-assert old in src, 'dracut stage shape changed'
-src = src.replace(old, new, 1)
-# main() takes (tree, options) but does not import os; add it at function scope
-src = src.replace('def main(tree, options):\n    kernels = options["kernel"]',
-                  'def main(tree, options):\n    import os as _os\n    kernels = options["kernel"]', 1)
-open(p, 'w').write(src)
-print('patched', p)
-EOF
+# setfiles recompiles from the text file_contexts. Same for the dracut stage: it
+# fails on --add'ed modules the Debian installer tree does not ship. The patch
+# scripts live in the overlay context: heredoc instructions would not parse on
+# the CI runner's dockerfile lexer.
+RUN python3 /overlay/patch_selinux.py && python3 /overlay/patch_dracut.py
