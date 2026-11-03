@@ -67,9 +67,10 @@ def test_shared_functional_pins_present() -> None:
 
 
 def test_canonical_patch_set_shape() -> None:
-    """One patch list, two consumers: 17 xanmod + 3 clearlinux + bore + the
-    debian-lane module carrier (rocknix-btrtl, moved from packages.yml by
-    the 13:05 arbitration).
+    """One patch list, two consumers: 17 xanmod + 3 clearlinux + bore + carrier.
+
+    The module carrier (rocknix-btrtl, moved from packages.yml by the 13:05
+    arbitration) rides on the arm64 kernel builds.
 
     0004-ata-before-graphics and 0003-kbuild-sms-pipelining must stay out (they
     no longer apply to the tracked series trees).
