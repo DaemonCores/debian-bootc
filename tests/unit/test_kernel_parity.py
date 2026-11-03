@@ -122,9 +122,7 @@ def test_no_arch_overlay_merge() -> None:
     # entries (rpi3/rpi4/...), which the fold keeps untouched.
     for stale in ('modules/arm', 'modules/x86_64'):
         assert f'"${{CI_KERNEL_SHARED}}/{stale}"' not in text, stale
-    mod_uses = re.findall(
-        r'"\$\{CI_KERNEL_SHARED\}/modules/([^"]+)"', text
-    )
+    mod_uses = re.findall(r'"\$\{CI_KERNEL_SHARED\}/modules/([^"]+)"', text)
     assert mod_uses == ['${DEVICE}'], mod_uses
     cfg = (CANONICAL_DATA / 'config').read_text(encoding='utf-8')
     for section in ('# arm64 built-in', '# amd64 built-in'):
