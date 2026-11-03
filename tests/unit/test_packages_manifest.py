@@ -116,13 +116,26 @@ def test_nvidia_stack_is_only_in_the_nvidia_image() -> None:
 
 
 def test_standard_image_keeps_the_login_stack() -> None:
-    """The login and console packages are installed explicitly."""
-    text = (MANIFEST.parents[2] / 'Containerfile').read_text()
+    """The login and console packages are installed on the image's tree.
+
+    They live in the shared socle of Containerfile.base: asserting over the
+    base as well is enough, the standard image inherits whatever layer of
+    the chain installs them.
+    """
+    root = MANIFEST.parents[2]
+    text = (root / 'Containerfile').read_text()
+    base = (root / 'Containerfile.base').read_text()
     for pkg in (
         'systemd-sysv', 'libpam-systemd', 'dbus-user-session', 'kbd',
         'keyboard-configuration'
     ):
-        assert f'        {pkg} \\' in text, pkg
+        assert pkg in text or pkg in base, pkg
+    for pkg in (
+        'systemd-sysv', 'libpam-systemd', 'dbus-user-session', 'kbd',
+        'keyboard-configuration'
+    ):
+        line = f'        {pkg} \\' if pkg in text else f'        {pkg}'
+        assert line in text or line in base, pkg
 
 
 def _variants(name: str) -> dict[str, Any]:

@@ -58,6 +58,12 @@ Pushes use change detection to skip unaffected stages. A scheduled run performs 
 The full image can be assembled on an amd64 host with:
 
 ```bash
+make build  # builds the local base then the image
+```
+
+or directly, once `make build-base` (or any base at `localhost/debian-bootc-base:latest`) exists:
+
+```bash
 podman build --format docker \
   --build-arg PRODUCT_NAME="debian bootc" \
   -f Containerfile \

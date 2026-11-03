@@ -3,10 +3,19 @@
 # security update, with the SSL prerequisites and the trusted bootc APT repository).
 # The CI builds the base once per job and passes it as BASE_IMAGE; it never pushes it.
 #####################################################################################
-ARG BASE_IMAGE=localhost/debian-bootc-base
+ARG BASE_IMAGE=localhost/debian-bootc-base:latest
 FROM ${BASE_IMAGE}
 # The shell is inherited from the base; repeated so the linter and the reader see it.
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+# Product display name, injected by the CI from the repo name (dashes -> spaces).
+# The BASE is neutral: this product layer alone brands itself. bootc-finalize
+# reads /usr/lib/bootc/product-name for the UEFI boot-entry label; empty falls
+# back to /etc/os-release NAME.
+ARG PRODUCT_NAME=""
+RUN if [ -n "${PRODUCT_NAME}" ]; then \
+        install -d /usr/lib/bootc \
+        && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name; \
+    fi
 
 LABEL org.opencontainers.image.title="Debian Trixie bootc"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootable bootc/ostree container image, signed with cosign."
@@ -33,14 +42,14 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # Recommends are NOT installed (--no-install-recommends): they pulled a mail
 # server (exim4), cron, buildah, criu and ~100 other packages into the image.
 # The trailing block of the list below keeps, on purpose, the recommends the OS
-# needs: bootc install tools (parted dosfstools fdisk), rootless podman
-# (uidmap passt aardvark-dns nftables catatonit containers-storage
-# fuse-overlayfs), dracut (cryptsetup systemd-cryptsetup kpartx mdadm zstd),
-# hardware firmware (firmware-* pulled by firmware-linux-free/misc-nonfree),
+# needs: hardware firmware (* pulled by firmware-linux-free/misc-nonfree),
 # console and ssh usability (console-common ncurses-term psmisc
-# linux-sysctl-defaults libpam-wtmpdb), and the login and console stack the last
-# booting image carried (systemd-sysv libpam-systemd dbus-user-session kbd
-# keyboard-configuration). Derived with apt-get -s for both
+# linux-sysctl-defaults). The SHARED socle (bootc, ostree,
+# composefs, skopeo, podman + its rootless stack, the bootc install tools
+# parted/fdisk/dosfstools, the dracut stack cryptsetup/systemd-cryptsetup/
+# kpartx/mdadm/zstd, and the login/console/systemd PAM stack) moved UP into
+# Containerfile.base, so every image (including a PVE one) carries it for free.
+# Derived with apt-get -s for both
 # architectures, see docs/tech-debt/TD-20261018-full-image-install-recommends.md.
 # The architecture specific recommends are installed in the per-arch block at
 # the end of this RUN: x86 GPU firmware on amd64; efibootmgr and the U-Boot
@@ -75,9 +84,6 @@ RUN apt update \
         git \
         curl \
         ${FIRMWARE_PKGS} \
-        bootc \
-        skopeo \
-        podman \
         adduser \
         sudo \
         locales \
@@ -90,7 +96,6 @@ RUN apt update \
         iproute2 \
         groff-base \
         manpages \
-        libnss-systemd \
         systemd-timesyncd \
         util-linux-extra \
         btrfs-progs \
@@ -103,7 +108,6 @@ RUN apt update \
         bind9-host \
         bind9-dnsutils \
         perl \
-        wtmpdb \
         media-types \
         liblockfile-bin \
         openssh-server \
@@ -121,34 +125,9 @@ RUN apt update \
         wpasupplicant \
         firstboot-user-setup \
         ${BOOT_PKG} \
-        parted \
-        dosfstools \
-        fdisk \
-        uidmap \
-        passt \
-        aardvark-dns \
-        nftables \
-        catatonit \
-        containers-storage \
-        fuse-overlayfs \
-        cryptsetup \
-        systemd-cryptsetup \
-        kpartx \
-        mdadm \
-        zstd \
         firmware-ath9k-htc \
         firmware-carl9170 \
         firmware-mediatek \
-        console-common \
-        ncurses-term \
-        psmisc \
-        linux-sysctl-defaults \
-        libpam-wtmpdb \
-        systemd-sysv \
-        libpam-systemd \
-        dbus-user-session \
-        kbd \
-        keyboard-configuration \
     && { [ -z "${APT_HOLD_PKG}" ] || apt-mark hold "${APT_HOLD_PKG}"; } \
     && apt update \
     && if [ "${ARCH}" = "amd64" ]; then \

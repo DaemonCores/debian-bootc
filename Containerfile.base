@@ -6,6 +6,23 @@
 # The CI builds it first, on the runner of the image it serves, and never pushes it;
 # a local build tags it `localhost/debian-bootc-base` (see docs/building.md).
 # NOTE: use debian trixie not pined for auto security update
+#
+# Besides the APT setup above, this base carries the SHARED bootc SOCLE, the
+# packages no image can replace (kernel, firmware, microcode, GRUB/bootupd and
+# product branding stay product-level, see the image Containerfiles):
+#   - bootc itself and its ostree/composefs storage engine (libostree,
+#     libcomposefs) and its install tooling (skopeo),
+#   - the bootc install stack (parted, fdisk, dosfstools) and the dracut
+#     initramfs stack (cryptsetup, systemd-cryptsetup, kpartx, mdadm, zstd;
+#     dracut, lvm2 and xfsprogs arrive as bootc Pre-Depends),
+#   - the rootless podman stack (uidmap, passt, aardvark-dns, nftables,
+#     catatonit, containers-storage, fuse-overlayfs),
+#   - the login/console/systemd PAM stack (systemd-sysv, libpam-systemd,
+#     libnss-systemd, dbus-user-session, wtmpdb, libpam-wtmpdb, console-common,
+#     ncurses-term, psmisc, linux-sysctl-defaults, kbd, keyboard-configuration).
+# The base stays NEUTRAL: it bakes no /usr/lib/bootc/product-name; the product
+# layer writes it (bootc-finalize reads it for the UEFI boot-entry label and
+# falls back to /etc/os-release NAME when the file is absent).
 #####################################################################################
 FROM debian:trixie
 STOPSIGNAL SIGRTMIN+3
@@ -52,10 +69,6 @@ ARG ARCH=amd64
 # repository and must be overridden for any other APT repository.
 ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
-# Product display name, injected by the CI from the repo name (dashes -> spaces).
-# bootc-finalize brands the UEFI boot-entry label with it; empty falls back to
-# /etc/os-release NAME.
-ARG PRODUCT_NAME=""
 RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
         /etc/apt/sources.list.d/debian-bootc.sources \
     && wget \
@@ -63,6 +76,48 @@ RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g"
         -O /usr/share/keyrings/debian-bootc-keyring.gpg \
         "${BOOTC_APT_URL%/}/gpg.key" \
     && printf '%s  /usr/share/keyrings/debian-bootc-keyring.gpg\n' "${BOOTC_GPG_SHA256}" \
-        | sha256sum -c - \
-    && mkdir -p /usr/lib/bootc \
-    && printf '%s' "${PRODUCT_NAME}" > /usr/lib/bootc/product-name
+        | sha256sum -c -
+
+# -----------------------------------------------------------------------------
+# Phase 3: the shared bootc socle (see the header for the rationale)
+# -----------------------------------------------------------------------------
+# One declarative layer: the packages no image can replace. The kernel, the
+# firmware/microcode, the GRUB/bootupd bootloader stack and the product
+# branding (/usr/lib/bootc/product-name) stay in the image Containerfiles. The
+# apt lists are wiped after every dpkg run (the 99-apt-clean policy of the
+# preinstall dir), so a later layer installing from this repository must
+# refresh them itself, as the images already do.
+RUN apt update \
+    && apt install -y --no-install-recommends \
+        bootc \
+        libostree \
+        libcomposefs \
+        skopeo \
+        podman \
+        uidmap \
+        passt \
+        aardvark-dns \
+        nftables \
+        catatonit \
+        containers-storage \
+        fuse-overlayfs \
+        parted \
+        fdisk \
+        dosfstools \
+        cryptsetup \
+        systemd-cryptsetup \
+        kpartx \
+        mdadm \
+        zstd \
+        systemd-sysv \
+        libpam-systemd \
+        libnss-systemd \
+        dbus-user-session \
+        wtmpdb \
+        libpam-wtmpdb \
+        console-common \
+        ncurses-term \
+        psmisc \
+        linux-sysctl-defaults \
+        kbd \
+        keyboard-configuration
