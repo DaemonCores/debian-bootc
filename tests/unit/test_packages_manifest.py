@@ -83,8 +83,8 @@ def _install_lines(text: str) -> list[str]:
 def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
     """The standard image lists only the per-arch hardware modules.
 
-    The NVIDIA open modules (`linux-modules-nvidia`) live in the separate
-    NVIDIA image only.
+    The NVIDIA open modules (`linux-modules-nvidia`) live in the separate NVIDIA
+    image only.
     """
     root = MANIFEST.parents[2]
     modules = {}
@@ -119,9 +119,9 @@ def test_nvidia_stack_is_only_in_the_nvidia_image() -> None:
 def test_standard_image_keeps_the_login_stack() -> None:
     """The login and console packages are installed on the image's tree.
 
-    They live in the shared socle of Containerfile.base: asserting over the
-    base as well is enough, the standard image inherits whatever layer of
-    the chain installs them.
+    They live in the shared socle of Containerfile.base: asserting over the base
+    as well is enough, the standard image inherits whatever layer of the chain
+    installs them.
     """
     root = MANIFEST.parents[2]
     text = (root / 'Containerfile').read_text()
@@ -152,15 +152,24 @@ def _variants(name: str) -> dict[str, Any]:
 
 
 def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
-    """The kernel entry keeps the 4 KB/16 KB arm64 page-size split alongside
-    the 7-flavour matrix (x64v1..v4 amd64, armv8.0/v8.2-lse/v9-sve2 arm64,
-    owner arbitration 2026-11-03 13:05)."""
+    """The kernel entry keeps the arm64 page-size split alongside the flavours.
+
+    The 7 flavours (x64v1..v4 amd64, armv8.0/v8.2-lse/v9-sve2 arm64) come
+    from the owner arbitration of 2026-11-03 13:05.
+    """
     entry = _packages()['linux-image']
     variants = _variants('linux-image')
-    assert '' in variants and '-16k' in variants
+    assert '' in variants  # the plain (x64v1 / 4 KB arm64) kernel
+    assert '-16k' in variants
     assert set(variants) == {
-        '', '-x64v2', '-x64v3', '-x64v4',
-        '-armv8.0', '-armv8.2-lse', '-armv9-sve2', '-16k',
+        '',
+        '-x64v2',
+        '-x64v3',
+        '-x64v4',
+        '-armv8.0',
+        '-armv8.2-lse',
+        '-armv9-sve2',
+        '-16k',
     }
     assert entry['env']['KERNEL_PAGES'] == '4k'
     assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
@@ -200,10 +209,10 @@ def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
 
     One fragment per SoC family, not per board: the rpi3 fragment covers
     BCM2710A1 (Pi Zero 2 W), rk3566 covers the RK356x, h616 covers the sun50i
-    family. A variant without its overlay file would make the CI build fail
-    the "overlay missing" check at first build. The fragments are engine data
-    (DaemonCores-CI build-deb/kernel-shared/modules) — skipped when the
-    sibling engine checkout is not present locally.
+    family. A variant without its overlay file would make the CI build fail the
+    "overlay missing" check at first build. The fragments are engine data
+    (DaemonCores-CI build-deb/kernel-shared/modules) — skipped when the sibling
+    engine checkout is not present locally.
     """
     devices = _variants('linux-modules-arm-device')
     overlays = (
