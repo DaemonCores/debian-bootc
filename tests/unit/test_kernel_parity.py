@@ -67,7 +67,9 @@ def test_shared_functional_pins_present() -> None:
 
 
 def test_canonical_patch_set_shape() -> None:
-    """One patch list, two consumers: 17 xanmod + 3 clearlinux + bore.
+    """One patch list, two consumers: 17 xanmod + 3 clearlinux + bore + the
+    debian-lane module carrier (rocknix-btrtl, moved from packages.yml by
+    the 13:05 arbitration).
 
     0004-ata-before-graphics and 0003-kbuild-sms-pipelining must stay out (they
     no longer apply to the tracked series trees).
@@ -77,7 +79,8 @@ def test_canonical_patch_set_shape() -> None:
     assert '0004-ata-before-graphics' not in names
     assert '0003-kbuild-sms-pipelining' not in names
     assert '0001-bore.patch' in text
-    assert len(names) == 21
+    assert 'rocknix-btrtl-rtl8733bu' in names
+    assert len(names) == 22
 
 
 def test_no_carbon_copy_of_the_engine_data() -> None:
