@@ -2,24 +2,24 @@
 
 PATCH PARITY (owner, 2026-11-03, re-arbitrated 12:55): the canonical shared
 kernel build data (patches-shared.yml + kconfig fragments) lives in the build
-engine — DaemonCores-CI build-deb/kernel-shared — and is exported to every
-build as CI_KERNEL_SHARED. This repository carries NO copy of that data: the
-debian linux-image build (packages.yml) consumes the export, and DaemonCores-VE
-kernel-pve consumes the same export in its own engine checkout. These tests
-pin the arbitrated functional set (owner 2026-11-03 12:14 revised) so a lane
-cannot silently lose it, plus the consumer contract of THIS repository.
+engine — DaemonCores-CI build-deb/kernel-shared — and is exported to every build
+as CI_KERNEL_SHARED. This repository carries NO copy of that data: the debian
+linux-image build (packages.yml) consumes the export, and DaemonCores-VE kernel-
+pve consumes the same export in its own engine checkout. These tests pin the
+arbitrated functional set (owner 2026-11-03 12:14 revised) so a lane cannot
+silently lose it, plus the consumer contract of THIS repository.
 """
 
 import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-CANONICAL_DATA = Path(REPO.parent) / 'DaemonCores-CI' / 'build-deb' / 'kernel-shared'
+CANONICAL_DATA = Path(
+    REPO.parent
+) / 'DaemonCores-CI' / 'build-deb' / 'kernel-shared'
 X86_COMMON = CANONICAL_DATA / 'kconfig-shared' / 'x86-common.cfg'
 CANONICAL_PATCHES = CANONICAL_DATA / 'patches-shared.yml'
-PACKAGES_YML = (
-    REPO / 'workflows' / 'bootc-debs-builder' / 'packages.yml'
-)
+PACKAGES_YML = (REPO / 'workflows' / 'bootc-debs-builder' / 'packages.yml')
 VE_MANIFEST = (
     REPO.parent / 'DaemonCores-VE' / 'workflows' / 'bootc-debs-builder' /
     'packages.yml'
@@ -38,8 +38,8 @@ def _cfg() -> str:
 def test_thp_arbitration_debian_lane_is_always() -> None:
     """THP ALWAYS on the embedded lane (AI-opti profile primes, critical).
 
-    MADVISE is pinned off so olddefconfig cannot resurrect the balanced
-    default next to ALWAYS.
+    MADVISE is pinned off so olddefconfig cannot resurrect the balanced default
+    next to ALWAYS.
     """
     cfg = _cfg()
     assert 'CONFIG_TRANSPARENT_HUGEPAGE=y' in cfg
@@ -51,8 +51,8 @@ def test_thp_arbitration_debian_lane_is_always() -> None:
 def test_shared_functional_pins_present() -> None:
     """The functional set travels with the canonical fragment, both lanes.
 
-    IO_URING=y, NTSYNC=m (Wine/Proton), the BORE knob and the XanMod timing
-    host profile (HZ_1000 + full preemption) live in the shared file.
+    IO_URING=y, NTSYNC=m (Wine/Proton), the BORE knob and the XanMod timing host
+    profile (HZ_1000 + full preemption) live in the shared file.
     """
     cfg = _cfg()
     for line in (
@@ -69,8 +69,8 @@ def test_shared_functional_pins_present() -> None:
 def test_canonical_patch_set_shape() -> None:
     """One patch list, two consumers: 17 xanmod + 3 clearlinux + bore.
 
-    0004-ata-before-graphics and 0003-kbuild-sms-pipelining must stay out
-    (they no longer apply to the tracked series trees).
+    0004-ata-before-graphics and 0003-kbuild-sms-pipelining must stay out (they
+    no longer apply to the tracked series trees).
     """
     text = CANONICAL_PATCHES.read_text(encoding='utf-8')
     names = re.findall(r'- name: ([^\s]+)', text)
@@ -87,10 +87,13 @@ def test_no_carbon_copy_of_the_engine_data() -> None:
     are gone and packages.yml consumes CI_KERNEL_SHARED, never a sibling
     path of this checkout.
     """
-    assert not (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
-                'patches-shared.yml').exists()
-    assert not (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
-                'kconfig-shared').exists()
+    assert not (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
+        'patches-shared.yml'
+    ).exists()
+    assert not (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'kconfig-shared'
+    ).exists()
     text = PACKAGES_YML.read_text(encoding='utf-8')
     assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in text
     assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
@@ -117,10 +120,14 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
     # The lane-local THP pin lives in the restored kernel-pve/kconfig tree
     # (merged LAST over the shared fragment, owner arbitration 12:55).
-    assert (VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
-            'kconfig' / 'thp-never.cfg').is_file()
-    thp = (VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
-           'kconfig' / 'thp-never.cfg').read_text(encoding='utf-8')
+    assert (
+        VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
+        'kconfig' / 'thp-never.cfg'
+    ).is_file()
+    thp = (
+        VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
+        'kconfig' / 'thp-never.cfg'
+    ).read_text(encoding='utf-8')
     assert 'CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n\n' in thp
     assert 'CONFIG_TRANSPARENT_HUGEPAGE=y\n' in thp
     assert 'CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=n\n' in thp
