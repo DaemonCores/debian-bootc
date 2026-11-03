@@ -221,6 +221,67 @@ tests:
       ls -la /sys/firmware/efi/efivars/ 2>&1 | head -n 20
       od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-* 2>&1
       dmesg 2>&1 | grep -i 'secure boot' | head -n 5
+  # MOK enrolment, end to end: the harness enrols the image's own Secure Boot
+  # certificates (sb_signing.crt plus every public cert of the image's mok.d,
+  # exactly what the installer's mok-stage stages) into the VM varstore before
+  # boot. This test closes the loop from inside the guest booted with Secure
+  # Boot enforced: every certificate shipped in the image must be found in the
+  # guest's MokList(MokListRT) UEFI variables. Key and certificates are
+  # generated in CI (ensure-secrets.sh), no manual secret anywhere.
+  - name: MOK enrolment carries the image certificates
+    run: |
+      python3 - <<'EOF'
+      import base64, glob, os, sys
+      cert_files = sorted(glob.glob("/usr/share/debian-bootc/*.crt"))
+      mokd = "/usr/share/debian-bootc/mok.d"
+      if os.path.isdir(mokd):
+          cert_files += sorted(
+              f for f in glob.glob(mokd + "/*") if os.path.isfile(f))
+      if not cert_files:
+          sys.exit("no certificate shipped in /usr/share/debian-bootc")
+      certs = []
+      for path in cert_files:
+          with open(path, "rb") as fh:
+              data = fh.read()
+          if data.startswith(b"-----"):
+              data = base64.b64decode(
+                  b"".join(
+                      line for line in data.splitlines()
+                      if not line.startswith(b"-----")))
+          certs.append((os.path.basename(path), data))
+      variables = sorted(glob.glob(
+          "/sys/firmware/efi/efivars/MokList*"))
+      if not variables:
+          sys.exit("no MokList UEFI variable readable in the guest")
+      bodies = [(os.path.basename(v), open(v, "rb").read()) for v in variables]
+      missing = []
+      for name, der in certs:
+          where = [v for v, body in bodies if der in body]
+          print(f"{name}: enrolled in {', '.join(where) or 'NONE'}")
+          if not where:
+              missing.append(name)
+      if missing:
+          sys.exit("MOK variables do not carry: " + ", ".join(missing))
+      print(f"enrolment verified: {len(certs)} certificate(s) in "
+            f"{len(variables)} MokList variable(s)")
+      EOF
+    diag: |
+      ls -la /usr/share/debian-bootc/ 2>&1
+      ls -la /usr/share/debian-bootc/mok.d/ 2>&1 || echo "no mok.d in this image"
+      ls -la /sys/firmware/efi/efivars/MokList* 2>&1
+      for v in /sys/firmware/efi/efivars/MokList*; do
+        echo "--- $v ($(stat -c %s "$v") bytes) ---"
+        od -An -tx1 "$v" 2>&1 | head -n 8
+      done
+      # DER fingerprints of the certs the image ships, to match against the
+      # variable bodies by eye when the containment fails.
+      for c in /usr/share/debian-bootc/*.crt; do
+        echo "--- $c ---"
+        openssl x509 -in "$c" -noout -subject -fingerprint -sha256 2>&1 \
+          || echo "not a PEM certificate: $(stat -c %s "$c") bytes"
+      done
+      command -v mokutil >/dev/null && mokutil --sb-state 2>&1 \
+        || echo "mokutil not installed in this image (sb-state already asserted)"
   - name: signed kernel enforces module signatures
     category:
       - signed
