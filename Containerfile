@@ -171,7 +171,8 @@ RUN apt update \
     && apt update \
     && apt install -y --no-install-recommends bootupd \
     && if [ "${ARCH}" = arm64 ]; then \
-        apt install -y --no-install-recommends grub-efi-arm64-signed \
+        apt install -y --no-install-recommends \
+            grub-efi-arm64-signed u-boot-tools \
         && apt-mark hold grub-efi-arm64-signed; \
     fi
 
