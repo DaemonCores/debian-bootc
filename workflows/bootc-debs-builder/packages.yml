@@ -57,8 +57,8 @@ packages:
   # ===========================================================================
   # Kernel packages — ONE kernel build per page size + ONE modules entry per
   # ARM device. The kernel (vmlinuz + common modules) is compiled in the
-  # `linux-image` entry from the base config, the architecture overlay
-  # (kernel/modules/arm or x86_64) and, on arm64, the page-size overlay. Each
+  # `linux-image` entry from the base config (the arch options are folded in
+  # it, see kernel/config) and, on arm64, the page-size overlay. Each
   # `linux-modules-<device>` entry depends on its kernel and rebuilds ONLY the
   # per-device modules from the device overlay. This saves N-1 full kernel
   # rebuilds AND lets the builder skip a device entirely when that device's
@@ -76,12 +76,10 @@ packages:
 
   # linux-image: the ONE full kernel build. Merges the BASE config
   # (kernel/config — filesystems, virtio, serial, disables, the common
-  # networking/cgroup/namespace set) into the Debian defconfig, then
-  # `make bindeb-pkg` produces the vmlinuz + common modules as
-  # linux-image-common_<ver>_<arch>.deb. The architecture overlay
-  # (kernel/modules/arm or x86_64) is merged here too. sources: lists the base
-  # config and both architecture overlays, but no per-device overlay, so
-  # changing a device overlay does NOT invalidate this package's cache.
+  # networking/cgroup/namespace set, AND the folded '# arm64 built-in' /
+  # '# amd64 built-in' arch sections) into the Debian defconfig.
+  # No architecture overlay is merged: the former kernel/modules/arm and
+  # kernel/modules/x86_64 are folded into the base config and deleted.
   #
   # Two kernels on arm64 (docs/Handoff-Decisions.md, "Two arm64 kernels"): the page size
   # is a compile-time choice, so the 4 KB kernel (older devices: Raspberry Pi 3
@@ -171,12 +169,10 @@ packages:
     # downloaded or does not apply fails the kernel build, so the last-good
     # published deb is kept.
     sources:
-      # The base config, the two architecture overlays and the source download
+      # The base config (arch options folded in) and the source download
       # feed this package's content hash. A per-device overlay change must NOT
       # trigger a full kernel rebuild — it only rebuilds that device's modules
-      # entry. Both architecture overlays are listed because sources: is not
-      # per-arch, so an x86_64 overlay edit also invalidates the arm64 kernel.
-      # Debian-lane anchors only: the base config/overlays/pages and the
+      # entry. Debian-lane anchors only: the base config/pages and the
       # shared set are engine data (CI_KERNEL_SHARED, hashed by the engine's
       # shared term) — nothing of the kernel build data lives in this repo.
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
@@ -235,35 +231,21 @@ packages:
       # below layers the project choices on top.
       make defconfig
 
-      # The architecture overlay (kernel/modules/arm or kernel/modules/x86_64)
-      # is part of the kernel build: it carries built-in (=y) options that a
-      # modules-only build cannot add to an existing kernel.
-      case "${DEB_ARCH}" in arm64) ARCH_OVERLAY_NAME=arm ;; *) ARCH_OVERLAY_NAME=x86_64 ;; esac
-      ARCH_OVERLAY="${CI_KERNEL_SHARED}/modules/${ARCH_OVERLAY_NAME}"
-      test -f "${ARCH_OVERLAY}" \
-        || { echo "ERROR: engine kernel-shared/modules/${ARCH_OVERLAY_NAME} overlay missing" >&2; exit 1; }
-      CONFIG_FILES=("${BASE_CONFIG}" "${ARCH_OVERLAY}")
-
-      # arm64 only: the page-size overlay of this kernel (4 KB or 16 KB,
-      # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
-      # modules built later inherit it from the .config shipped in the deb.
-      if [ "${DEB_ARCH}" = "arm64" ]; then
-        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
-        test -f "${PAGES_OVERLAY}" \
-          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
-        CONFIG_FILES+=("${PAGES_OVERLAY}")
-      fi
-
-      # Shared kconfig fragments (owner arbitration 2026-11-03 12:55: the set
-      # lives in the build engine — DaemonCores-CI build-deb/kernel-shared/
-      # kconfig-shared, exported here as CI_KERNEL_SHARED; VE consumes the
-      # same export): the XanMod-flavoured x86 base and the GPU sets merged
-      # transversely (ONE optimised kernel, every vendor, no per-vendor
-      # matrix; KERNEL_GPU=none disables, mirrors the VE entry). amd64 only —
-      # The fragments are x86 config; the x64vN flavour fragment of THIS
-      # variant is merged above (KERNEL_ARCH_LEVEL): debian carries the SAME
-      # 7-flavour matrix as the PVE lane (owner 2026-11-03 13:05).
+      CONFIG_FILES=()
+      # The transverse kconfig-shared fragments go FIRST on amd64, so the base
+      # config (appended last) wins with its '# amd64 built-in' section: the
+      # arch drivers are built-in (=y) in the kernel image, overriding the
+      # transverse module defaults by the kconfig last-wins rule.
       if [ "${DEB_ARCH}" = "amd64" ]; then
+        # Shared kconfig fragments (owner arbitration 2026-11-03 12:55: the set
+        # lives in the build engine — DaemonCores-CI build-deb/kernel-shared/
+        # kconfig-shared, exported here as CI_KERNEL_SHARED; VE consumes the
+        # same export): the XanMod-flavoured x86 base and the GPU sets merged
+        # transversely (ONE optimised kernel, every vendor, no per-vendor
+        # matrix; KERNEL_GPU=none disables, mirrors the VE entry). amd64 only —
+        # The fragments are x86 config; the x64vN flavour fragment of THIS
+        # variant is merged too (KERNEL_ARCH_LEVEL): debian carries the SAME
+        # 7-flavour matrix as the PVE lane (owner 2026-11-03 13:05).
         SHARED_KCFG="${CI_KERNEL_SHARED}/kconfig-shared"
         CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
         case "${KERNEL_GPU:-all}" in
@@ -274,10 +256,26 @@ packages:
         # The kernel FLAVOUR fragment (LOCALVERSION -x64vN-xanmod1) of this
         # variant (KERNEL_ARCH_LEVEL) — baseline flavours carry it too; the
         # guarded -s merge keeps the lane usable when the engine carries no
-        # fragment for the level (e.g. the 4 KB arm64 kernel of the plain
-        # variant name).
+        # fragment for the level.
         [[ -s "${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
           CONFIG_FILES+=("${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg")
+      fi
+
+      # The BASE config (filesystems, virtio, serial, disables, AND the folded
+      # '# arm64 built-in' / '# amd64 built-in' arch sections — one canonical
+      # kernel/config, no per-arch overlay anymore). Merged last on amd64 so
+      # the arch built-ins win; first on arm64 so the page-size overlay below
+      # stays the final word.
+      CONFIG_FILES+=("${BASE_CONFIG}")
+
+      # arm64 only: the page-size overlay of this kernel (4 KB or 16 KB,
+      # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
+      # modules built later inherit it from the .config shipped in the deb.
+      if [ "${DEB_ARCH}" = "arm64" ]; then
+        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
+        test -f "${PAGES_OVERLAY}" \
+          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
+        CONFIG_FILES+=("${PAGES_OVERLAY}")
       fi
 
       # Merge the base config (filesystems, virtio, serial, disables — the
@@ -421,8 +419,8 @@ packages:
   # Variants (all wave 1): linux-modules-rpi3 / -rpi4 / -rk3399 / -h616 /
   # -imx8m / -mt8183 depend on linux-image, linux-modules-rpi5 / -rk3588 /
   # -rk3566 on linux-image-16k.
-  # Each starts from the .config shipped in its kernel deb (base + arm overlay
-  # + page size) and merges only its own device overlay.
+  # Each starts from the .config shipped in its kernel deb (base — arch options
+  # folded in — + page size) and merges only its own device overlay.
   - name: linux-modules-arm-device
     ccache: true
     when:

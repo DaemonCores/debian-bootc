@@ -105,6 +105,34 @@ def test_no_carbon_copy_of_the_engine_data() -> None:
     assert 'bootc-debs-builder/kernel/kconfig-shared' not in text
 
 
+def test_no_arch_overlay_merge() -> None:
+    """linux-image merges ONLY the base config + the arm64 page-size overlay.
+
+    The fold (owner 2026-11-03): the former architecture overlays
+    (kernel-shared/modules/arm and x86_64) are merged into the base config
+    ('# arm64 built-in' / '# amd64 built-in' sections, =m options promoted =y)
+    and deleted from the engine store. packages.yml must reference neither a
+    modules/<arch> overlay nor an ARCH_OVERLAY variable anymore, and the
+    engine's base config must carry the folded sections.
+    """
+    text = PACKAGES_YML.read_text(encoding='utf-8')
+    assert 'ARCH_OVERLAY' not in text
+    # The former arch overlay merge paths are gone; the only remaining
+    # modules/ fragment merge is the per-DEVICE one of the device modules
+    # entries (rpi3/rpi4/...), which the fold keeps untouched.
+    for stale in ('modules/arm', 'modules/x86_64'):
+        assert f'"${{CI_KERNEL_SHARED}}/{stale}"' not in text, stale
+    mod_uses = re.findall(
+        r'"\$\{CI_KERNEL_SHARED\}/modules/([^"]+)"', text
+    )
+    assert mod_uses == ['${DEVICE}'], mod_uses
+    cfg = (CANONICAL_DATA / 'config').read_text(encoding='utf-8')
+    for section in ('# arm64 built-in', '# amd64 built-in'):
+        assert section in cfg, section
+    for promoted in ('CONFIG_DRM_AMDGPU=y', 'CONFIG_E1000=y'):
+        assert promoted in cfg, promoted
+
+
 def test_ve_consumer_uses_the_engine_export() -> None:
     """VE kernel entry consumes the set FROM the engine export, by path.
 
