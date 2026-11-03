@@ -751,6 +751,249 @@ packages:
       test -s "/debs/linux-modules-nvidia_${MOD_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-nvidia deb empty" >&2; exit 1; }
 
+  # linux-modules-gpu — the four GPU module sets (GPU FINAL, owner
+  # 2026-11-03): gpu-ia (compute: amdgpu without Display Core, HSA/KFD on,
+  # fb minimal), gpu-gaming (display: AMD DC with its HDCP/DSC/FP
+  # dependencies, fbcon), and the -nvidia variants (gpu-ia-nvidia,
+  # gpu-gaming-nvidia) which carry ONLY the loader policy — their in-tree
+  # modules come from the sibling open set and the NVIDIA open kernel
+  # modules from the linux-modules-nvidia base deb (one modules-only build
+  # per profile, one NVIDIA base, four sets: rebuilding a second copy of
+  # every in-tree driver would produce byte-identical .ko files and split
+  # the ownership of /lib/modules for nothing).
+  # The in-tree sets are modules-only builds over the standard kernel deb
+  # (kernel_prepare + the overlay kernel/modules/gpu/<set>), exactly the
+  # linux-modules-arm-device pattern; the deb owns the gpu driver paths the
+  # kernel deb also carries (=m base build) through Replaces, and the two
+  # in-tree sets conflict with each other: exactly one profile build can be
+  # installed. The image installs NONE of them — the bootc-installer pulls
+  # the chosen set at install (P-513a, the GPU/EULA install-time variable).
+  # The base config rollback (kernel-shared/config, GPU =m) makes the
+  # drivers addable by a modules-only build; each overlay pins its profile
+  # (ia drops Display Core, gaming pins it on).
+  - name: linux-modules-gpu
+    variants:
+      ia:
+        when: {arch: amd64}
+        deps:
+          - linux-image
+        env: {GPU_SET: ia}
+      gaming:
+        when: {arch: amd64}
+        deps:
+          - linux-image
+        env: {GPU_SET: gaming}
+      # NVIDIA variants: the loader policy only. They depend on their
+      # sibling open set (same in-tree build), on the linux-modules-nvidia
+      # base deb (the open NVIDIA modules) AND on linux-image (the kernel
+      # the whole stack is pinned to).
+      ia-nvidia:
+        when: {arch: amd64}
+        deps:
+          - linux-image
+          - gpu-ia
+          - linux-modules-nvidia
+        env: {GPU_SET: ia, GPU_NVIDIA: "yes"}
+      gaming-nvidia:
+        when: {arch: amd64}
+        deps:
+          - linux-image
+          - gpu-gaming
+          - linux-modules-nvidia
+        env: {GPU_SET: gaming, GPU_NVIDIA: "yes"}
+    variant-name-prefix: "gpu-"
+    variant-env: GPU_VARIANT
+    # Track the stable kernel version so KERNEL_VER enters the content hash:
+    # without it the set debs would keep a pinned Depends on the old kernel
+    # once the APT repo dropped it (same reason as linux-modules-arm-device).
+    track:
+      KERNEL_VER:
+        kernel-org: stable
+        require-patches: engine
+    sources:
+      - preinstall/output/linux-modules-gpu
+      # The per-set kconfig overlays and the loader-policy confs of this
+      # repo: a profile change rebuilds only the touched set.
+      - kernel/modules/gpu
+    env:
+      HELPERS_VER: 7
+    build: |
+      set -euo pipefail
+      # GPU_SET is injected by the CI from the variant env (ia|gaming);
+      # GPU_NVIDIA marks the loader-policy-only variants.
+      SAVE_PWD=$(pwd)
+      DEB_ARCH=$(dpkg --print-architecture)
+      WORKTREE="${GITHUB_WORKSPACE:-$(pwd)}"
+      WORKFLOW="${WORKTREE}/workflows/bootc-debs-builder"
+      CONF_DIR="${WORKFLOW}/kernel/modules/gpu/modprobe"
+      GPU_NVIDIA="${GPU_NVIDIA:-no}"
+
+      if [ "${GPU_NVIDIA}" = yes ]; then
+        # -----------------------------------------------------------------
+        # Loader-policy deb: no kernel build. Everything it needs is in the
+        # deb it depends on: the sibling open set (same in-tree build) and
+        # the linux-modules-nvidia base (the open NVIDIA modules). The
+        # versions are read from the dependency debs the CI installed, so
+        # the Depends pins stay exact and a bump of any of the three
+        # rebuilds the set.
+        # -----------------------------------------------------------------
+        SIB_VER=$(dpkg-query -W -f='${Version}' "gpu-${GPU_SET}") \
+          || { echo "ERROR: dependency gpu-${GPU_SET} not installed" >&2; exit 1; }
+        NV_VER=$(dpkg-query -W -f='${Version}' linux-modules-nvidia) \
+          || { echo "ERROR: dependency linux-modules-nvidia not installed" >&2; exit 1; }
+        SET_VER="${SIB_VER}"
+        DEPS="gpu-${GPU_SET} (= ${SIB_VER}), linux-modules-nvidia (= ${NV_VER})"
+        REPLACES=""
+        CONFLICTS=""
+        CONF="dc-gpu-${GPU_SET}-nvidia.conf"
+
+        DESTDIR="/output/gpu-${GPU_SET}-nvidia"
+        rm -rf "${DESTDIR}"
+        mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/etc/modprobe.d"
+      else
+        # -----------------------------------------------------------------
+        # In-tree set: modules-only build over the standard kernel deb
+        # (the linux-modules-arm-device pattern) with the profile overlay
+        # merged on top of the seeded .config.
+        # -----------------------------------------------------------------
+        OVERLAY="${WORKFLOW}/kernel/modules/gpu/${GPU_SET}"
+        test -f "${OVERLAY}" \
+          || { echo "ERROR: gpu module overlay kernel/modules/gpu/${GPU_SET} missing" >&2; exit 1; }
+
+        kernel_prepare
+        kernel_merge_config "${SRCDIR}" "${OVERLAY}"
+        kernel_signing_setup
+        make olddefconfig
+
+        # Seed Module.symvers from the kernel deb (the modules-only build has
+        # no vmlinux.o; the vmlinux-only filter and the modpost flag live in
+        # the device entry build, this block replicates it verbatim).
+        test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+          || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
+        cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" Module.symvers
+        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
+        if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
+           && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
+          printf '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\n' \
+            >> scripts/Makefile.modpost
+        fi
+        [ -f modules.builtin ] || touch modules.builtin
+        [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
+        make -j"$(nproc)" modules
+
+        DESTDIR="/output/gpu-${GPU_SET}"
+        rm -rf "${DESTDIR}"
+        mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
+        [ -f modules.builtin ] || touch modules.builtin
+        [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
+        make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
+
+        # Keep ONLY the vendor driver subtree of the profile build (everything
+        # else stays in the kernel deb): kernel/drivers/gpu and the AMD ACP
+        # audio controller (sound/soc/amd) the amdgpu profile build carries.
+        KEEP="${DESTDIR}/lib/modules/${KVER}/kernel"
+        mv "${KEEP}/drivers/gpu" /tmp/gpu-set-drivers-gpu
+        if [ -d "${KEEP}/sound/soc/amd" ]; then
+          mv "${KEEP}/sound/soc/amd" /tmp/gpu-set-sound-amd
+        fi
+        rm -rf "${KEEP}"
+        mkdir -p "${KEEP}/drivers" "${KEEP}/sound/soc"
+        mv /tmp/gpu-set-drivers-gpu "${KEEP}/drivers/gpu"
+        if [ -d /tmp/gpu-set-sound-amd ]; then
+          mv /tmp/gpu-set-sound-amd "${KEEP}/sound/soc/amd"
+        fi
+
+        # Kernel metadata files (modules.alias, modules.dep...) are generated
+        # identically by every modules build and the kernel deb owns them; the
+        # set deb must not carry its own (same ownership conflict as the
+        # device entries), and the build/source symlinks dangle anyway.
+        for f in modules.builtin modules.builtin.modinfo modules.alias \
+                 modules.alias.bin modules.dep modules.dep.bin \
+                 modules.softdep modules.symbols modules.symbols.bin \
+                 modules.devname build source; do
+          if [ -f "${DESTDIR}/lib/modules/${KVER}/${f}" ] \
+             || [ -L "${DESTDIR}/lib/modules/${KVER}/${f}" ]; then
+            rm -f "${DESTDIR}/lib/modules/${KVER}/${f}"
+          fi
+        done
+
+        # Ship the loader policy of the set (the conf the bootc-installer
+        # records the choice through).
+        mkdir -p "${DESTDIR}/etc/modprobe.d"
+        cp "${CONF_DIR}/dc-gpu-${GPU_SET}.conf" "${DESTDIR}/etc/modprobe.d/"
+        CONF="dc-gpu-${GPU_SET}.conf"
+
+        # The kernel deb owns the same .ko paths (=m base build): the set
+        # replaces those files on install, pinned to the exact kernel. The
+        # two in-tree sets build amdgpu differently (DC on/off) — exactly one
+        # may be installed.
+        SET_VER="${BUILT_VER}+r1"
+        DEPS="daemoncores-kernel-${KVER} (= ${BUILT_VER})"
+        REPLACES="daemoncores-kernel-${KVER} (= ${BUILT_VER})"
+        CONFLICTS="gpu-gaming, gpu-gaming-nvidia"
+        [ "${GPU_SET}" = gaming ] && CONFLICTS="gpu-ia, gpu-ia-nvidia"
+      fi
+
+      # The profile overlay decides the shipped build; assert it really did
+      # (olddefconfig silently resolves an unmet option): the in-tree builds
+      # must carry amdgpu, and the Display Core pin of the profile must hold
+      # in the final .config (DC compiled inside amdgpu.ko — there is no
+      # separate .ko file to test, the merged config IS the proof).
+      if [ "${GPU_NVIDIA}" != yes ]; then
+        test -n "$(find "${DESTDIR}/lib/modules/${KVER}/kernel/drivers/gpu" -name 'amdgpu.ko*' 2>/dev/null)" \
+          || { echo "ERROR: gpu-${GPU_SET} deb carries no amdgpu" >&2; exit 1; }
+        test -f "${SRCDIR}/.config" \
+          || { echo "ERROR: no final .config in the kernel tree" >&2; exit 1; }
+        if [ "${GPU_SET}" = ia ]; then
+          grep -q '^# CONFIG_DRM_AMD_DC is not set$' "${SRCDIR}/.config" \
+            || { echo "ERROR: gpu-ia overlay lost the DC-off pin" >&2; exit 1; }
+        else
+          grep -q '^CONFIG_DRM_AMD_DC=y$' "${SRCDIR}/.config" \
+            || { echo "ERROR: gpu-gaming overlay lost the DC-on pin" >&2; exit 1; }
+        fi
+      fi
+
+      # Control from the shared template: deps, replaces and conflicts differ
+      # per variant (computed above), the rest is verbatim.
+      NAME="gpu-${GPU_SET}"
+      [ "${GPU_NVIDIA}" = yes ] && NAME="gpu-${GPU_SET}-nvidia"
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-gpu/DEBIAN/control" \
+        "${DESTDIR}/DEBIAN/control"
+      sed -i \
+        -e "s|^Package: gpu-{{ SET }}|Package: ${NAME}|g" \
+        -e "s|Version: {{ VER }}|Version: ${SET_VER}|g" \
+        -e "s|{{ VER }}|${SET_VER}|g" \
+        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
+        -e "s|{{ KVER }}|${KVER:-kernel}|g" \
+        -e "s|Depends: {{ DEPS }}|Depends: ${DEPS}|g" \
+        -e "s|Replaces: {{ REPLACES }}|Replaces: ${REPLACES}|g" \
+        -e "s|Conflicts: {{ CONFLICTS }}|Conflicts: ${CONFLICTS}|g" \
+        -e "s|/etc/modprobe.d/dc-gpu-{{ SET }}.conf|/etc/modprobe.d/${CONF}|g" \
+        "${DESTDIR}/DEBIAN/control"
+
+      # Regenerate md5sums for the shipped files (lib and etc).
+      ( cd "${DESTDIR}" && \
+        find lib etc -type f | sort | xargs md5sum | sed -e 's|lib/|/lib/|' -e 's|etc/|/etc/|' \
+        > DEBIAN/md5sums )
+
+      # Empty-Replaces must not ship as a literal empty field: dpkg refuses an
+      # empty Depends-like line.
+      if [ -z "${REPLACES}" ]; then
+        sed -i '/^Replaces: *$/d' "${DESTDIR}/DEBIAN/control"
+      fi
+      if [ -z "${CONFLICTS}" ]; then
+        sed -i '/^Conflicts: *$/d' "${DESTDIR}/DEBIAN/control"
+      fi
+
+      # Content check: the loader policy conf is in the deb.
+      test -s "${DESTDIR}/etc/modprobe.d/${CONF}" \
+        || { echo "ERROR: gpu deb produced without its modprobe policy" >&2; exit 1; }
+
+      dpkg-deb --build "${DESTDIR}" \
+        "/debs/${NAME}_${SET_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/${NAME}_${SET_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: output ${NAME} deb empty" >&2; exit 1; }
+
   # ===========================================================================
   # gpu-userspace class — the GPU userspace stack, compiled from source, one
   # build per usage profile. BOTH profiles carry the drivers of EVERY vendor
