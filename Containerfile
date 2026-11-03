@@ -171,7 +171,12 @@ RUN apt update \
     && apt update \
     && apt install -y --no-install-recommends bootupd \
     && if [ "${ARCH}" = arm64 ]; then \
-        apt install -y --no-install-recommends \
+        # The apt lists are wiped after every dpkg run (the 99-apt-clean
+        # policy of the preinstall dir), so this run refreshes them itself:
+        # without it the lists gone with the bootupd install left u-boot-tools
+        # with no candidate (run 41609057130, the last arm64 failure).
+        apt update \
+        && apt install -y --no-install-recommends \
             grub-efi-arm64-signed u-boot-tools \
         && apt-mark hold grub-efi-arm64-signed; \
     fi
