@@ -174,7 +174,8 @@ packages:
       # trigger a full kernel rebuild — it only rebuilds that device's modules
       # entry. Debian-lane anchors only: the base config/pages and the
       # shared set are engine data (CI_KERNEL_SHARED, hashed by the engine's
-      # shared term) — nothing of the kernel build data lives in this repo.
+      # shared term); the device module fragments of this lane live HERE
+      # (kernel/modules, hashed per modules entry — KERNEL FINAL v2).
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
     # whose series every patch source (CachyOS, ROCKNIX) already provides,
     # PROBED IN THE ENGINE (`require-patches: engine`) — the newest series
@@ -491,14 +492,24 @@ packages:
         require-patches: engine
     sources:
       - preinstall/output/linux-modules-arm-device
+      # The device fragments of this repo (per-DEVICE overlay of the build):
+      # their content is hashed here — a fragment change rebuilds only that
+      # device's modules entry (KERNEL FINAL v2: the device data of the bootc
+      # lane lives in this repository).
+      - kernel/modules
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
+      # DEVICE overlay (owner KERNEL FINAL v2, 2026-11-03): the device module
+      # fragments live IN THIS REPO (kernel/modules/<device>) — built uniquely
+      # on the debian-bootc lane; VE consumes the device modules debs through
+      # the APT repo. The engine export keeps only the common set (patches,
+      # kconfig, base config, pages).
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      OVERLAY="${CI_KERNEL_SHARED}/modules/${DEVICE}"
+      OVERLAY="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
       test -f "${OVERLAY}" \
-        || { echo "ERROR: engine kernel-shared/modules/${DEVICE} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: device module overlay kernel/modules/${DEVICE} missing" >&2; exit 1; }
 
       # Bootstrap shared by the kernel module entries: locate the kernel deb,
       # download the kernel source, seed .config (kernel_prepare).

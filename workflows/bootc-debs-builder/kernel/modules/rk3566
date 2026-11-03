@@ -1,0 +1,80 @@
+# kernel/modules/rk3566
+#
+# Per-generation MODULE overlay for the Rockchip RK3566 / RK3568 (RK356x,
+# Cortex-A55). Applied on top of the base kernel/config THEN the ARM-generic
+# overlay kernel/modules/arm:
+#     scripts/kconfig/merge_config.sh -m .config kernel/config kernel/modules/arm kernel/modules/rk3566
+#     make olddefconfig
+#
+# Built AGAINST the 16 KB kernel (kernel-image-16k), the same kernel the
+# RK3588 modules are built against — one rockchip build per kernel, not per
+# board. Boards: Orange Pi R1 Plus LTS, Radxa ROCK 3A/3C, NanoPi R2S/R3S,
+# Luckfox Omni3556, Turing M1, etc.
+#
+# This file is NOT a full .config. It lists ONLY options that are specific to
+# the RK356x — everything shared lives in kernel/config and kernel/modules/arm.
+# The RK3588 overlay (kernel/modules/rk3588) is NOT shared here: the RK356x
+# boots from a DIFFERENT MMC controller (DesignWare dw-mshc, not the RK3588's
+# sdhci-of-arasan covered by kernel/modules/arm alone), and RK3399 — the other
+# designware-mshc rockchip SoC we serve — has its own fragment
+# (kernel/modules/rk3399) so each generation builds against its own kernel
+# page size.
+#
+# Conventions:
+#   # reason in English
+#   CONFIG_OPTION=y           # built-in
+#   CONFIG_OPTION=m           # module
+#   # CONFIG_OPTION is not set  # disabled
+
+# =============================================================================
+# SoC platform support — built-in. The kernel must know about the SoC before
+# it can parse the device tree, so this is built-in rather than a module.
+# =============================================================================
+
+# Rockchip: RK356x platform support. Built-in.
+CONFIG_ARCH_ROCKCHIP=y
+
+# =============================================================================
+# MMC / SD / eMMC — built-in. RK3566/RK3568 boards boot from SD or eMMC. The
+# RK356x uses the DesignWare dw-mshc controller with the Rockchip glue
+# (CONFIG_MMC_DW + CONFIG_MMC_DW_ROCKCHIP), NOT the RK3588's sdhci-of-arasan:
+# the ARM-generic overlay (CONFIG_MMC_SDHCI + CONFIG_MMC_SDHCI_PLTFM) does not
+# cover it. Boot storage must be readable without a module load step, so the
+# controller glue is built-in.
+# =============================================================================
+
+# MMC_DW: built-in. DesignWare mobile-storage MMC controller core.
+CONFIG_MMC_DW=y
+
+# MMC_DW_ROCKCHIP: built-in. The dw-mshc-plt of the RK356x SD/eMMC controllers.
+CONFIG_MMC_DW_ROCKCHIP=y
+
+# =============================================================================
+# Ethernet — kept as =m with the exact same PHYLINK/modpost pattern as
+# kernel/modules/rk3588 (STMMAC_ETH selects PHYLINK, forcing either built-in
+# promotes PHYLINK to =y, removes phylink.ko and breaks other Ethernet
+# drivers at modpost). The RK356x GMAC is dwmac-rknic on top of the generic
+# DWMAC platform driver.
+# =============================================================================
+
+CONFIG_DWMAC_GENERIC=m
+CONFIG_STMMAC_ETH=m
+# Pin PHYLINK to =m so STMMAC_ETH's select cannot promote it to =y.
+CONFIG_PHYLINK=m
+
+# =============================================================================
+# I2C — built-in. The RK356x boards wire the HYM8563 RTC and the RK809 PMIC
+# on the rk3x I2C controller; the RTC below and clock/power sequencing of
+# this storage path need the controller early.
+# =============================================================================
+
+CONFIG_I2C_RK3X=y
+
+# =============================================================================
+# RTC — built-in. The boards carry an external HYM8563 I2C RTC on I2C (the
+# RK356x internal RTCs of this generation vary by board); without it,
+# systemd-timesyncd has no fallback time and bootc rollback ordering can
+# break. (CONFIG_RTC_CLASS is in kernel/modules/arm.)
+# =============================================================================
+
+CONFIG_RTC_DRV_HYM8563=y
