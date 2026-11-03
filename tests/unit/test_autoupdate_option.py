@@ -56,7 +56,12 @@ def test_overlays_are_built_in_and_hashed() -> None:
     for name in ('fisherman', 'bootc-installer'):
         entry = _entry(name)
         assert f'{name}-src' in entry['sources']
-        assert (BUILDER / f'{name}-src' / 'patches.lock.json').is_file()
+        # The overlay carries ONLY source: the .patch files. No
+        # patches.lock.json in git (owner 2026-11-03): the sha256 reference is
+        # computed and retained by patch_guard at build, build-local.
+        assert list((BUILDER / f'{name}-src').rglob('*.patch')), name
+        assert not list((BUILDER / f'{name}-src').rglob('patches.lock.json')
+                        ), name
         call = (
             'deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/'
             f'{name}-src"'
