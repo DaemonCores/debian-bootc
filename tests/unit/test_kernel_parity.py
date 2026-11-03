@@ -1,24 +1,24 @@
 """Patch-parity pins of the shared kernel kconfig fragments.
 
-PATCH PARITY (owner, 2026-11-03): the shared kconfig fragments in this
-repository are THE canonical data both kernels consume — the debian
-linux-image build merges them in-repo (packages.yml) and DaemonCores-VE
-consumes them by pinned commit + sha256. These tests pin the arbitrated
-functional set (owner 2026-11-03 12:14 revised) so a lane cannot silently
-lose it, and the reference-mode contract of the VE consumer (never a copy).
+PATCH PARITY (owner, 2026-11-03, re-arbitrated 12:55): the canonical shared
+kernel build data (patches-shared.yml + kconfig fragments) lives in the build
+engine — DaemonCores-CI build-deb/kernel-shared — and is exported to every
+build as CI_KERNEL_SHARED. This repository carries NO copy of that data: the
+debian linux-image build (packages.yml) consumes the export, and DaemonCores-VE
+kernel-pve consumes the same export in its own engine checkout. These tests
+pin the arbitrated functional set (owner 2026-11-03 12:14 revised) so a lane
+cannot silently lose it, plus the consumer contract of THIS repository.
 """
 
 import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-X86_COMMON = (
-    REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'kconfig-shared' /
-    'x86-common.cfg'
-)
-CANONICAL_PATCHES = (
-    REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
-    'patches-shared.yml'
+CANONICAL_DATA = Path(REPO.parent) / 'DaemonCores-CI' / 'build-deb' / 'kernel-shared'
+X86_COMMON = CANONICAL_DATA / 'kconfig-shared' / 'x86-common.cfg'
+CANONICAL_PATCHES = CANONICAL_DATA / 'patches-shared.yml'
+PACKAGES_YML = (
+    REPO / 'workflows' / 'bootc-debs-builder' / 'packages.yml'
 )
 VE_MANIFEST = (
     REPO.parent / 'DaemonCores-VE' / 'workflows' / 'bootc-debs-builder' /
@@ -30,7 +30,7 @@ def _cfg() -> str:
     """Return the shared x86-common kconfig fragment verbatim.
 
     Returns:
-        The raw fragment text.
+        The raw fragment text of the engine checkout.
     """
     return X86_COMMON.read_text(encoding='utf-8')
 
@@ -80,25 +80,47 @@ def test_canonical_patch_set_shape() -> None:
     assert len(names) == 21
 
 
-def test_ve_consumer_is_reference_mode() -> None:
-    """VE kernel entry consumes the set BY REFERENCE, pinned commit + sha256.
+def test_no_carbon_copy_of_the_engine_data() -> None:
+    """This repository carries NO copy of the shared kernel data.
 
-    The VE entry defines no native patch data, and the local kconfig copy
-    is deleted; its lane-local THP pin is NEVER (hugepages belong to the
-    PVE guests). The sibling checkout absent locally skips the assertions
-    that need it — CI owns the cross-repo gate. The former PVE-directory
-    name is gone from this repository's builder data (it lives in the
-    tracked path of no file).
+    The engine checkout is the single source: the former in-repo data paths
+    are gone and packages.yml consumes CI_KERNEL_SHARED, never a sibling
+    path of this checkout.
+    """
+    assert not (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
+                'patches-shared.yml').exists()
+    assert not (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
+                'kconfig-shared').exists()
+    text = PACKAGES_YML.read_text(encoding='utf-8')
+    assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in text
+    assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
+    assert 'bootc-debs-builder/kernel/patches-shared.yml' not in text
+    assert 'bootc-debs-builder/kernel/kconfig-shared' not in text
+
+
+def test_ve_consumer_uses_the_engine_export() -> None:
+    """VE kernel entry consumes the set FROM the engine export, by path.
+
+    No raw distfetch of this repository: the former DC_DATA_REF /
+    dc_data_fetch pattern (pinned commit + sha256 raw URLs against a sibling
+    production repo) is retired in favour of CI_KERNEL_SHARED. The lane-local
+    THP pin stays NEVER (hugepages belong to the PVE guests). The sibling
+    checkout absent locally skips the assertions that need it — CI owns the
+    cross-repo gate.
     """
     if not VE_MANIFEST.is_file():
         return
-    bootc_data = (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel')
-    assert (bootc_data / 'patches-shared.yml').is_file()
-    assert (bootc_data / 'kconfig-shared' / 'x86-common.cfg').is_file()
     text = VE_MANIFEST.read_text(encoding='utf-8')
-    assert 'DC_DATA_REF=' in text
-    assert 'kernel/patches-shared.yml' in text
-    assert 'dc_data_fetch' in text
-    assert 'kernel_apply_patches "${PATCHES_FILE}"' in text
-    assert 'DC_DATA_BASE=' in text
-    assert 'TRANSPARENT_HUGEPAGE_ALWAYS=n' in text
+    assert 'DC_DATA_REF=' not in text
+    assert 'dc_data_fetch' not in text
+    assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in text
+    assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
+    # The lane-local THP pin lives in the restored kernel-pve/kconfig tree
+    # (merged LAST over the shared fragment, owner arbitration 12:55).
+    assert (VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
+            'kconfig' / 'thp-never.cfg').is_file()
+    thp = (VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
+           'kconfig' / 'thp-never.cfg').read_text(encoding='utf-8')
+    assert 'CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n\n' in thp
+    assert 'CONFIG_TRANSPARENT_HUGEPAGE=y\n' in thp
+    assert 'CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=n\n' in thp
