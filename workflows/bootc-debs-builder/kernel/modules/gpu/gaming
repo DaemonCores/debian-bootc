@@ -1,0 +1,28 @@
+# kernel/modules/gpu/gaming
+#
+# GPU FINAL (owner, 2026-11-03): the DISPLAY profile overlay of the gpu-gaming
+# entry (packages.yml, modules-only build seeded from the standard kernel
+# deb). AMD DC (Display Core) on with its HDCP/DSC/FP dependencies, fbcon
+# and the display stack — the build a gaming/display machine loads.
+#
+# The overlay merges on top of the seeded .config of the kernel deb
+# (base config + the transverse kconfig-shared fragments):
+#     kernel_merge_config "${SRCDIR}" kernel/modules/gpu/gaming
+#     make olddefconfig
+#
+# This file is NOT a full .config. It lists ONLY the deltas of the display
+# profile — every other value is inherited (append + olddefconfig merges).
+
+# Display Core on, the full display build of amdgpu.
+CONFIG_DRM_AMD_DC=y
+CONFIG_DRM_AMD_DC_SI=y
+CONFIG_DRM_AMD_DC_FP=y
+CONFIG_DRM_AMD_DC_HDCP=y
+CONFIG_DRM_AMD_DC_DSC=y
+
+# Display plumbing: fbdev emulation over the KMS device and the fbcon
+# console (the kernel config already keeps FRAMEBUFFER_CONSOLE; the DC
+# build needs the fbdev path explicit).
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FB=y
+CONFIG_FRAMEBUFFER_CONSOLE=y

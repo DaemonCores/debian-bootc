@@ -1,0 +1,21 @@
+Package: gpu-{{ SET }}
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+Section: kernel
+Priority: optional
+Depends: {{ DEPS }}
+Replaces: {{ REPLACES }}
+Conflicts: {{ CONFLICTS }}
+Description: GPU module set {{ SET }} profile (kernel modules, loader policy)
+ GPU FINAL (owner 2026-11-03): the four GPU module sets rebuild the profile
+ build of the vendor drivers as modules-only entries on top of the standard
+ kernel (daemoncores-kernel). The set the machine runs is chosen AT INSTALL
+ (bootc-installer GPU profile selector, P-513a pattern) — the image carries
+ no set; the bootc-installer pulls this deb from the APT repo and the loader
+ policy lands in /etc/modprobe.d/dc-gpu-{{ SET }}.conf. The in-tree sets
+ (gpu-ia, gpu-gaming) conflict with each other: exactly one can be
+ installed. The -nvidia variants carry only the loader policy: their in-tree
+ modules come from the sibling open set and the NVIDIA open kernel modules
+ from the linux-modules-nvidia base deb — one modules-only build per
+ profile, one NVIDIA base, four sets.

@@ -16,6 +16,7 @@ MANIFEST = (
 )
 GRUB_PINS = ('GRUB_VER', 'GRUB_FEDORA_BRANCH', 'GRUB_PINNED_COMMIT')
 GRUB_PACKAGES = ('grub-efi-amd64-signed', 'grub-efi-arm64-signed')
+REPO = Path(__file__).resolve().parents[2]
 
 
 def _packages() -> dict[str, dict[str, Any]]:
@@ -348,3 +349,114 @@ def test_gpu_userspace_lists_no_vendor_and_no_fixed_march() -> None:
         assert vendor not in code, vendor
     assert 'kernel_flavour_kcflags "${GPU_LEVEL}"' in code
     assert '-march' not in code
+
+
+def test_gpu_module_sets_expand_to_the_four_variants() -> None:
+    """GPU FINAL (owner 2026-11-03): the four module sets exist on amd64.
+
+    gpu-ia and gpu-gaming are modules-only builds over the standard kernel
+    (deps: linux-image); the -nvidia variants are the loader-policy debs on
+    top of their sibling open set and the linux-modules-nvidia base. No set
+    on arm64 (the arm GPUs ride the base kernel fold).
+    """
+    expanded = {p['name'] for p in _expand('amd64')}
+    for name in ('gpu-ia', 'gpu-gaming', 'gpu-ia-nvidia', 'gpu-gaming-nvidia'):
+        assert name in expanded, name
+    amd64 = _packages()
+    set_entry = amd64['linux-modules-gpu']
+    assert set_entry['variant-env'] == 'GPU_VARIANT'
+    assert set_entry['sources'][1] == 'kernel/modules/gpu'
+    variants = amd64['linux-modules-gpu']['variants']
+    assert variants['ia']['deps'] == ['linux-image']
+    assert variants['gaming']['deps'] == ['linux-image']
+    assert variants['ia-nvidia']['deps'] == [
+        'linux-image', 'gpu-ia', 'linux-modules-nvidia',
+    ]
+    assert variants['gaming-nvidia']['deps'] == [
+        'linux-image', 'gpu-gaming', 'linux-modules-nvidia',
+    ]
+    for name in ('gpu-ia', 'gpu-gaming', 'gpu-ia-nvidia', 'gpu-gaming-nvidia'):
+        assert name not in {p['name'] for p in _expand_arm64()}
+
+
+def _expand_arm64() -> list[dict[str, Any]]:
+    """Expand the manifest for arm64 (the sibling helper is amd64-bound).
+
+    Returns:
+        The resolved package entry dicts.
+    """
+    return _expand('arm64')
+
+
+def test_gpu_module_set_overlays_pin_their_profile() -> None:
+    """Each set overlay pins its Display Core build; HSA stays compute on.
+
+    gpu-ia: CONFIG_DRM_AMD_DC explicitly unset (the transverse kernel
+    fragment default is overridden last-wins by the overlay), HSA/KFD on.
+    gpu-gaming: DC on with its HDCP/DSC/FP dependencies and fbcon.
+    """
+    mod = REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+    ia = (mod / 'ia').read_text(encoding='utf-8')
+    gaming = (mod / 'gaming').read_text(encoding='utf-8')
+    assert '# CONFIG_DRM_AMD_DC is not set' in ia
+    assert 'CONFIG_HSA_AMD=y' in ia
+    assert 'CONFIG_HSA_AMD_SVM=y' in ia
+    for option in (
+        'CONFIG_DRM_AMD_DC=y',
+        'CONFIG_DRM_AMD_DC_SI=y',
+        'CONFIG_DRM_AMD_DC_FP=y',
+        'CONFIG_DRM_AMD_DC_HDCP=y',
+        'CONFIG_DRM_AMD_DC_DSC=y',
+        'CONFIG_FRAMEBUFFER_CONSOLE=y',
+    ):
+        assert option in gaming, option
+    assert 'CONFIG_DRM_AMD_DC=y' not in ia
+
+
+def test_gpu_module_sets_ship_their_loader_policy() -> None:
+    """Every set carries its /etc/modprobe.d policy file.
+
+    The in-tree sets blacklist nothing of each other (exactly one is
+    installed); the compute profiles keep nouveau away from the open NVIDIA
+    modules, gaming pins dc=1 and the gaming-NVIDIA policy enables the
+    nvidia_drm modeset.
+    """
+    conf_dir = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' /
+        'gpu' / 'modprobe'
+    )
+    assert (conf_dir / 'dc-gpu-ia.conf').read_text().rstrip().endswith(
+        'blacklist nouveau'
+    )
+    assert 'options amdgpu dc=1' in (conf_dir / 'dc-gpu-gaming.conf').read_text()
+    assert 'blacklist nouveau' in (conf_dir / 'dc-gpu-ia-nvidia.conf').read_text()
+    gaming_nv = (conf_dir / 'dc-gpu-gaming-nvidia.conf').read_text()
+    assert 'blacklist nouveau' in gaming_nv
+    assert 'options nvidia-drm modeset=1' in gaming_nv
+    build = _packages()['linux-modules-gpu']['build']
+    assert 'cp "${CONF_DIR}/dc-gpu-${GPU_SET}.conf"' in build.replace("'\"", '"')
+    assert 'etc/modprobe.d' in build
+
+
+def test_gpu_module_sets_own_the_kernel_paths_once() -> None:
+    """The in-tree sets replace the kernel deb's =m gpu modules, exactly one.
+
+    The control template carries the Replaces/Conflicts placeholders and the
+    build computes both: Replaces pins the exact kernel deb, the two in-tree
+    sets conflict with each other so exactly one profile build exists; the
+    loader-policy variants ship no conflict (their sibling carries it).
+    """
+    control = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'preinstall' / 'output' /
+        'linux-modules-gpu' / 'DEBIAN' / 'control'
+    ).read_text(encoding='utf-8')
+    for field in ('Depends: {{ DEPS }}', 'Replaces: {{ REPLACES }}',
+                  'Conflicts: {{ CONFLICTS }}'):
+        assert field in control, field
+    build = _packages()['linux-modules-gpu']['build']
+    assert 'CONFLICTS="gpu-gaming, gpu-gaming-nvidia"' in build
+    assert 'CONFLICTS="gpu-ia, gpu-ia-nvidia"' in build
+    assert 'REPLACES="daemoncores-kernel-${KVER} (= ${BUILT_VER})"' in build
+    # The profile build is proved in the build: DC pin greps the final config.
+    assert 'CONFIG_DRM_AMD_DC is not set$' in build
+    assert 'CONFIG_DRM_AMD_DC=y$' in build
