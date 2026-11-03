@@ -89,23 +89,19 @@ packages:
   # builds of this same script. The variant key is a name suffix: "" keeps the
   # plain `linux-image` (4 KB; also the only amd64 kernel), "-16k" produces
   # `linux-image-16k` (arm64 only). KERNEL_SUFFIX carries the key, KERNEL_PAGES
-  # selects the overlay under kernel/pages/.
+  # selects the overlay under the engine kernel-shared/pages/.
   - name: linux-image
     ccache: true
     variant-name-prefix: linux-image
     variant-env: KERNEL_SUFFIX
     variants:
-      "":
-        sources:
-          - kernel/pages/4k
+      "": {}
       "-16k":
         when:
           arch: arm64
         deb-glob: "linux-image-common-16k_*"
         env:
           KERNEL_PAGES: "16k"
-        sources:
-          - kernel/pages/16k
     env:
       # Kernel build primitives come from DaemonCores-CI scripts/
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
@@ -150,9 +146,9 @@ packages:
       # trigger a full kernel rebuild — it only rebuilds that device's modules
       # entry. Both architecture overlays are listed because sources: is not
       # per-arch, so an x86_64 overlay edit also invalidates the arm64 kernel.
-      - kernel/config
-      - kernel/modules/arm
-      - kernel/modules/x86_64
+      # Debian-lane anchors only: the base config/overlays/pages and the
+      # shared set are engine data (CI_KERNEL_SHARED, hashed by the engine's
+      # shared term) — nothing of the kernel build data lives in this repo.
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
     # whose series every patch source (CachyOS, ROCKNIX) already provides
     # (version and tarball sha256 resolved before each build, nothing pinned).
@@ -169,9 +165,9 @@ packages:
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
       case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
-      BASE_CONFIG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/config"
+      BASE_CONFIG="${CI_KERNEL_SHARED}/config"
       test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel/config (base) missing" >&2; exit 1; }
+        || { echo "ERROR: engine kernel-shared/config (base) missing" >&2; exit 1; }
 
       # Install kernel build deps (build-essential + the kernel's own
       # build-deps). libncurses-dev/bc are required by the kconfig merge.
@@ -187,25 +183,16 @@ packages:
       # implicitly by deb_helpers.sh in the same bash.)
       kernel_fetch_source "${KERNEL_VER}" "${KERNEL_SHA256}"
 
-      # Apply the kernel-class patches fetched from their official upstream
-      # (the native `patches:` data of this entry, exported as PATCHES_JSON):
-      # common first, then this architecture.
-      kernel_apply_patches - "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}" kernel
-
-      # PATCH PARITY (owner 2026-11-03): the debian kernel carries the SAME
-      # XanMod set as the PVE kernel build — the canonical shared list
-      # (patch-parity: 17 xanmod + 3 clearlinux + bore) lives in the build
-      # engine (DaemonCores-CI build-deb/kernel-shared/, exported to this very
-      # build shell as CI_KERNEL_SHARED) and is applied in addition to the
-      # anchor patches above by the same helper (dry-run all-or-nothing). The
-      # PVE lane (DaemonCores-VE) consumes the same export in its checkout, so
-      # BOTH kernels apply one identical set: one list, two consumers, no copy
-      # in either production repo. x86-only by nature — the arm64 build is not
-      # touched.
-      [[ "${DEB_ARCH}" = "amd64" ]] && \
-        kernel_apply_patches \
-          "${CI_KERNEL_SHARED}/patches-shared.yml" \
-          "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
+      # Apply the SHARED patch manifest (owner arbitration 2026-11-03 13:05:
+      # NO native `patches:` list is kept in a production packages.yaml —
+      # the patch data lives ONLY in the build engine, exported here as
+      # CI_KERNEL_SHARED). The manifest carries the shared XanMod+clearlinux
+      # set (stage common), the arm64 module-carrier entry (rocknix btrtl,
+      # stage arm64) and bore (series-gated); the arch/stage filter of the
+      # helper applies exactly this architecture's entries.
+      kernel_apply_patches \
+        "${CI_KERNEL_SHARED}/patches-shared.yml" \
+        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
 
       cd "${SRCDIR}"
       make mrproper
@@ -219,18 +206,18 @@ packages:
       # is part of the kernel build: it carries built-in (=y) options that a
       # modules-only build cannot add to an existing kernel.
       case "${DEB_ARCH}" in arm64) ARCH_OVERLAY_NAME=arm ;; *) ARCH_OVERLAY_NAME=x86_64 ;; esac
-      ARCH_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${ARCH_OVERLAY_NAME}"
+      ARCH_OVERLAY="${CI_KERNEL_SHARED}/modules/${ARCH_OVERLAY_NAME}"
       test -f "${ARCH_OVERLAY}" \
-        || { echo "ERROR: kernel/modules/${ARCH_OVERLAY_NAME} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: engine kernel-shared/modules/${ARCH_OVERLAY_NAME} overlay missing" >&2; exit 1; }
       CONFIG_FILES=("${BASE_CONFIG}" "${ARCH_OVERLAY}")
 
       # arm64 only: the page-size overlay of this kernel (4 KB or 16 KB,
       # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
       # modules built later inherit it from the .config shipped in the deb.
       if [ "${DEB_ARCH}" = "arm64" ]; then
-        PAGES_OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/pages/${KERNEL_PAGES}"
+        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
         test -f "${PAGES_OVERLAY}" \
-          || { echo "ERROR: kernel/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
+          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
         CONFIG_FILES+=("${PAGES_OVERLAY}")
       fi
 
@@ -445,7 +432,6 @@ packages:
           - linux-image
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
-    variant-source: "kernel/modules/{variant}"
     env:
       # Kernel build primitives come from DaemonCores-CI scripts/
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
@@ -470,9 +456,9 @@ packages:
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      OVERLAY="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
+      OVERLAY="${CI_KERNEL_SHARED}/modules/${DEVICE}"
       test -f "${OVERLAY}" \
-        || { echo "ERROR: kernel/modules/${DEVICE} overlay missing" >&2; exit 1; }
+        || { echo "ERROR: engine kernel-shared/modules/${DEVICE} overlay missing" >&2; exit 1; }
 
       # Bootstrap shared by the kernel module entries: locate the kernel deb,
       # download the kernel source, seed .config (kernel_prepare).

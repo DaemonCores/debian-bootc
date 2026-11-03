@@ -106,8 +106,10 @@ def test_ve_consumer_uses_the_engine_export() -> None:
 
     No raw distfetch of this repository: the former DC_DATA_REF /
     dc_data_fetch pattern (pinned commit + sha256 raw URLs against a sibling
-    production repo) is retired in favour of CI_KERNEL_SHARED. The lane-local
-    THP pin stays NEVER (hugepages belong to the PVE guests). The sibling
+    production repo) is retired in favour of CI_KERNEL_SHARED. The THP
+    arbitration is revoked lane-side (owner 2026-11-03 13:05): THP=never
+    travels with the image-lane -thpnever twins, never a lane kconfig pin.
+    The sibling
     checkout absent locally skips the assertions that need it — CI owns the
     cross-repo gate.
     """
@@ -118,16 +120,18 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     assert 'dc_data_fetch' not in text
     assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in text
     assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
-    # The lane-local THP pin lives in the restored kernel-pve/kconfig tree
-    # (merged LAST over the shared fragment, owner arbitration 12:55).
-    assert (
-        VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
-        'kconfig' / 'thp-never.cfg'
-    ).is_file()
+    # THP lane-side arbitration revoked (owner 2026-11-03 13:05, supersedes
+    # the 12:14/12:55 pins): the shared fragment's ALWAYS pin wins on the PVE
+    # lane too (full-LXC prime); THP=never travels with the image-lane
+    # -thpnever twins (karg transparent_hugepage=never), NEVER a lane-side
+    # kconfig pin, and the lane tree carries NO config line (empty
+    # sur-rides.cfg kept on purpose — documentation + precedent).
     thp = (
         VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
-        'kconfig' / 'thp-never.cfg'
-    ).read_text(encoding='utf-8')
-    assert 'CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n\n' in thp
-    assert 'CONFIG_TRANSPARENT_HUGEPAGE=y\n' in thp
-    assert 'CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=n\n' in thp
+        'kconfig' / 'sur-rides.cfg'
+    )
+    assert thp.is_file()
+    lane_text = thp.read_text(encoding='utf-8')
+    assert 'CONFIG_TRANSPARENT_HUGEPAGE=y\n' not in lane_text
+    assert 'CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n\n' not in lane_text
+    assert 'CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=n\n' not in lane_text
