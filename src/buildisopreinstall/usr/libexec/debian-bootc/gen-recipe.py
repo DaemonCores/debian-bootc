@@ -100,7 +100,11 @@ def _build_images(
             entry: JsonObject = {
                 "name": f"{distro_name} {variant} ({arch})",
                 "imgref": imgref,
-                "bootloader": "grub2",
+                # bootc-install bootloader: "auto" lets the installer detect
+                # the firmware at installation (UEFI → GRUB through bootupd,
+                # U-Boot boards → no bootc bootloader stage instead of baking
+                # the bootloader per image variant).
+                "bootloader": "auto",
                 "filesystem": "btrfs",
                 "composefs": False,
                 "needs_user_creation": True,

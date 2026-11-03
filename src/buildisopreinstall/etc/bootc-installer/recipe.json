@@ -7,7 +7,7 @@
         {
             "name": "DaemonCores Standard (amd64)",
             "imgref": "ghcr.io/daemoncores/debian-bootc:latest_amd64",
-            "bootloader": "grub2",
+            "bootloader": "auto",
             "filesystem": "btrfs",
             "composefs": false,
             "needs_user_creation": true,
@@ -19,7 +19,7 @@
         {
             "name": "DaemonCores Standard (arm64)",
             "imgref": "ghcr.io/daemoncores/debian-bootc:latest_arm64",
-            "bootloader": "grub2",
+            "bootloader": "auto",
             "filesystem": "btrfs",
             "composefs": false,
             "needs_user_creation": true,
@@ -31,7 +31,7 @@
         {
             "name": "DaemonCores Nvidia (amd64)",
             "imgref": "ghcr.io/daemoncores/debian-bootc:nvidia_amd64",
-            "bootloader": "grub2",
+            "bootloader": "auto",
             "filesystem": "btrfs",
             "composefs": false,
             "needs_user_creation": true,

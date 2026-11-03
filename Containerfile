@@ -47,14 +47,18 @@ LABEL org.daemoncores.arm64-4k-image="true"
 # tooling (libubootenv-tool, device-tree-compiler) on arm64.
 # Target architecture: amd64 (x86_64) default; CI overrides to arm64 via --build-arg ARCH=arm64.
 ARG ARCH=amd64
-# Boot profile, set by the CI from `LABEL org.daemoncores.boot-profile` (generic when
-# absent): `generic` boots through UEFI with the Fedora GRUB, `embedded` is arm64
-# boards whose firmware loads U-Boot. The CI derives BOOT_PKG and APT_HOLD_PKG from it.
+# Boot profile, kept for CI compatibility (`LABEL org.daemoncores.boot-profile`,
+# generic when absent): the CI still derives BOOT_PKG and APT_HOLD_PKG from it.
+# Both arm64 profiles now ship the SAME dual boot stack, because the bootloader
+# is no longer baked per-variant: it is auto-detected at install time
+# (UEFI → bootupd installs the Fedora GRUB, U-Boot boards → `--bootloader none`
+# and the board's U-Boot firmware serves /boot).
 ARG BOOT_PROFILE=generic
 # Boot stack chosen by the CI from the architecture and the boot profile:
 # grub-efi-amd64-signed (amd64), grub-efi-arm64-signed (arm64 generic) or
-# u-boot-tools (arm64 embedded). A separate ARG because arm64 does NOT follow the
-# grub-efi-${ARCH} pattern in the embedded profile.
+# u-boot-tools (arm64 embedded). The image completes the stack itself (the RUN
+# after the package list): every arm64 image ends up with GRUB + bootupd +
+# u-boot-tools, whatever the profile.
 ARG BOOT_PKG=grub-efi-amd64-signed
 # Firmware packages: x86_64 includes microcode + full firmware; arm64 drops microcode.
 ARG FIRMWARE_PKGS="intel-microcode amd64-microcode firmware-linux-free firmware-linux firmware-misc-nonfree"
@@ -158,9 +162,17 @@ RUN apt update \
             libubootenv-tool \
             device-tree-compiler; \
     fi \
-    && if [ "${BOOT_PROFILE}" = generic ]; then \
-        apt update \
-        && apt install -y --no-install-recommends bootupd; \
+    # Bootloader of the image, auto-detected at install, never baked per
+    # variant: every arm64 (and amd64) image ships bootupd next to the GRUB
+    # package, and arm64 also carries the U-Boot tooling. At install the
+    # installer detects the firmware: UEFI → bootupd installs GRUB from the
+    # image, U-Boot boards → fisherman passes --bootloader none and the
+    # board's U-Boot firmware serves /boot.
+    && apt update \
+    && apt install -y --no-install-recommends bootupd \
+    && if [ "${ARCH}" = arm64 ]; then \
+        apt install -y --no-install-recommends grub-efi-arm64-signed \
+        && apt-mark hold grub-efi-arm64-signed; \
     fi
 
 # -----------------------------------------------------------------------------

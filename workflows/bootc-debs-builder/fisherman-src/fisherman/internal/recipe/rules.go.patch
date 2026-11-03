@@ -1,0 +1,17 @@
+diff --git a/fisherman/internal/recipe/rules.go b/fisherman/internal/recipe/rules.go
+--- a/fisherman/internal/recipe/rules.go	2026-11-03 00:00:00.000000000 +0100
++++ b/fisherman/internal/recipe/rules.go	2026-11-03 09:20:03.625478820 +0100
+@@ -324,11 +324,11 @@
+ // CheckBootloader applies the bootloader rule.
+ func CheckBootloader(b string) []Problem {
+ 	switch b {
+-	case "", "grub2", "systemd":
++	case "", "grub2", "systemd", "auto":
+ 		return nil
+ 	default:
+ 		return []Problem{{"bootloader", CodeBootloaderUnsupported,
+-			fmt.Sprintf("bootloader must be \"grub2\" or \"systemd\", got %q", b)}}
++			fmt.Sprintf("bootloader must be \"grub2\", \"systemd\" or \"auto\", got %q", b)}}
+ 	}
+ }
+ 
