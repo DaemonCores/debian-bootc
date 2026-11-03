@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -168,12 +169,31 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
 def test_each_arm_module_follows_its_kernel() -> None:
     """Older devices build against the 4 KB kernel, recent ones the 16 KB."""
     devices = _variants('linux-modules-arm-device')
-    for old in ('rpi3', 'rpi4'):
+    for old in ('rpi3', 'rpi4', 'rk3399', 'h616', 'imx8m', 'mt8183'):
         assert devices[old]['deps'] == ['linux-image'], old
         assert 'env' not in devices[old], old
-    for recent in ('rpi5', 'rk3588'):
+    for recent in ('rpi5', 'rk3588', 'rk3566'):
         assert devices[recent]['deps'] == ['linux-image-16k'], recent
         assert devices[recent]['env'] == {'KERNEL_SUFFIX': '-16k'}, recent
+
+
+def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
+    """Each device module variant carries its kernel/modules/<SoC> fragment.
+
+    One fragment per SoC family, not per board: the rpi3 fragment covers
+    BCM2710A1 (Pi Zero 2 W), rk3566 covers the RK356x, h616 covers the sun50i
+    family. A variant without its overlay file would make the CI build fail
+    the "overlay missing" check at first build.
+    """
+    devices = _variants('linux-modules-arm-device')
+    overlays = MANIFEST.parent / 'kernel' / 'modules'
+    for device in devices:
+        overlay = overlays / device
+        assert overlay.is_file(), device
+        text = overlay.read_text()
+        assert 'CONFIG_' in text, f'{device}: fragment carries no config'
+        # The built-in SoC platform core is stated in every fragment.
+        assert re.search(r'^CONFIG_ARCH_\w+=y', text, re.M), device
 
 
 def test_there_is_no_unsigned_twin_anymore() -> None:
