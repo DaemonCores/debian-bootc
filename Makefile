@@ -226,8 +226,7 @@ docs-check: py-ready ci-repo
 # The shared base every image is built on; local only, never pushed.
 build-base:
 	podman build --format docker \
-	  --build-arg PRODUCT_NAME="debian bootc" \
-	  -f Containerfile.base -t localhost/debian-bootc-base .
+	  -f Containerfile.base -t localhost/debian-bootc-base:latest .
 
 build: build-base
 	podman build --format docker \
