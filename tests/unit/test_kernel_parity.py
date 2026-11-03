@@ -1,6 +1,6 @@
-"""Patch-parity pins of the shared kernel-pve kconfig fragment.
+"""Patch-parity pins of the shared kernel kconfig fragments.
 
-PATCH PARITY (owner, 2026-11-03): the kernel-pve kconfig fragments in this
+PATCH PARITY (owner, 2026-11-03): the shared kconfig fragments in this
 repository are THE canonical data both kernels consume — the debian
 linux-image build merges them in-repo (packages.yml) and DaemonCores-VE
 consumes them by pinned commit + sha256. These tests pin the arbitrated
@@ -13,11 +13,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 X86_COMMON = (
-    REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-pve' / 'kconfig' /
+    REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'kconfig-shared' /
     'x86-common.cfg'
 )
 CANONICAL_PATCHES = (
-    REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-pve' / 'patches.yml'
+    REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
+    'patches-shared.yml'
 )
 VE_MANIFEST = (
     REPO.parent / 'DaemonCores-VE' / 'workflows' / 'bootc-debs-builder' /
@@ -80,19 +81,24 @@ def test_canonical_patch_set_shape() -> None:
 
 
 def test_ve_consumer_is_reference_mode() -> None:
-    """VE kernel-pve consumes the set BY REFERENCE, pinned commit + sha256.
+    """VE kernel entry consumes the set BY REFERENCE, pinned commit + sha256.
 
     The VE entry defines no native patch data, and the local kconfig copy
     is deleted; its lane-local THP pin is NEVER (hugepages belong to the
     PVE guests). The sibling checkout absent locally skips the assertions
-    that need it — CI owns the cross-repo gate.
+    that need it — CI owns the cross-repo gate. The former PVE-directory
+    name is gone from this repository's builder data (it lives in the
+    tracked path of no file).
     """
     if not VE_MANIFEST.is_file():
         return
+    bootc_data = (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel')
+    assert (bootc_data / 'patches-shared.yml').is_file()
+    assert (bootc_data / 'kconfig-shared' / 'x86-common.cfg').is_file()
     text = VE_MANIFEST.read_text(encoding='utf-8')
     assert 'DC_DATA_REF=' in text
-    assert 'kernel-pve/patches.yml' in text
+    assert 'kernel/patches-shared.yml' in text
+    assert 'dc_data_fetch' in text
     assert 'kernel_apply_patches "${PATCHES_FILE}"' in text
     assert 'DC_DATA_BASE=' in text
     assert 'TRANSPARENT_HUGEPAGE_ALWAYS=n' in text
-    assert not (VE_MANIFEST.parent / 'kernel-pve' / 'kconfig').exists()

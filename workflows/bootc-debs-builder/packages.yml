@@ -127,7 +127,7 @@ packages:
     # PATCHES_JSON in the content hash): anchored here, referenced by the
     # module entries below. Since the patch-parity change (2026-11-03) the
     # shared XanMod set (bore included, the whole functional set) lives at
-    # kernel-pve/patches.yml and is applied by the build block below; this
+    # kernel/patches-shared.yml and is applied by the build block below; this
     # anchor keeps ONLY the debian-lane-specific entries.
     # Module-class patches ship as a module (the rule is in
     # docs/kernel-patches.md). A patch that cannot be downloaded or does not
@@ -194,7 +194,7 @@ packages:
 
       # PATCH PARITY (owner, 2026-11-03): the debian kernel carries the SAME
       # XanMod set as the PVE kernel build — the shared canonical list at
-      # workflow data kernel-pve/patches.yml (17 xanmod + 3 clearlinux + bore),
+      # workflow data kernel/patches-shared.yml (17 xanmod + 3 clearlinux + bore),
       # applied in addition to the anchor patches above by the same helper
       # (dry-run all-or-nothing). The PVE lane (DaemonCores-VE) consumes this
       # exact file by pinned commit + sha256, so BOTH kernels apply one
@@ -202,7 +202,7 @@ packages:
       # arm64 build is not touched.
       [[ "${DEB_ARCH}" = "amd64" ]] && \
         kernel_apply_patches \
-          "${SAVE_PWD}/workflows/bootc-debs-builder/kernel-pve/patches.yml" \
+          "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches-shared.yml" \
           "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
 
       cd "${SRCDIR}"
@@ -240,12 +240,12 @@ packages:
       # the fragments are x86 config; the x64vN flavour fragments stay the
       # PVE lane's flavour concept (debian keeps its own single flavour).
       if [ "${DEB_ARCH}" = "amd64" ]; then
-        PVE_KCFG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel-pve/kconfig"
-        CONFIG_FILES+=("${PVE_KCFG}/x86-common.cfg")
+        SHARED_KCFG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/kconfig-shared"
+        CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
         case "${KERNEL_GPU:-all}" in
-          all) CONFIG_FILES+=("${PVE_KCFG}/gpu/amd.cfg" "${PVE_KCFG}/gpu/intel.cfg" "${PVE_KCFG}/gpu/nvidia.cfg") ;;
+          all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
           none) ;;
-          *) for PVE_GPU in ${KERNEL_GPU}; do CONFIG_FILES+=("${PVE_KCFG}/gpu/${PVE_GPU}.cfg"); done ;;
+          *) for PVE_GPU in ${KERNEL_GPU}; do CONFIG_FILES+=("${SHARED_KCFG}/gpu/${PVE_GPU}.cfg"); done ;;
         esac
       fi
 
@@ -696,7 +696,8 @@ packages:
   # ===========================================================================
   - name: gpu-userspace
     # One variant per (usage profile, CPU level), the transverse-variant
-    # strategy of the VE kernel-pve entry (DaemonCores-VE packages.yml): the
+    # transverse-variant strategy of the PVE kernel build (DaemonCores-VE
+    # packages.yml): the
     # level is a build variable (GPU_LEVEL x64v1/x64v2/x64v3 on amd64, mapped
     # to -march by the CI helper kernel_flavour_kcflags, the same mapping the
     # kernels use; `generic` on arm64 = one build, no microarch matrix). All
@@ -908,14 +909,14 @@ packages:
         || { echo "ERROR: output ${PKG} deb empty" >&2; exit 1; }
 
   # ===========================================================================
-  # kernel-pve: NO build entry here. The PVE kernel build lives ONE place —
-  # DaemonCores-VE (the image that consumes the kernel). This repository
-  # carries the DATA both kernels build from, as data only:
-  #   workflows/bootc-debs-builder/kernel-pve/patches.yml   the canonical
+  # SHARED KERNEL DATA: NO build entry here. The PVE kernel build lives ONE
+  # place — DaemonCores-VE (the image that consumes the kernel). This
+  # repository carries the DATA both kernels build from, as data only:
+  #   workflows/bootc-debs-builder/kernel/patches-shared.yml  the canonical
   #     XanMod patch set — PATCH PARITY: the debian linux-image build applies
   #     it to its own kernel in-repo, and DaemonCores-VE consumes the same
   #     file by pinned commit + sha256 (one set, both kernels)
-  #   workflows/bootc-debs-builder/kernel-pve/kconfig/      base + GPU +
+  #   workflows/bootc-debs-builder/kernel/kconfig-shared/     base + GPU +
   #     flavour kconfig fragments (the base + GPU fragments are merged into
   #     the debian kernel too; VE consumes them by pinned ref + sha256 since
   #     bef03ff)
