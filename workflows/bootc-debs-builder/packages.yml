@@ -377,12 +377,17 @@ packages:
       # jobs (e.g. grub-efi-amd64-signed) of disk space.
       rm -rf "${SRCDIR}" /tmp/linux-*
 
-  # linux-modules-arm-device: one template for all four ARM device-specific
-  # module packages. The CI expands each variant into an independent build job
-  # (see the manifest-expand action) and injects VARIANT from the variant key,
-  # so this build script is written once.
-  # Variants (all wave 1): linux-modules-rpi3 / linux-modules-rpi4 depend on
-  # linux-image, linux-modules-rpi5 / linux-modules-rk3588 on linux-image-16k.
+  # linux-modules-arm-device: one template for all ARM device-specific module
+  # packages (one per SoC FAMILY, not per board — a fragment covers every
+  # board of its SoC generation: rpi3 also serves the Pi Zero 2 W
+  # (BCM2710A1), rk3566 serves RK3566/RK3568, h616 serves the sun50i family
+  # H616/H613/H6/A64, imx8m serves 8MQ/8MM/8MP, mt8183 serves the
+  # MT8167-8183 Chromebook class). The CI expands each variant into an
+  # independent build job (see the manifest-expand action) and injects
+  # VARIANT from the variant key, so this build script is written once.
+  # Variants (all wave 1): linux-modules-rpi3 / -rpi4 / -rk3399 / -h616 /
+  # -imx8m / -mt8183 depend on linux-image, linux-modules-rpi5 / -rk3588 /
+  # -rk3566 on linux-image-16k.
   # Each starts from the .config shipped in its kernel deb (base + arm overlay
   # + page size) and merges only its own device overlay.
   - name: linux-modules-arm-device
@@ -410,6 +415,31 @@ packages:
           - linux-image-16k
         env:
           KERNEL_SUFFIX: "-16k"
+      # RK356x family (RK3566/RK3568): same recent-hardware kernel page size
+      # as the RK3588 — one rockchip 16 KB kernel build serves both.
+      rk3566:
+        deps:
+          - linux-image-16k
+        env:
+          KERNEL_SUFFIX: "-16k"
+      # RK3399: pre-RK3588 generation, 4 KB kernel (old devices wave).
+      rk3399:
+        deps:
+          - linux-image
+      # Allwinner sun50i family (H616/H613/H6/A64): upstream sunxi arm64 is
+      # 4 KB proven; 16 KB stays unarbitrated until it boots on an H616.
+      h616:
+        deps:
+          - linux-image
+      # NXP i.MX8M family (8MQ/8MM/8MP): 4 KB kernel, the old-devices wave.
+      imx8m:
+        deps:
+          - linux-image
+      # MediaTek MT8167-MT8183 family (kukui/jacuzzi Chromebooks): 4 KB
+      # kernel until a MediaTek 16 KB story is proven.
+      mt8183:
+        deps:
+          - linux-image
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
     variant-source: "kernel/modules/{variant}"
