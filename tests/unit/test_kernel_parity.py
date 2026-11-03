@@ -122,8 +122,21 @@ def test_no_arch_overlay_merge() -> None:
     # entries (rpi3/rpi4/...), which the fold keeps untouched.
     for stale in ('modules/arm', 'modules/x86_64'):
         assert f'"${{CI_KERNEL_SHARED}}/{stale}"' not in text, stale
-    mod_uses = re.findall(r'"\$\{CI_KERNEL_SHARED\}/modules/([^"]+)"', text)
-    assert mod_uses == ['${DEVICE}'], mod_uses
+    # KERNEL FINAL v2 (owner 2026-11-03): the per-DEVICE fragment merged by the
+    # device modules entries lives IN THIS REPO (kernel/modules/<device>) —
+    # no engine kernel-shared/modules path on the modules lane, and the nine
+    # device fragments are committed here.
+    mod_uses = re.findall(r'kernel/modules/\$\{DEVICE\}', text)
+    assert len(mod_uses) == 2, mod_uses
+    assert '"${CI_KERNEL_SHARED}/modules' not in text
+    assert 'kernel/modules' in text
+    devices = sorted(p.name for p in (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules'
+    ).iterdir())
+    assert devices == sorted((
+        'rpi3', 'rpi4', 'rpi5', 'rk3588', 'rk3566',
+        'rk3399', 'h616', 'imx8m', 'mt8183',
+    )), devices
     cfg = (CANONICAL_DATA / 'config').read_text(encoding='utf-8')
     for section in ('# arm64 built-in', '# amd64 built-in'):
         assert section in cfg, section
