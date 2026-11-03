@@ -297,6 +297,17 @@ tests:
     diag: |
       cat /sys/module/module/parameters/sig_enforce 2>&1
       dpkg-query -W 'daemoncores-kernel-*' 2>&1
+  # PATCH PARITY / THP arbitration (owner, 2026-11-03 12:14 revised): the
+  # embedded image primes the AI-optimised compute profile — THP ALWAYS.
+  # (DaemonCores-VE: same patch set, THP NEVER — hugepages belong to the
+  # PVE guests. The state travels IN the kernel config, so this sysfs probe
+  # is also the parity proof of the shared x86-common.cfg fragment.)
+  - name: THP arbitration — transparent_hugepage enabled=always
+    run: '[ "$(cat /sys/kernel/mm/transparent_hugepage/enabled)" = always ]'
+    diag: |
+      cat /sys/kernel/mm/transparent_hugepage/enabled 2>&1
+      grep . /sys/kernel/mm/transparent_hugepage/defrag 2>&1
+      dpkg-query -W 'daemoncores-kernel-*' 2>&1
   # Every arm64 image now ships BOTH boot stacks (grub-efi-arm64-signed +
   # bootupd + the U-Boot tooling); the one used on the disk is decided at
   # install time from the firmware the machine booted through: UEFI → bootupd
