@@ -86,16 +86,59 @@ packages:
   # Two kernels on arm64 (docs/Handoff-Decisions.md, "Two arm64 kernels"): the page size
   # is a compile-time choice, so the 4 KB kernel (older devices: Raspberry Pi 3
   # and 4) and the 16 KB kernel (recent hardware: Raspberry Pi 5, RK3588) are two
-  # builds of this same script. The variant key is a name suffix: "" keeps the
-  # plain `linux-image` (4 KB; also the only amd64 kernel), "-16k" produces
-  # `linux-image-16k` (arm64 only). KERNEL_SUFFIX carries the key, KERNEL_PAGES
-  # selects the overlay under the engine kernel-shared/pages/.
+  # builds of this same script. The variant key is a name suffix: "": the
+  # plain `linux-image` (4 KB on arm64; the x64v1 flavour on amd64). Since the
+  # 7-flavour arbitration (owner 2026-11-03 13:05) the matrix is: x64v1..v4
+  # on amd64 (variant keys -x64v2/x64v3, -x64v4; KERNEL_ARCH_LEVEL selects
+  # the flavour fragment of the shared engine export and the flavour
+  # KCFLAGS), armv8.0 / armv8.2-lse / armv9-sve2 on arm64 (4 KB), and the
+  # 4 KB/16 KB page-size split of the plain arm64 baseline ("-16k" produces
+  # `linux-image-16k`, arm64 only). KERNEL_SUFFIX carries the name suffix,
+  # KERNEL_PAGES selects the page-size overlay.
   - name: linux-image
     ccache: true
     variant-name-prefix: linux-image
     variant-env: KERNEL_SUFFIX
     variants:
-      "": {}
+      "":
+        env:
+          KERNEL_ARCH_LEVEL: x64v1
+      "-x64v2":
+        when:
+          arch: amd64
+        deb-glob: "linux-image-common-x64v2_*"
+        env:
+          KERNEL_ARCH_LEVEL: x64v2
+      "-x64v3":
+        when:
+          arch: amd64
+        deb-glob: "linux-image-common-x64v3_*"
+        env:
+          KERNEL_ARCH_LEVEL: x64v3
+      "-x64v4":
+        when:
+          arch: amd64
+        deb-glob: "linux-image-common-x64v4_*"
+        env:
+          KERNEL_ARCH_LEVEL: x64v4
+      "-armv8.0":
+        when:
+          arch: arm64
+        deb-glob: "linux-image-common-armv8.0_*"
+        env:
+          KERNEL_ARCH_LEVEL: armv8.0
+      "-armv8.2-lse":
+        when:
+          arch: arm64
+        deb-glob: "linux-image-common-armv8.2-lse_*"
+        env:
+          KERNEL_ARCH_LEVEL: armv8.2-lse
+      "-armv9-sve2":
+        when:
+          arch: arm64
+        deb-glob: "linux-image-common-armv9-sve2_*"
+        env:
+          KERNEL_ARCH_LEVEL: armv9-sve2
       "-16k":
         when:
           arch: arm64
@@ -119,27 +162,14 @@ packages:
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
       SB_SIGNING_CERT: SB_SIGNING_CERT
-    # Native patch data (the canonical patches schema, hashed via
-    # PATCHES_JSON in the content hash): anchored here, referenced by the
-    # module entries below. Since the patch-parity arbitration (2026-11-03,
-    # revised 12:55) the shared XanMod set lives in the build engine and is
-    # applied by the build block below via CI_KERNEL_SHARED; this anchor
-    # keeps ONLY the debian-lane-specific entries.
-    # Module-class patches ship as a module (the rule is in
-    # docs/kernel-patches.md). A patch that cannot be downloaded or does not
-    # apply fails the kernel build, so the last-good published deb is kept.
-    patches: &kernel-patches
-      - name: rocknix-btrtl-rtl8733bu
-        # 171 chars: the upstream file name cannot be split (YAML folds a
-        # line break to a space, which would corrupt the URL).
-        url: https://github.com/ROCKNIX/distribution/raw/next/projects/ROCKNIX/packages/linux/patches/mainline/0005-Bluetooth-btrtl-Add-the-support-for-RTL8733BU.patch  # yamllint disable-line rule:line-length
-        stage: arm64
-        # The upstream context of btusb.c moved (186 lines, two context lines
-        # differ); the hunk only inserts one device-ID entry. Placement verified on
-        # 7.2.14: it lands between 0xb011 and the 8761BUV block.
-        fuzz: 2
-        license: GPL-2.0-only
-        class: module
+    # Patch data (owner arbitration 2026-11-03 13:05): the production
+    # packages.yaml carry NO native `patches:` list — the canonical set
+    # (shared XanMod+clearlinux, bore series-gated, the debian-lane module
+    # carrier rocknix-btrtl) lives ONLY in the build engine
+    # (DaemonCores-CI build-deb/kernel-shared/patches-shared.yml), applied
+    # by the build block via CI_KERNEL_SHARED. A patch that cannot be
+    # downloaded or does not apply fails the kernel build, so the last-good
+    # published deb is kept.
     sources:
       # The base config, the two architecture overlays and the source download
       # feed this package's content hash. A per-device overlay change must NOT
@@ -150,13 +180,16 @@ packages:
       # shared set are engine data (CI_KERNEL_SHARED, hashed by the engine's
       # shared term) — nothing of the kernel build data lives in this repo.
     # Rolling: the kernel is the newest stable or longterm release of kernel.org
-    # whose series every patch source (CachyOS, ROCKNIX) already provides
-    # (version and tarball sha256 resolved before each build, nothing pinned).
-    # If that release does not build, the last-good published deb is kept.
+    # whose series every patch source (CachyOS, ROCKNIX) already provides,
+    # PROBED IN THE ENGINE (`require-patches: engine`) — the newest series
+    # whose every patch of the shared set is upstream-available wins (7.3
+    # without a CachyOS bore sibling falls back to 7.2 automatically). Nothing
+    # pinned; version and tarball sha256 resolved before each build. If the
+    # chosen release does not build, the last-good published deb is kept.
     track:
       KERNEL_VER:
         kernel-org: stable
-        require-patches: native
+        require-patches: engine
         digests:
           KERNEL_SHA256: "linux-{version}.tar.xz"
     build: |
@@ -227,8 +260,9 @@ packages:
       # same export): the XanMod-flavoured x86 base and the GPU sets merged
       # transversely (ONE optimised kernel, every vendor, no per-vendor
       # matrix; KERNEL_GPU=none disables, mirrors the VE entry). amd64 only —
-      # the fragments are x86 config; the x64vN flavour fragments stay the
-      # PVE lane's flavour concept (debian keeps its own single flavour).
+      # The fragments are x86 config; the x64vN flavour fragment of THIS
+      # variant is merged above (KERNEL_ARCH_LEVEL): debian carries the SAME
+      # 7-flavour matrix as the PVE lane (owner 2026-11-03 13:05).
       if [ "${DEB_ARCH}" = "amd64" ]; then
         SHARED_KCFG="${CI_KERNEL_SHARED}/kconfig-shared"
         CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
@@ -237,6 +271,13 @@ packages:
           none) ;;
           *) for PVE_GPU in ${KERNEL_GPU}; do CONFIG_FILES+=("${SHARED_KCFG}/gpu/${PVE_GPU}.cfg"); done ;;
         esac
+        # The kernel FLAVOUR fragment (LOCALVERSION -x64vN-xanmod1) of this
+        # variant (KERNEL_ARCH_LEVEL) — baseline flavours carry it too; the
+        # guarded -s merge keeps the lane usable when the engine carries no
+        # fragment for the level (e.g. the 4 KB arm64 kernel of the plain
+        # variant name).
+        [[ -s "${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
+          CONFIG_FILES+=("${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg")
       fi
 
       # Merge the base config (filesystems, virtio, serial, disables — the
@@ -274,7 +315,9 @@ packages:
       # Makefile reads it from the environment; no make argument needed.
       # KDEB_PKGVERSION pins the deb version to <kernel>-1 so that the module
       # entries recover the kernel.org version from it (BUILT_VER%%-*).
-      KDEB_PKGVERSION="${KERNEL_VER}-1" make -j"$(nproc)" bindeb-pkg
+      KDEB_PKGVERSION="${KERNEL_VER}-1" \
+      KCFLAGS="$(kernel_flavour_kcflags "${KERNEL_ARCH_LEVEL:-}")" \
+      make -j"$(nproc)" bindeb-pkg
 
       # Find the produced image deb (exclude debug debs).
       COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
@@ -447,10 +490,9 @@ packages:
     track:
       KERNEL_VER:
         kernel-org: stable
-        require-patches: native
+        require-patches: engine
     sources:
       - preinstall/output/linux-modules-arm-device
-    patches: *kernel-patches
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
@@ -592,7 +634,6 @@ packages:
     deps:
       - linux-image
     deb-glob: "linux-modules-nvidia_*"
-    patches: *kernel-patches
     sources:
       - nvidia
     env:
