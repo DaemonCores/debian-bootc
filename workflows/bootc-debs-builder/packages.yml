@@ -125,10 +125,10 @@ packages:
       SB_SIGNING_CERT: SB_SIGNING_CERT
     # Native patch data (the canonical patches schema, hashed via
     # PATCHES_JSON in the content hash): anchored here, referenced by the
-    # module entries below. Since the patch-parity change (2026-11-03) the
-    # shared XanMod set (bore included, the whole functional set) lives at
-    # kernel/patches-shared.yml and is applied by the build block below; this
-    # anchor keeps ONLY the debian-lane-specific entries.
+    # module entries below. Since the patch-parity arbitration (2026-11-03,
+    # revised 12:55) the shared XanMod set lives in the build engine and is
+    # applied by the build block below via CI_KERNEL_SHARED; this anchor
+    # keeps ONLY the debian-lane-specific entries.
     # Module-class patches ship as a module (the rule is in
     # docs/kernel-patches.md). A patch that cannot be downloaded or does not
     # apply fails the kernel build, so the last-good published deb is kept.
@@ -192,17 +192,19 @@ packages:
       # common first, then this architecture.
       kernel_apply_patches - "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}" kernel
 
-      # PATCH PARITY (owner, 2026-11-03): the debian kernel carries the SAME
-      # XanMod set as the PVE kernel build — the shared canonical list at
-      # workflow data kernel/patches-shared.yml (17 xanmod + 3 clearlinux + bore),
-      # applied in addition to the anchor patches above by the same helper
-      # (dry-run all-or-nothing). The PVE lane (DaemonCores-VE) consumes this
-      # exact file by pinned commit + sha256, so BOTH kernels apply one
-      # identical set: one list, two consumers. x86-only by nature — the
-      # arm64 build is not touched.
+      # PATCH PARITY (owner 2026-11-03): the debian kernel carries the SAME
+      # XanMod set as the PVE kernel build — the canonical shared list
+      # (patch-parity: 17 xanmod + 3 clearlinux + bore) lives in the build
+      # engine (DaemonCores-CI build-deb/kernel-shared/, exported to this very
+      # build shell as CI_KERNEL_SHARED) and is applied in addition to the
+      # anchor patches above by the same helper (dry-run all-or-nothing). The
+      # PVE lane (DaemonCores-VE) consumes the same export in its checkout, so
+      # BOTH kernels apply one identical set: one list, two consumers, no copy
+      # in either production repo. x86-only by nature — the arm64 build is not
+      # touched.
       [[ "${DEB_ARCH}" = "amd64" ]] && \
         kernel_apply_patches \
-          "${SAVE_PWD}/workflows/bootc-debs-builder/kernel/patches-shared.yml" \
+          "${CI_KERNEL_SHARED}/patches-shared.yml" \
           "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
 
       cd "${SRCDIR}"
@@ -232,15 +234,16 @@ packages:
         CONFIG_FILES+=("${PAGES_OVERLAY}")
       fi
 
-      # Shared kconfig fragments of the PVE kernel lane (in-repo data here,
-      # this repo is the single source; VE consumes them by pinned ref +
-      # sha256): the XanMod-flavoured x86 base and the GPU sets merged
+      # Shared kconfig fragments (owner arbitration 2026-11-03 12:55: the set
+      # lives in the build engine — DaemonCores-CI build-deb/kernel-shared/
+      # kconfig-shared, exported here as CI_KERNEL_SHARED; VE consumes the
+      # same export): the XanMod-flavoured x86 base and the GPU sets merged
       # transversely (ONE optimised kernel, every vendor, no per-vendor
       # matrix; KERNEL_GPU=none disables, mirrors the VE entry). amd64 only —
       # the fragments are x86 config; the x64vN flavour fragments stay the
       # PVE lane's flavour concept (debian keeps its own single flavour).
       if [ "${DEB_ARCH}" = "amd64" ]; then
-        SHARED_KCFG="${SAVE_PWD}/workflows/bootc-debs-builder/kernel/kconfig-shared"
+        SHARED_KCFG="${CI_KERNEL_SHARED}/kconfig-shared"
         CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
         case "${KERNEL_GPU:-all}" in
           all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
@@ -939,17 +942,16 @@ packages:
         || { echo "ERROR: output ${PKG} deb empty" >&2; exit 1; }
 
   # ===========================================================================
-  # SHARED KERNEL DATA: NO build entry here. The PVE kernel build lives ONE
-  # place — DaemonCores-VE (the image that consumes the kernel). This
-  # repository carries the DATA both kernels build from, as data only:
-  #   workflows/bootc-debs-builder/kernel/patches-shared.yml  the canonical
-  #     XanMod patch set — PATCH PARITY: the debian linux-image build applies
-  #     it to its own kernel in-repo, and DaemonCores-VE consumes the same
-  #     file by pinned commit + sha256 (one set, both kernels)
-  #   workflows/bootc-debs-builder/kernel/kconfig-shared/     base + GPU +
-  #     flavour kconfig fragments (the base + GPU fragments are merged into
-  #     the debian kernel too; VE consumes them by pinned ref + sha256 since
-  #     bef03ff)
+  # SHARED KERNEL DATA: carried by the build engine — DaemonCores-CI
+  # build-deb/kernel-shared/ (owner arbitration 2026-11-03 12:55), exported
+  # to every build as CI_KERNEL_SHARED. This repository defines NO copy:
+  #   build-deb/kernel-shared/patches-shared.yml  the canonical XanMod patch
+  #     set — PATCH PARITY: the debian linux-image build applies it to its
+  #     own kernel; DaemonCores-VE kernel-pve consumes the same export
+  #     (one set, both kernels, no cross-repo fetch)
+  #   build-deb/kernel-shared/kconfig-shared/     base + GPU + flavour
+  #     kconfig fragments (base + GPU merged into the debian kernel too;
+  #     the VE lane merges them with its own lane-local THP=never override)
   # No logic is duplicated here; the build orchestrates the standard kernel
   # helpers of DaemonCores-CI scripts/kernel_helpers.sh.
   #
