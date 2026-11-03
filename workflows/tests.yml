@@ -325,7 +325,9 @@ tests:
       out=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' \
             grub-efi-arm64-signed bootupd u-boot-tools 2>&1)
       echo "$out"
-      [ "$(echo "$out" | grep -c '^ii')" -eq 3 ]
+      # 'ii' = installed, 'hi' = held (grub + u-boot-tools are deliberately
+      # hold-marked by the package manifest) — both count as installed.
+      [ "$(echo "$out" | grep -cE '^[a-z]i ')" -eq 3 ]
     diag: |
       command -v mkimage 2>&1 || echo "mkimage absent"
       dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' \
