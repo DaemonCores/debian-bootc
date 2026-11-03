@@ -1,5 +1,5 @@
 ---
-# kernel-pve patch data — the CANONICAL patch list of the PVE kernel lane
+# shared kernel patch data — the CANONICAL patch list of the PVE kernel lane
 # (the XanMod set applied over the Proxmox kernel packaging at build time)
 # AND the debian linux-image build: PATCH PARITY (owner, 2026-11-03). The
 # debian kernel applies this same set in addition to its own anchor patches
