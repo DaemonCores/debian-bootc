@@ -1,0 +1,117 @@
+---
+# kernel-pve patch data — the CANONICAL patch list of the PVE kernel lane
+# (the XanMod set applied over the Proxmox kernel packaging at build time)
+# AND the debian linux-image build: PATCH PARITY (owner, 2026-11-03). The
+# debian kernel applies this same set in addition to its own anchor patches
+# (packages.yml linux-image); the PVE kernel build (DaemonCores-VE) consumes
+# this exact file by pinned commit + sha256 — one list, two consumers, no
+# copy outside this repository. {seriesdir}/{topic} placeholders resolve
+# inside kernel_patch_list (DaemonCores-CI): each lane resolves its own
+# kernel series (PVE tracks 7.0.x -> eol/linux-7.0.y-xanmod; the debian
+# kernel resolves its tracked series). Source reviewed 2026-10-29 (series
+# 7.0): 17 xanmod + 3 clearlinux entries + bore (which travels with the
+# shared set so the SCHED_BORE pin of kconfig/x86-common.cfg resolves on
+# both kernels); 0004-ata-before-graphics removed (no
+# longer applies to the 7.0.x tree); 0003-kbuild-sms-pipelining retired
+# (dry-run fails on both series variants). A patch that cannot be downloaded
+# or applied fails the consumer build (dry-run all-or-nothing).
+patches:
+      - name: 0001-x86-cflags
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0001-XANMOD-x86-build-Add-more-CFLAGS-optimizations.patch
+        topic: xanmod
+        stage: common
+      # 0002-kbuild-llvm-plo: PINNED to the active 7.3 file: the EOL 7.0
+      # sibling does not apply to the 7.0.x tree; the absolute URL keeps a
+      # series bump from silently moving it.
+      - name: 0002-kbuild-llvm-plo
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/linux-7.3.y-xanmod/xanmod/0002-XANMOD-kbuild-Add-LLVM-polyhedral-loop-optimizer-fla.patch
+        topic: xanmod
+        stage: common
+      - name: 0004-kbuild-debpkg-dbg
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0004-XANMOD-kbuild-deb-pkg-Create-dbg-when-make-DEB_DEBUG.patch
+        topic: xanmod
+        stage: common
+      - name: 0005-kbuild-sign-external-cfg
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0005-kbuild-Re-add-.config-file-required-to-sign-external.patch
+        topic: xanmod
+        stage: common
+      - name: 0006-fair-unscaled-tunables
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0006-XANMOD-fair-Set-scheduler-tunable-latencies-to-unsca.patch
+        topic: xanmod
+        stage: common
+      - name: 0007-mq-deadline-write-prio
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0007-XANMOD-block-mq-deadline-Increase-write-priority-to-.patch
+        topic: xanmod
+        stage: common
+      - name: 0008-mq-deadline-front-merges
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0008-XANMOD-block-mq-deadline-Disable-front_merges-by-def.patch
+        topic: xanmod
+        stage: common
+      - name: 0009-block-rq-affinity
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0009-XANMOD-block-Set-rq_affinity-to-force-complete-I-O-r.patch
+        topic: xanmod
+        stage: common
+      - name: 0010-blk-wbt-latency
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0010-XANMOD-blk-wbt-Set-wbt_default_latency_nsec-to-2msec.patch
+        topic: xanmod
+        stage: common
+      - name: 0011-kconfig-500hz
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0011-XANMOD-kconfig-add-500Hz-timer-interrupt-kernel-conf.patch
+        topic: xanmod
+        stage: common
+      - name: 0012-vfs-cache-pressure
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0012-XANMOD-vfs-Decrease-rate-at-which-vfs-caches-are-rec.patch
+        topic: xanmod
+        stage: common
+      - name: 0013-mm-max-map-count
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0013-XANMOD-mm-Raise-max_map_count-default-value.patch
+        topic: xanmod
+        stage: common
+      - name: 0014-mm-vmscan-swappiness
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0014-XANMOD-mm-vmscan-Reduce-amount-of-swapping.patch
+        topic: xanmod
+        stage: common
+        # The Ubuntu mirror tree's context around the line differs (fuzz 2);
+        # the hunk rewrites the single `int vm_swappiness = 60;` line, verified
+        # at mm/vmscan.c:201 of the pinned 7.0 tree.
+        fuzz: 2
+      - name: 0015-cpufreq-governor-tunes
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0015-XANMOD-cpufreq-tunes-ondemand-and-conservative-gover.patch
+        topic: xanmod
+        stage: common
+      - name: 0016-kconfig-symbolic-err
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0016-XANMOD-lib-kconfig.debug-disable-default-SYMBOLIC_ER.patch
+        topic: xanmod
+        stage: common
+      - name: 0017-setlocalversion-tag
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0017-XANMOD-scripts-setlocalversion-remove-tag-for-git-re.patch
+        topic: xanmod
+        stage: common
+      - name: 0018-setlocalversion-file
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0018-XANMOD-scripts-setlocalversion-Move-localversion-fil.patch
+        topic: xanmod
+        stage: common
+      - name: 0001-wait-lifo
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0001-sched-wait-Do-accept-in-LIFO-order-for-cache-efficie.patch
+        topic: clearlinux
+        stage: common
+      - name: 0002-firmware-stateless
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0002-firmware-Enable-stateless-firmware-loading.patch
+        topic: clearlinux
+        stage: common
+      - name: 0003-rwsem-spin
+        url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0003-locking-rwsem-spin-faster.patch
+        topic: clearlinux
+        stage: common
+      # 0004-ata-before-graphics REMOVED (series 7.0 review): downloads but no
+      # longer applies to the 7.0.x tree — drivers initialize ata before
+      # graphics upstream now.
+      # BORE travels with the shared set (owner 2026-11-03): its config pin
+      # (SCHED_BORE) lives in kconfig/x86-common.cfg, so both kernels get the
+      # sched profile from the same source. CachyOS serves the series dir per
+      # {series}; a series without a bore sibling fails the consumer build
+      # (dry-run, all-or-nothing) and keeps the last-good deb.
+      - name: bore
+        url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/{series}/sched/0001-bore.patch
+        stage: common
+        license: GPL-2.0-only
