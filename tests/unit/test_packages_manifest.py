@@ -152,13 +152,26 @@ def _variants(name: str) -> dict[str, Any]:
 
 
 def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
-    """The kernel entry builds a 4 KB kernel and an arm64-only 16 KB one."""
+    """The kernel entry keeps the 4 KB/16 KB arm64 page-size split alongside
+    the 7-flavour matrix (x64v1..v4 amd64, armv8.0/v8.2-lse/v9-sve2 arm64,
+    owner arbitration 2026-11-03 13:05)."""
     entry = _packages()['linux-image']
     variants = _variants('linux-image')
-    assert set(variants) == {'', '-16k'}
+    assert '' in variants and '-16k' in variants
+    assert set(variants) == {
+        '', '-x64v2', '-x64v3', '-x64v4',
+        '-armv8.0', '-armv8.2-lse', '-armv9-sve2', '-16k',
+    }
     assert entry['env']['KERNEL_PAGES'] == '4k'
     assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
     assert variants['-16k']['when'] == {'arch': 'arm64'}
+    assert variants['']['env']['KERNEL_ARCH_LEVEL'] == 'x64v1'
+    for flavour in ('-x64v2', '-x64v3', '-x64v4'):
+        assert variants[flavour]['when'] == {'arch': 'amd64'}
+        assert variants[flavour]['env']['KERNEL_ARCH_LEVEL'] == flavour[1:]
+    for flavour in ('-armv8.0', '-armv8.2-lse', '-armv9-sve2'):
+        assert variants[flavour]['when'] == {'arch': 'arm64'}
+        assert variants[flavour]['env']['KERNEL_ARCH_LEVEL'] == flavour[1:]
     assert 'when' not in entry
     root = (
         MANIFEST.parents[2].parent / 'DaemonCores-CI' / 'build-deb' /
