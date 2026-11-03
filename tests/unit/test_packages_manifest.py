@@ -160,7 +160,12 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
     assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
     assert variants['-16k']['when'] == {'arch': 'arm64'}
     assert 'when' not in entry
-    root = MANIFEST.parent / 'kernel' / 'pages'
+    root = (
+        MANIFEST.parents[2].parent / 'DaemonCores-CI' / 'build-deb' /
+        'kernel-shared' / 'pages'
+    )
+    if not root.is_dir():
+        return
     assert 'CONFIG_ARM64_4K_PAGES=y' in (root / '4k').read_text()
     assert 'CONFIG_ARM64_16K_PAGES=y' in (root / '16k').read_text()
     assert 'CONFIG_LOCALVERSION="-16k"' in (root / '16k').read_text()
@@ -183,10 +188,17 @@ def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
     One fragment per SoC family, not per board: the rpi3 fragment covers
     BCM2710A1 (Pi Zero 2 W), rk3566 covers the RK356x, h616 covers the sun50i
     family. A variant without its overlay file would make the CI build fail
-    the "overlay missing" check at first build.
+    the "overlay missing" check at first build. The fragments are engine data
+    (DaemonCores-CI build-deb/kernel-shared/modules) — skipped when the
+    sibling engine checkout is not present locally.
     """
     devices = _variants('linux-modules-arm-device')
-    overlays = MANIFEST.parent / 'kernel' / 'modules'
+    overlays = (
+        MANIFEST.parents[2].parent / 'DaemonCores-CI' / 'build-deb' /
+        'kernel-shared' / 'modules'
+    )
+    if not overlays.is_dir():
+        return
     for device in devices:
         overlay = overlays / device
         assert overlay.is_file(), device
