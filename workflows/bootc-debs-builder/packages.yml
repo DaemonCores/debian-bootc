@@ -139,7 +139,9 @@ packages:
         class: kernel
 
       - name: rocknix-btrtl-rtl8733bu
-        url: https://raw.githubusercontent.com/ROCKNIX/distribution/next/projects/ROCKNIX/packages/linux/patches/mainline/0005-Bluetooth-btrtl-Add-the-support-for-RTL8733BU.patch
+        # 171 chars: the upstream file name cannot be split (YAML folds a
+        # line break to a space, which would corrupt the URL).
+        url: https://github.com/ROCKNIX/distribution/raw/next/projects/ROCKNIX/packages/linux/patches/mainline/0005-Bluetooth-btrtl-Add-the-support-for-RTL8733BU.patch  # yamllint disable-line rule:line-length
         stage: arm64
         # The upstream context of btusb.c moved (186 lines, two context lines
         # differ); the hunk only inserts one device-ID entry. Placement verified on
