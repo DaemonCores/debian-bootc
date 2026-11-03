@@ -62,7 +62,8 @@ def test_build_images_bootloader_is_install_time_auto(tmp_path: Path) -> None:
     """
     (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
     images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
-    assert images and all(i["bootloader"] == "auto" for i in images)
+    assert images
+    assert all(i["bootloader"] == "auto" for i in images)
 
 
 def test_main_updates_only_images_fields(tmp_path: Path) -> None:
