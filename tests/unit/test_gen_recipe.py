@@ -50,6 +50,21 @@ def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
     assert images[2]["name"] == "Deb Nvidia (amd64)"
 
 
+def test_build_images_bootloader_is_install_time_auto(tmp_path: Path) -> None:
+    """Every generated entry leaves the bootloader to install-time detection.
+
+    The bootloader must not be baked per variant: "auto" is resolved by
+    fisherman from the firmware of the machine being installed to (UEFI →
+    GRUB through bootupd, U-Boot boards → no bootc bootloader stage).
+
+    Args:
+        tmp_path: Scratch directory holding the fake Containerfiles.
+    """
+    (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
+    images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
+    assert images and all(i["bootloader"] == "auto" for i in images)
+
+
 def test_main_updates_only_images_fields(tmp_path: Path) -> None:
     """Static recipe fields are preserved; imgref/images are replaced.
 

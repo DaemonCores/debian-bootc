@@ -1,8 +1,50 @@
 diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
-index 26f74ff..2e88f25 100644
---- a/fisherman/cmd/fisherman/main.go
-+++ b/fisherman/cmd/fisherman/main.go
-@@ -864,6 +864,45 @@ func main() {
+--- a/fisherman/cmd/fisherman/main.go	2026-11-03 00:00:00.000000000 +0100
++++ b/fisherman/cmd/fisherman/main.go	2026-11-03 09:20:03.625364185 +0100
+@@ -211,6 +211,33 @@
+ 	return nil
+ }
+ 
++// resolveBootloader maps the recipe's bootloader to the value bootc receives.
++// "auto" means the bootloader is detected at installation (Debian-bootc dual
++// bootloader images): a machine the installer runs on when it booted through
++// UEFI installs GRUB through bootupd exactly like a grub2 recipe; anything
++// else — U-Boot boards, whose firmware is not UEFI — passes --bootloader none
++// so bootc writes no bootloader and the board's U-Boot firmware serves /boot.
++func resolveBootloader(b string) string {
++	if b != "auto" {
++		return b
++	}
++	if efiFirmwarePresent() {
++		progress.Info("Detected UEFI firmware: bootc installs GRUB (bootupd)")
++		return "grub2"
++	}
++	progress.Info("Detected U-Boot firmware: bootc skips the bootloader stage")
++	return "none"
++}
++
++// efiFirmwarePresent reports whether the machine fisherman is installing on
++// was booted through UEFI: /sys/firmware/efi only exists when the firmware
++// has exposed the EFI system table (Linux leaves it absent on legacy BIOS and
++// on U-Boot boots).
++func efiFirmwarePresent() bool {
++	st, err := os.Stat("/sys/firmware/efi")
++	return err == nil && st.IsDir()
++}
++
+ var version = "dev"
+ 
+ func printHelp() {
+@@ -727,7 +754,7 @@
+ 		UnifiedStorage:        r.UnifiedStorage,
+ 		ComposeFsBackend:      composeFsBackend,
+ 		GenericImage:          r.GenericImage,
+-		Bootloader:            r.Bootloader,
++		Bootloader:            resolveBootloader(r.Bootloader),
+ 		Target:                activeTargetMount,
+ 		ScratchDir:            scratchDir,
+ 		NeedsPull:             imageCheck.NeedsPull,
+@@ -864,6 +891,45 @@
  		fatal("writing hostname: %v", err)
  	}
  
@@ -48,7 +90,7 @@ index 26f74ff..2e88f25 100644
  	// Write /var fstab entry if a separate /var disk was used.
  	if hasVarDisk {
  		varUUID := disk.UUID(r.VarDisk.Disk)
-@@ -878,6 +917,13 @@ func main() {
+@@ -878,6 +944,13 @@
  		}
  	}
  
@@ -62,7 +104,7 @@ index 26f74ff..2e88f25 100644
  	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
  	if r.User.Username != "" {
  		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))
-@@ -900,6 +946,17 @@ func main() {
+@@ -900,6 +973,17 @@
  		progress.Info(fmt.Sprintf("Added Plymouth boot args to %d loader entr%s", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
  	}
  
