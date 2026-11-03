@@ -1,5 +1,12 @@
 # kernel/modules/rpi3
 #
+# Also serves the Raspberry Pi Zero 2 W: BCM2710A1 is a Cortex-A53 SiP of the
+# same generation (arch/arm64/boot/dts/broadcom/bcm2710-rpi-zero-2-w.dts), and
+# it needs exactly the drivers this overlay carries — CONFIG_ARCH_BCM2835
+# platform, CONFIG_MMC_BCM2835 for the SDHOST controller the Zero 2 W DT uses
+# (like the Pi 3), and the USB/serial cores from kernel/modules/arm. No
+# separate bcm2710 fragment: the rpi3 family list is its fragment (one per
+# SoC family, not per board). The image installs linux-modules-rpi3 for it.
 # Per-device MODULE overlay for the Raspberry Pi 3 (BCM2710 / BCM2837).
 # Applied on top of the base kernel/config THEN the ARM-generic overlay
 # kernel/modules/arm:
