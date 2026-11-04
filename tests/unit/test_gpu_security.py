@@ -120,18 +120,31 @@ def test_acceptance_is_the_exact_word() -> None:
 
 
 def test_stage_choice_goes_through_the_helper() -> None:
-    """Consent first (when accepted), then the usage, both via pkexec."""
+    """Consent, usage, image gate and set, all via pkexec, in order.
+
+    GPU FINAL (owner 2026-11-03): the module set rides the same step —
+    the usage resolves the open set, the nvidia toggle the -nvidia
+    variant, auto resolves to gaming (an install-time choice).
+    """
     m = _module()
     run = _Runner()
-    assert m.stage_choice('ia', True, 'reg/x:nvidia_amd64', run)
+    assert m.stage_choice(
+        'ia', True, 'reg/x:nvidia_amd64', nvidia=True, run=run
+    )
     assert run.commands == [
         ['pkexec', m.HELPER, 'consent', '--accept'],
         ['pkexec', m.HELPER, 'usage', 'ia'],
         ['pkexec', m.HELPER, 'image', 'reg/x:nvidia_amd64'],
+        ['pkexec', m.GPU_SET_HELPER, 'set', 'gpu-ia-nvidia'],
     ]
     run = _Runner()
     assert m.stage_choice('gaming', False, run=run)
-    assert run.commands == [['pkexec', m.HELPER, 'usage', 'gaming']]
+    assert run.commands[-1] == [
+        'pkexec', m.GPU_SET_HELPER, 'set', 'gpu-gaming'
+    ]
+    run = _Runner()
+    assert m.stage_choice('auto', False, run=run)
+    assert run.commands[-1][-1] == 'gpu-gaming'
 
 
 def test_image_gate_refusal_is_reported() -> None:
@@ -151,7 +164,12 @@ def test_stage_choice_refusals_are_reported() -> None:
 
 
 def test_apply_gpu_fills_the_recipe() -> None:
-    """Usage, consent and enforcement reach the recipe."""
+    """Usage, consent (and the module set) and enforcement reach the recipe.
+
+    GPU FINAL: ``gpuSet`` is resolved from the usage and the NVIDIA toggle;
+    a plain ia without consent stays gpu-ia, auto resolves to gaming and
+    consent adds the -nvidia variant.
+    """
     m = _module()
     recipe: dict[str, Any] = {}
     m.apply_gpu(
@@ -164,8 +182,13 @@ def test_apply_gpu_fills_the_recipe() -> None:
     assert recipe == {
         'gpuUsage': 'ia',
         'nvidiaConsent': True,
+        'gpuSet': 'gpu-ia-nvidia',
         'sigEnforce': True
     }
+    recipe = {}
+    m.apply_gpu(recipe, {'usage': 'auto'})
+    assert recipe == {'gpuUsage': 'auto', 'nvidiaConsent': False,
+                      'gpuSet': 'gpu-gaming'}
 
 
 def test_apply_gpu_disabled_enforcement_is_written() -> None:

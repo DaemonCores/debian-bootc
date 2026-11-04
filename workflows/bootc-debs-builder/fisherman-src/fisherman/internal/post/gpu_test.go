@@ -43,6 +43,48 @@ func TestWriteGPUProfile(t *testing.T) {
 	}
 }
 
+func TestWriteGPUModuleSet_RejectsUnknownSet(t *testing.T) {
+	calls := recordRuns(t)
+	if err := post.WriteGPUModuleSet(t.TempDir(), "gpu-evil"); err == nil {
+		t.Fatal("unknown set accepted")
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("invalid set ran %v", *calls)
+	}
+}
+
+func TestWriteGPUModuleSet(t *testing.T) {
+	for _, set := range []string{
+		"gpu-ia", "gpu-gaming", "gpu-ia-nvidia", "gpu-gaming-nvidia",
+	} {
+		target, deploy := ostreeTarget(t)
+		calls := recordRuns(t)
+		if err := post.WriteGPUModuleSet(target, set); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(deploy, "etc", "dc-gpu")
+		conf := "dc-gpu-" + strings.TrimPrefix(set, "gpu-") + ".conf"
+		want := []string{
+			"mkdir -p " + dir,
+			"tee " + filepath.Join(dir, "set"),
+			"mkdir -p " + filepath.Join(deploy, "etc", "modprobe.d"),
+			"cp " + filepath.Join(post.GPUModprobePayloads, conf) +
+				" " + filepath.Join(deploy, "etc", "modprobe.d", conf),
+		}
+		if len(*calls) != len(want) {
+			t.Fatalf("%s calls = %v, want %d", set, *calls, len(want))
+		}
+		for i, w := range want {
+			if got := strings.Join((*calls)[i].argv, " "); got != w {
+				t.Errorf("%s call %d = %q, want %q", set, i, got, w)
+			}
+		}
+		if (*calls)[1].stdin != set+"\n" {
+			t.Errorf("%s: set file carries %q", set, (*calls)[1].stdin)
+		}
+	}
+}
+
 func writeEntry(t *testing.T, sysroot, options string) string {
 	t.Helper()
 	dir := filepath.Join(sysroot, "boot", "loader", "entries")
