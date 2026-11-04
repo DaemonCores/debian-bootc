@@ -75,7 +75,7 @@ def test_shared_functional_pins_present() -> None:
 
 
 def test_canonical_patch_set_shape() -> None:
-    """One patch list, two consumers: 18 xanmod + 3 clearlinux + dormant bore + carrier.
+    """One patch list, two consumers: 18 xanmod + 3 clearlinux + bore.
 
     The module carrier (rocknix-btrtl, moved from packages.yml by the 13:05
     arbitration) rides on the arm64 kernel builds. The bore sibling stays in
