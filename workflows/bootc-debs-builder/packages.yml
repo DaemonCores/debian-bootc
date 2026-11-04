@@ -924,6 +924,10 @@ packages:
       # drift the ABI under our modules.
       test -n "${PVE_HEADERS_DEB:-}" -a -n "${PVE_HEADERS_SHA256:-}" \
         || { echo "ERROR: the PVE headers variant carries no file/sha256 pin" >&2; exit 1; }
+      # The base may be dropped by the env merge — the literal default is the
+      # same URL as the manifest pin (belt + braces, never a silent drift:
+      # the per-variant file/sha256 pins still guard the artifact itself).
+      PVE_HEADERS_BASE="${PVE_HEADERS_BASE:-https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/}"
       apt-get install -y --no-install-recommends curl zstandard >/dev/null 2>&1 || curl --version >/dev/null
       HDR_DEB=/tmp/pve-headers.deb
       curl -fsSL -o "${HDR_DEB}" "${PVE_HEADERS_BASE}${PVE_HEADERS_DEB}" \
@@ -936,6 +940,11 @@ packages:
       # kernel lane injected (idempotent: src==dest if the deb already ships it inner).
       rm -rf /build/pve-tree && mkdir -p /build
       dpkg-deb -R "${HDR_DEB}" /build/pve-tree
+      # The kernel arch name is NOT the Debian arch name (amd64 -> x86): the
+      # runner exports ARCH=amd64 job-wide and the kernel Makefile then looks
+      # for arch/amd64/Makefile, which exists nowhere. Map it like the base
+      # kernel lane does.
+      case "$(dpkg --print-architecture)" in amd64) NV_KERNEL_ARCH=x86 ;; *) NV_KERNEL_ARCH="$(dpkg --print-architecture)" ;; esac
       KREL=$(dpkg-deb -f "${HDR_DEB}" Package | sed 's/^linux-headers-//')
       test -n "${KREL}" \
         || { echo "ERROR: cannot read the PVE kernel release from the headers deb" >&2; exit 1; }
@@ -952,7 +961,7 @@ packages:
       # exports IN the file (same contract as the daemoncores-tree lane).
       # make the tree module-ready if the artifact left any generated file
       # out (idempotent on a fully prepared tree).
-      make -C "${SRCDIR}" -j"$(nproc)" modules_prepare
+      make ARCH="${NV_KERNEL_ARCH}" -C "${SRCDIR}" -j"$(nproc)" modules_prepare
 
       # Upstream NVIDIA open kernel modules at the release the host
       # user-space carries; tag AND commit pinned (the pin lives BELOW with
@@ -981,7 +990,7 @@ packages:
         "amd64" "${NVIDIA_OPEN_TAG}" "/build/nvidia-open"
       unset PATCHES_SERIES
 
-      make -C /build/nvidia-open SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
+      make ARCH="${NV_KERNEL_ARCH}" -C /build/nvidia-open SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
 
       # Pair deb: version = NVIDIA release + the kernel image version the
       # headers deb depends on (read from the artifact, never re-derived).
@@ -998,7 +1007,7 @@ packages:
       [ -f modules.builtin ] || touch modules.builtin
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
       rm -f /build/nvidia-open/modules.builtin /build/nvidia-open/modules.builtin.modinfo
-      make -C /build/nvidia-open SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" \
+      make ARCH="${NV_KERNEL_ARCH}" -C /build/nvidia-open SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" \
         INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1 modules_install
 
       # Keep ONLY the five nvidia modules: the PVE kernel image deb owns
