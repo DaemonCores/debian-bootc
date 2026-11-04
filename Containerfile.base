@@ -119,5 +119,6 @@ RUN apt update \
         ncurses-term \
         psmisc \
         linux-sysctl-defaults \
+        openresolv \
         kbd \
         keyboard-configuration
