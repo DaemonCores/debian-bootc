@@ -1,12 +1,12 @@
 """GPU profile and module-signature settings of the installer ``gpu_security`` step.
 
 The GPU usage profile (consumed by ``dc-gpu`` on the installed system) and the
-module signature enforcement (the ``module.sig_enforce=1`` kernel argument)
-are install-time choices. The NVIDIA license is tied to the image, not to the
+module signature enforcement (the ``module.sig_enforce=1`` kernel argument) are
+install-time choices. The NVIDIA license is tied to the image, not to the
 hardware: it is required exactly when the selected image is a recipe entry
-carrying an ``eula`` key. The gate itself is delegated to the live image
-helper ``nvidia-eula-stage``; the helpers here hold no GTK code so they can be
-tested alone.
+carrying an ``eula`` key. The gate itself is delegated to the live image helper
+``nvidia-eula-stage``; the helpers here hold no GTK code so they can be tested
+alone.
 """
 
 import logging
@@ -16,7 +16,7 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 
 HELPER = "/usr/libexec/debian-bootc/nvidia-eula-stage"
-GPU_SET_HELPER = "/usr/libexec/debian-bootc/gpu-set-stage"
+GPU_SET_HELPER = "/usr/libexec/debian-bootc/gpu-set-stage.py"
 # Order of the usage rows in the step; the first one is the default.
 USAGES = ("auto", "gaming", "ia")
 # The GPU module sets of the installed kernel (GPU FINAL, owner
@@ -92,8 +92,11 @@ def eula_text(run: Runner = subprocess.run) -> str:
         The EULA text, empty when the helper cannot provide it.
     """
     try:
-        done = run([HELPER, "text"], capture_output=True, text=True,
-                   check=False, timeout=COMMAND_TIMEOUT)
+        done = run([HELPER, "text"],
+                   capture_output=True,
+                   text=True,
+                   check=False,
+                   timeout=COMMAND_TIMEOUT)
     except (OSError, subprocess.SubprocessError) as error:
         logger.warning("EULA text unavailable: %s", error)
         return ""
@@ -149,11 +152,30 @@ def stage_choice(
     commands.append(["pkexec", HELPER, "usage", usage])
     if imgref:
         commands.append(["pkexec", HELPER, "image", imgref])
-    commands.append(["pkexec", GPU_SET_HELPER, "set", selected_set(usage, nvidia)])
+    commands.append([
+        "pkexec", GPU_SET_HELPER, "set",
+        selected_set(usage, nvidia)
+    ])
+    if nvidia:
+        # The derived-image lane (owner 03/11): the base payload ref is
+        # recorded first, the installer derives the NVIDIA image after the
+        # consent gate and deploys the derived ref (the bootc-image-builder
+        # compose machinery proven in P-757).
+        if imgref:
+            commands.append(["pkexec", GPU_SET_HELPER, "base", imgref])
+        commands.append([
+            "pkexec", GPU_SET_HELPER, "derive",
+            selected_set(usage, nvidia)
+        ])
     for command in commands:
         try:
-            done = run(command, capture_output=True, text=True, check=False,
-                       timeout=COMMAND_TIMEOUT)
+            done = run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=COMMAND_TIMEOUT
+            )
         except (OSError, subprocess.SubprocessError) as error:
             logger.warning("GPU choice could not be recorded: %s", error)
             return False
@@ -175,13 +197,19 @@ def apply_gpu(recipe: dict, gpu: dict | None) -> None:
         return
     usage = gpu.get("usage")
     if usage in USAGES:
-        nvidia = bool(gpu.get("nvidiaConsent", False)) or bool(
-            gpu.get("nvidia", False)
-        )
+        nvidia = bool(gpu.get("nvidiaConsent", False)
+                      ) or bool(gpu.get("nvidia", False))
         recipe["gpuUsage"] = usage
         recipe["nvidiaConsent"] = bool(gpu.get("nvidiaConsent", False))
         # The module set of the install (GPU FINAL): the fisherman post step
         # delivers it (recipe key consumed by WriteGPUModuleSet).
         recipe["gpuSet"] = selected_set(usage, nvidia)
+        if nvidia:
+            # The installer deploys the derived image (owner 03/11): by
+            # convention the derive compose tags <base>-nvidia in the
+            # machine's container storage (recorded by gpu-set-stage).
+            base = gpu.get("imgref") or gpu.get("selected_image") or ""
+            if base:
+                recipe["imgref"] = f"{base}-nvidia"
     if "sigEnforce" in gpu:
         recipe["sigEnforce"] = bool(gpu["sigEnforce"])
