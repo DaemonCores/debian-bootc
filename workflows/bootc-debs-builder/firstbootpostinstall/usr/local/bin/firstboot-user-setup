@@ -244,6 +244,21 @@ _yesno "$SUMMARY" || {
 # ── Apply hostname ────────────────────────────────────────────────────────
 hostnamectl set-hostname "$NEWHOSTNAME"
 
+# ── Regenerate /etc/hosts bootstrap for the new hostname ─────────────────
+# The image ships a placeholder entry (postinstall stage). The hosts line
+# must always match the live hostname: PVE-adjacent stacks (pmxcfs, pve-ssl)
+# resolve the node name over loopback before any network is up.
+_refresh_hosts() {
+  local _file=/etc/hosts
+  [[ -f $_file ]] || return 0
+  # Replace the whole 127.0.1.1 bootstrap line with the live hostname
+  # (same shape as the shipped postinstall entry: fqdn + shortname).
+  sed -i "s#^127\\.0\\.1\\.1[[:space:]].*#127.0.1.1\\t${NEWHOSTNAME}.local ${NEWHOSTNAME}#" "$_file"
+  grep -qP "^127\\.0\\.1\\.1\\s+\\S" "$_file" || \
+    printf '127.0.1.1\\t%s.local %s\\n' "$NEWHOSTNAME" "$NEWHOSTNAME" >> "$_file"
+}
+_refresh_hosts
+
 # ── Create user ───────────────────────────────────────────────────────────
 useradd \
   --home-dir "/home/${USERNAME}" \
