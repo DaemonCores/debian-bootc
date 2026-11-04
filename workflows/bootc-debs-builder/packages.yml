@@ -930,8 +930,11 @@ packages:
       PVE_HEADERS_BASE="${PVE_HEADERS_BASE:-https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/}"
       apt-get install -y --no-install-recommends curl zstandard >/dev/null 2>&1 || curl --version >/dev/null
       HDR_DEB=/tmp/pve-headers.deb
-      curl -fsSL -o "${HDR_DEB}" "${PVE_HEADERS_BASE}${PVE_HEADERS_DEB}" \
-        || { echo "ERROR: cannot download the pinned PVE headers artifact" >&2; exit 1; }
+      # Pages (Fastly) answers transient 503s on the pool URLs — retry with
+      # backoff; a 503 is a CDN hiccup, never a signal that the pin is wrong.
+      curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 --max-time 60 \
+        -o "${HDR_DEB}" "${PVE_HEADERS_BASE}${PVE_HEADERS_DEB}" \
+        || { echo "ERROR: cannot download the pinned PVE headers artifact (retries exhausted)" >&2; exit 1; }
       test "$(sha256sum "${HDR_DEB}" | cut -d' ' -f1)" == "${PVE_HEADERS_SHA256}" \
         || { echo "ERROR: PVE headers artifact sha256 mismatch (pin drift — re-pin the variant)" >&2; exit 1; }
 
