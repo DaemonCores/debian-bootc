@@ -25,7 +25,7 @@ The repository is under active development. The amd64 path is the current instal
 
 - Debian packages for bootc, OSTree, composefs, bootupd, a BLS-capable GRUB build, first-boot setup, and bootc-specific service integration.
 - A signed APT repository published from the package manifest in `workflows/bootc-debs-builder/packages.yml`.
-- A full image, plus an NVIDIA variant, assembled from Debian Trixie.
+- A full image assembled from Debian Trixie (the NVIDIA stack is derived at install time, never hosted as a separate image).
 - Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and cosign signing with a key owned by the repository.
 - Boot tests that install an image to a virtual disk, start it with QEMU/KVM, and execute `workflows/tests.yml` over SSH before publication.
 - Online and offline amd64 installer ISOs.

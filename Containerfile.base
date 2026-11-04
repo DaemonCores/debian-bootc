@@ -2,7 +2,7 @@
 # Containerfile.base — layers shared by the images
 #
 # Debian trixie with the project APT repository trusted. It carries no kernel and no
-# package set: Containerfile (and Containerfile.nvidia) start `FROM` it and add theirs.
+# package set: Containerfile starts `FROM` it and adds its own.
 # The CI builds it first, on the runner of the image it serves, and never pushes it;
 # a local build tags it `localhost/debian-bootc-base` (see docs/building.md).
 # NOTE: use debian trixie not pined for auto security update

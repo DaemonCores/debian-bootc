@@ -56,7 +56,7 @@ PAYLOAD_DIR = Path(
     )
 )
 APT_TIMEOUT = 120
-# NVIDIA user-space packages, the exact list of Containerfile.nvidia (the
+# NVIDIA user-space packages, the exact list of the derived image (the
 # signed NVIDIA repo supplies the proprietary user-space at derive time; it
 # is never hosted by us).
 NVIDIA_PKGS = (
@@ -314,7 +314,7 @@ def _nvidia_containerfile(set_name: str, base: str) -> str:
     time, never hosted by us) and the gpu-*-nvidia module set deb from the
     DaemonCores APT repo (which pulls its sibling open set and the
     linux-modules-nvidia base). The same-release and single-kernel guards
-    of Containerfile.nvidia are enforced verbatim.
+    are enforced verbatim in the generated containerfile.
 
     Args:
         set_name: A ``SETS`` entry ending with ``-nvidia``.

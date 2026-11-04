@@ -84,8 +84,8 @@ def _install_lines(text: str) -> list[str]:
 def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
     """The standard image lists only the per-arch hardware modules.
 
-    The NVIDIA open modules (`linux-modules-nvidia`) live in the separate NVIDIA
-    image only.
+    The NVIDIA open modules (`linux-modules-nvidia`) belong to the derived
+    NVIDIA image at install only.
     """
     root = MANIFEST.parents[2]
     modules = {}
@@ -102,19 +102,25 @@ def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
     ), modules
 
 
-def test_nvidia_stack_is_only_in_the_nvidia_image() -> None:
-    """The proprietary stack is a separate, amd64-only, licensed image."""
+def test_nvidia_stack_is_not_a_hosted_image() -> None:
+    """The proprietary stack lives in the derived lane, not a Containerfile."""
     root = MANIFEST.parents[2]
     standard = '\n'.join(_install_lines((root / 'Containerfile').read_text()))
     for token in ('linux-modules-nvidia', 'nvidia-driver-libs', 'libcuda1'):
         assert token not in standard, token
-    text = (root / 'Containerfile.nvidia').read_text()
-    install = '\n'.join(_install_lines(text))
-    assert 'FROM ${BASE_IMAGE}' in install
-    assert 'linux-modules-nvidia' in install
-    assert 'libcuda1' in install
-    assert 'LABEL org.daemoncores.arches="amd64"' in install
-    assert 'LABEL org.daemoncores.requires-eula="nvidia"' in install
+    # The separate NVIDIA image is retired (owner 03/11): the derived lane at
+    # install replaces it. Nobody may recreate the hosted-image Containerfile.
+    assert not (root / 'Containerfile.nvidia').exists()
+    # The derived build carries the stack instead: the user-space list of
+    # gpu-set-stage.py plus the module plan deb, behind the EULA label.
+    stage = (
+        root / 'src/buildisopreinstall/usr/libexec/debian-bootc/'
+        'gpu-set-stage.py'
+    ).read_text()
+    assert 'nvidia-driver-libs' in stage
+    assert 'libcuda1' in stage
+    assert 'linux-modules-nvidia' in stage
+    assert 'LABEL org.daemoncores.requires-eula="nvidia"' in stage
 
 
 def test_standard_image_keeps_the_login_stack() -> None:
