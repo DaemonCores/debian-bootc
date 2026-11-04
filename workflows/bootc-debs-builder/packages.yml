@@ -875,7 +875,7 @@ packages:
 
         DESTDIR="/output/gpu-${GPU_SET}-nvidia"
         rm -rf "${DESTDIR}"
-        mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/etc/modprobe.d"
+        mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/etc/modprobe.d" && cp "${CONF_DIR}/${CONF}" "${DESTDIR}/etc/modprobe.d/"
       else
         # -----------------------------------------------------------------
         # In-tree set: modules-only build over the standard kernel deb
