@@ -136,12 +136,12 @@ def test_stage_choice_goes_through_the_helper() -> None:
         ['pkexec', m.HELPER, 'usage', 'ia'],
         ['pkexec', m.HELPER, 'image', 'reg/x:nvidia_amd64'],
         ['pkexec', m.GPU_SET_HELPER, 'set', 'gpu-ia-nvidia'],
+        ['pkexec', m.GPU_SET_HELPER, 'base', 'reg/x:nvidia_amd64'],
+        ['pkexec', m.GPU_SET_HELPER, 'derive', 'gpu-ia-nvidia'],
     ]
     run = _Runner()
     assert m.stage_choice('gaming', False, run=run)
-    assert run.commands[-1] == [
-        'pkexec', m.GPU_SET_HELPER, 'set', 'gpu-gaming'
-    ]
+    assert run.commands[-1] == ['pkexec', m.GPU_SET_HELPER, 'set', 'gpu-gaming']
     run = _Runner()
     assert m.stage_choice('auto', False, run=run)
     assert run.commands[-1][-1] == 'gpu-gaming'
@@ -187,8 +187,31 @@ def test_apply_gpu_fills_the_recipe() -> None:
     }
     recipe = {}
     m.apply_gpu(recipe, {'usage': 'auto'})
-    assert recipe == {'gpuUsage': 'auto', 'nvidiaConsent': False,
-                      'gpuSet': 'gpu-gaming'}
+    assert recipe == {
+        'gpuUsage': 'auto',
+        'nvidiaConsent': False,
+        'gpuSet': 'gpu-gaming'
+    }
+
+
+def test_apply_gpu_nvidia_deploys_the_derived_image() -> None:
+    """With consent the install deploys <base>-nvidia, the derived ref.
+
+    Owner 03/11: the derived-image lane — the installer deploys the image
+    the derive compose built (tags <base>-nvidia), never the clean base
+    with the proprietary user-space baked by us.
+    """
+    m = _module()
+    recipe: dict[str, Any] = {}
+    m.apply_gpu(
+        recipe, {
+            'usage': 'ia',
+            'nvidiaConsent': True,
+            'imgref': 'reg/base:latest_amd64'
+        }
+    )
+    assert recipe['imgref'] == 'reg/base:latest_amd64-nvidia'
+    assert recipe['gpuSet'] == 'gpu-ia-nvidia'
 
 
 def test_apply_gpu_disabled_enforcement_is_written() -> None:
