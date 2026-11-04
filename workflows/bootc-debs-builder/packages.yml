@@ -1005,7 +1005,7 @@ packages:
 
       # Regenerate md5sums for the shipped files (lib and etc).
       ( cd "${DESTDIR}" && \
-        find lib etc -type f | sort | xargs md5sum | sed -e 's|lib/|/lib/|' -e 's|etc/|/etc/|' \
+        { [ -d lib ] && find lib -type f; [ -d etc ] && find etc -type f; true; } | sort | xargs md5sum | sed -e 's|lib/|/lib/|' -e 's|etc/|/etc/|' \
         > DEBIAN/md5sums )
 
       # Empty-Replaces must not ship as a literal empty field: dpkg refuses an
