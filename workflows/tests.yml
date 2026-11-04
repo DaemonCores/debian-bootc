@@ -303,7 +303,9 @@ tests:
   # PVE guests. The state travels IN the kernel config, so this sysfs probe
   # is also the parity proof of the shared x86-common.cfg fragment.)
   - name: THP arbitration — transparent_hugepage enabled=always
-    run: '[ "$(cat /sys/kernel/mm/transparent_hugepage/enabled)" = always ]'
+    run: >-
+      [ "$(sed -n 's/.*\[\([^]]*\)\].*/\1/p'
+      /sys/kernel/mm/transparent_hugepage/enabled)" = always ]
     diag: |
       cat /sys/kernel/mm/transparent_hugepage/enabled 2>&1
       grep . /sys/kernel/mm/transparent_hugepage/defrag 2>&1
