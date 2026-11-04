@@ -959,9 +959,18 @@ packages:
       # The vmlinux-only modpost filter of the in-tree sets is NOT applied:
       # the nvidia conftest's module_symvers_sanity_check requires vmlinux
       # exports IN the file (same contract as the daemoncores-tree lane).
-      # make the tree module-ready if the artifact left any generated file
-      # out (idempotent on a fully prepared tree).
-      make ARCH="${NV_KERNEL_ARCH}" -C "${SRCDIR}" -j"$(nproc)" modules_prepare
+      # make the tree module-ready ONLY when the artifact left generated
+      # files out. bindeb-pkg headers carry the full prepared state
+      # (auto.conf, autoconf.h, Module.symvers) BUT strip scripts/kconfig
+      # (config-time only tooling; never needed to compile modules).
+      # Forcing modules_prepare there triggers syncconfig and dies on the
+      # absent scripts/kconfig/Makefile — the module-ready deb needs NO
+      # prepare pass at all.
+      if [[ ! -f "${SRCDIR}/include/generated/autoconf.h" ]]; then
+        make ARCH="${NV_KERNEL_ARCH}" -C "${SRCDIR}" -j"$(nproc)" modules_prepare
+      else
+        echo "pve headers tree is module-ready (autoconf.h present); no prepare pass"
+      fi
 
       # Upstream NVIDIA open kernel modules at the release the host
       # user-space carries; tag AND commit pinned (the pin lives BELOW with
