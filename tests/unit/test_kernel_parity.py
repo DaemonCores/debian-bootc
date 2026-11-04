@@ -4,8 +4,11 @@ PATCH PARITY (owner, 2026-11-03, re-arbitrated 12:55): the canonical shared
 kernel build data (patches-shared.yml + kconfig fragments) lives in the build
 engine — DaemonCores-CI build-deb/kernel-shared — and is exported to every build
 as CI_KERNEL_SHARED. This repository carries NO copy of that data: the debian
-linux-image build (packages.yml) consumes the export, and DaemonCores-VE kernel-
-pve consumes the same export in its own engine checkout. These tests pin the
+linux-image build (packages.yml) consumes the export, and the vanilla
+proxmox-ve-bootc kernel-pve entry consumes the same export in its own engine
+checkout (the DaemonCores-VE fork consumes the PUBLISHED proxmox-ve-bootc
+image instead — no kernel build, no engine reference in the fork).
+These tests pin the
 arbitrated functional set (owner 2026-11-03 12:14 revised) so a lane cannot
 silently lose it, plus the consumer contract of THIS repository.
 """
@@ -24,6 +27,7 @@ VE_MANIFEST = (
     REPO.parent / 'DaemonCores-VE' / 'workflows' / 'bootc-debs-builder' /
     'packages.yml'
 )
+VANILLA_ROOT = REPO.parent / 'proxmox-ve-bootc'
 
 
 def _cfg() -> str:
@@ -170,32 +174,48 @@ def test_no_arch_overlay_merge() -> None:
 
 
 def test_ve_consumer_uses_the_engine_export() -> None:
-    """VE kernel entry consumes the set FROM the engine export, by path.
+    """The vanilla PVE lane consumes the engine export; the fork does not.
 
-    No raw distfetch of this repository: the former DC_DATA_REF /
-    dc_data_fetch pattern (pinned commit + sha256 raw URLs against a sibling
-    production repo) is retired in favour of CI_KERNEL_SHARED. The THP
-    arbitration is revoked lane-side (owner 2026-11-03 13:05): THP=never
-    travels with the image-lane -thpnever twins, never a lane kconfig pin.
-    The sibling
-    checkout absent locally skips the assertions that need it — CI owns the
-    cross-repo gate.
+    PATCH PARITY (separation owner order, 03/11): the kernel-pve entry now
+    lives ONLY in the vanilla proxmox-ve-bootc repository, and it must keep
+    eating the engine export (CI_KERNEL_SHARED) — no raw distfetch of this
+    repository (DC_DATA_REF / dc_data_fetch retired). The DaemonCores-VE
+    fork consumes the PUBLISHED proxmox-ve-bootc base image instead: no
+    kernel build, no deb built twice ('no deb is built twice'), and no
+    CIKernelShared reference left in its manifest. The THP pin stays with
+    the compiled kernel: the vanilla images carry the never karg, the fork
+    derives thin -thpalways twins — a lane-side THP kconfig pin would be a
+    second kernel state.
+    The sibling checkout absent locally skips the assertions that need it —
+    CI owns the cross-repo gate.
     """
     if not VE_MANIFEST.is_file():
         return
     text = VE_MANIFEST.read_text(encoding='utf-8')
+    # The fork references NO engine export and builds NO kernel any more.
     assert 'DC_DATA_REF=' not in text
     assert 'dc_data_fetch' not in text
-    assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in text
-    assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
-    # THP lane-side arbitration revoked (owner 2026-11-03 13:05, supersedes
-    # the 12:14/12:55 pins): the shared fragment's ALWAYS pin wins on the PVE
-    # lane too (full-LXC prime); THP=never travels with the image-lane
-    # -thpnever twins (karg transparent_hugepage=never), NEVER a lane-side
-    # kconfig pin, and the lane tree carries NO config line (empty
-    # sur-rides.cfg kept on purpose — documentation + precedent).
+    assert 'CI_KERNEL_SHARED' not in text
+    assert '- name: kernel-pve' not in text
+    # The fork consumes the vanilla base image: the base manifest FROM is
+    # the published proxmox-ve-bootc image, not debian-bootc, and the fork
+    # keeps deriving FROM that published image (thin twins only).
+    ve_base = (
+        REPO.parent / 'DaemonCores-VE' / 'Containerfile.base'
+    )
+    assert ve_base.is_file()
+    assert 'FROM ghcr.io/daemoncores/proxmox-ve-bootc:latest_' \
+        in ve_base.read_text(encoding='utf-8')
+    # Where the kernel lane lives NOW: the vanilla proxmox-ve-bootc repo,
+    # still on the engine-export contract and free of a lane THP pin.
+    vanilla = VANILLA_ROOT / 'workflows' / 'bootc-debs-builder' / 'packages.yml'
+    if not vanilla.is_file():
+        return
+    vtext = vanilla.read_text(encoding='utf-8')
+    assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in vtext
+    assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in vtext
     thp = (
-        VE_MANIFEST.parents[1] / 'bootc-debs-builder' / 'kernel-pve' /
+        VANILLA_ROOT / 'workflows' / 'bootc-debs-builder' / 'kernel-pve' /
         'kconfig' / 'sur-rides.cfg'
     )
     assert thp.is_file()
