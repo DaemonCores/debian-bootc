@@ -996,6 +996,7 @@ packages:
       GPU_NVIDIA_YML="${CI_KERNEL_SHARED}/patches-gpu/nvidia.yml"
       [[ -f "${GPU_NVIDIA_YML}" ]] \
         || { echo "ERROR: engine patches-gpu/nvidia.yml missing" >&2; exit 1; }
+      KVER="${KREL}"
       PATCHES_SERIES="${KVER%%-*}"
       export PATCHES_SERIES
       kernel_apply_patches "${GPU_NVIDIA_YML}" \
