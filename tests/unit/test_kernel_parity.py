@@ -134,14 +134,25 @@ def test_no_arch_overlay_merge() -> None:
     # four GPU module set overlays + modprobe policy) lives next to the
     # device fragments — a directory, not a device fragment, so it is
     # excluded from the device-file pin like the device list itself.
-    devices = sorted(p.name for p in (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules'
-    ).iterdir() if p.is_file())
+    devices = sorted(
+        p.name for p in
+        (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
+         'modules').iterdir() if p.is_file()
+    )
     assert devices == sorted((
-        'rpi3', 'rpi4', 'rpi5', 'rk3588', 'rk3566',
-        'rk3399', 'h616', 'imx8m', 'mt8183',
+        'rpi3',
+        'rpi4',
+        'rpi5',
+        'rk3588',
+        'rk3566',
+        'rk3399',
+        'h616',
+        'imx8m',
+        'mt8183',
     )), devices
-    gpu_dir = REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+    gpu_dir = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+    )
     assert (gpu_dir / 'ia').is_file()
     assert (gpu_dir / 'gaming').is_file()
     assert (gpu_dir / 'modprobe' / 'dc-gpu-ia.conf').is_file()
@@ -151,7 +162,7 @@ def test_no_arch_overlay_merge() -> None:
         assert section in cfg, section
     # The GPU drivers are modules again (the fold is undone): the amd64
     # fold promotes the network/USB drivers =y, the GPU block stays =m.
-    for promoted in ('CONFIG_E1000=y',):
+    for promoted in ('CONFIG_E1000=y', ):
         assert promoted in cfg, promoted
     for modular in ('CONFIG_DRM_AMDGPU=m', 'CONFIG_DRM_I915=m'):
         assert modular in cfg, modular

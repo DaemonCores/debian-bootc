@@ -370,10 +370,14 @@ def test_gpu_module_sets_expand_to_the_four_variants() -> None:
     assert variants['ia']['deps'] == ['linux-image']
     assert variants['gaming']['deps'] == ['linux-image']
     assert variants['ia-nvidia']['deps'] == [
-        'linux-image', 'gpu-ia', 'linux-modules-nvidia',
+        'linux-image',
+        'gpu-ia',
+        'linux-modules-nvidia',
     ]
     assert variants['gaming-nvidia']['deps'] == [
-        'linux-image', 'gpu-gaming', 'linux-modules-nvidia',
+        'linux-image',
+        'gpu-gaming',
+        'linux-modules-nvidia',
     ]
     for name in ('gpu-ia', 'gpu-gaming', 'gpu-ia-nvidia', 'gpu-gaming-nvidia'):
         assert name not in {p['name'] for p in _expand_arm64()}
@@ -395,7 +399,9 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
     fragment default is overridden last-wins by the overlay), HSA/KFD on.
     gpu-gaming: DC on with its HDCP/DSC/FP dependencies and fbcon.
     """
-    mod = REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+    mod = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+    )
     ia = (mod / 'ia').read_text(encoding='utf-8')
     gaming = (mod / 'gaming').read_text(encoding='utf-8')
     assert '# CONFIG_DRM_AMD_DC is not set' in ia
@@ -425,16 +431,19 @@ def test_gpu_module_sets_ship_their_loader_policy() -> None:
         REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' /
         'gpu' / 'modprobe'
     )
-    assert (conf_dir / 'dc-gpu-ia.conf').read_text().rstrip().endswith(
-        'blacklist nouveau'
-    )
-    assert 'options amdgpu dc=1' in (conf_dir / 'dc-gpu-gaming.conf').read_text()
-    assert 'blacklist nouveau' in (conf_dir / 'dc-gpu-ia-nvidia.conf').read_text()
+    assert (conf_dir / 'dc-gpu-ia.conf'
+            ).read_text().rstrip().endswith('blacklist nouveau')
+    assert 'options amdgpu dc=1' in (conf_dir /
+                                     'dc-gpu-gaming.conf').read_text()
+    assert 'blacklist nouveau' in (conf_dir /
+                                   'dc-gpu-ia-nvidia.conf').read_text()
     gaming_nv = (conf_dir / 'dc-gpu-gaming-nvidia.conf').read_text()
     assert 'blacklist nouveau' in gaming_nv
     assert 'options nvidia-drm modeset=1' in gaming_nv
     build = _packages()['linux-modules-gpu']['build']
-    assert 'cp "${CONF_DIR}/dc-gpu-${GPU_SET}.conf"' in build.replace("'\"", '"')
+    assert 'cp "${CONF_DIR}/dc-gpu-${GPU_SET}.conf"' in build.replace(
+        "'\"", '"'
+    )
     assert 'etc/modprobe.d' in build
 
 
@@ -450,8 +459,10 @@ def test_gpu_module_sets_own_the_kernel_paths_once() -> None:
         REPO / 'workflows' / 'bootc-debs-builder' / 'preinstall' / 'output' /
         'linux-modules-gpu' / 'DEBIAN' / 'control'
     ).read_text(encoding='utf-8')
-    for field in ('Depends: {{ DEPS }}', 'Replaces: {{ REPLACES }}',
-                  'Conflicts: {{ CONFLICTS }}'):
+    for field in (
+        'Depends: {{ DEPS }}', 'Replaces: {{ REPLACES }}',
+        'Conflicts: {{ CONFLICTS }}'
+    ):
         assert field in control, field
     build = _packages()['linux-modules-gpu']['build']
     assert 'CONFLICTS="gpu-gaming, gpu-gaming-nvidia"' in build
