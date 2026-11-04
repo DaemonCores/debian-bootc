@@ -631,7 +631,7 @@ packages:
   # same deps/waves module pattern as the device entries: built in CI against
   # the kernel of the SAME build (linux-image dep), .config + Module.symvers
   # seeded from the published kernel deb. NOT DKMS: nothing compiles on the
-  # target. Installed by Containerfile.nvidia only (the separate NVIDIA image,
+  # target. Installed by the derived lane at install (the NVIDIA image,
   # built FROM the standard one so the kernel is the same); the standard image
   # does not carry it. The module is the MIT open-gpu-kernel-modules; its version
   # is the one of the Debian NVIDIA user-space (a module and its user-space
@@ -731,7 +731,7 @@ packages:
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
-      # Package version = NVIDIA release (what Containerfile.nvidia compares to
+      # Package version = NVIDIA release (what the derived-image lane compares to
       # libcuda1) + the kernel deb version it was built against; Depends pins
       # the kernel deb version exactly.
       MOD_VER="${NVIDIAOPEN_VER}+${BUILT_VER}"

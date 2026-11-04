@@ -188,8 +188,9 @@ RUN /usr/libexec/debian-bootc/ostree-layout \
 # `dc-gpu set gaming|ia|auto` (GPU-VARIANTS.md). Kernel side: the in-tree
 # drivers (amdgpu, nouveau, i915/xe) are =m, so nothing compiles on the target.
 # The NVIDIA proprietary stack (user-space and the plan deb linux-modules-nvidia)
-# is binary-only and license-gated: it ships in its own image,
-# Containerfile.nvidia, built FROM this one.
+# is binary-only and license-gated: it is NOT an image of its own here — the
+# installer derives it at install time from this one (gpu-set-stage.py,
+# the signed NVIDIA repo + the gpu-*-nvidia module set debs, after EULA).
 # Installed from Debian instead (not recompilable here):
 #   common   Vulkan loader, glvnd dispatch libraries, vulkan/VA-API/OpenCL
 #            tools, non-free firmware

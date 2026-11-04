@@ -27,19 +27,6 @@
                 "btrfs",
                 "xfs"
             ]
-        },
-        {
-            "name": "DaemonCores Nvidia (amd64)",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:nvidia_amd64",
-            "bootloader": "auto",
-            "filesystem": "btrfs",
-            "composefs": false,
-            "needs_user_creation": true,
-            "filesystems": [
-                "btrfs",
-                "xfs"
-            ],
-            "eula": "nvidia"
         }
     ],
     "live_image_selection": true,
