@@ -37,8 +37,14 @@ def test_nvidia_policy_confs_disable_gsp() -> None:
             line for line in lines
             if line.startswith('options nvidia NVreg_EnableGpuFirmware=')
         ]
-        assert knob == ['options nvidia NVreg_EnableGpuFirmware=0'
-                        ], (f'{name}: the GSP-off knob is missing or altered')
+        expected = ['options nvidia NVreg_EnableGpuFirmware=0 '
+                    'NVreg_RegistryDwords=RMInstLoc2=0x00000001'
+                    ] if name == 'dc-gpu-ia-nvidia.conf' else [
+                        'options nvidia NVreg_EnableGpuFirmware=0'
+                    ]
+        assert knob == expected, (f'{name}: the GSP-off/VRAM knobs are '
+                                  'missing or altered (IA carries RMInstLoc2, '
+                                  'gaming does not)')
 
 
 def test_nvidia_policy_confs_keep_the_knob_in_one_place() -> None:
