@@ -1003,7 +1003,9 @@ packages:
         "amd64" "${NVIDIA_OPEN_TAG}" "/build/nvidia-open"
       unset PATCHES_SERIES
 
-      make ARCH="${NV_KERNEL_ARCH}" -C /build/nvidia-open SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
+      # The NVIDIA wrapper Makefile rejects the kernel ARCH name (x86); it
+      # expects its own scheme (x86_64) and maps it to kbuild internally.
+      make ARCH="x86_64" -C /build/nvidia-open SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
 
       # Pair deb: version = NVIDIA release + the kernel image version the
       # headers deb depends on (read from the artifact, never re-derived).
