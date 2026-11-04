@@ -1,0 +1,15 @@
+Package: gpu-{{ SET }}-nvidia-pve-{{ FLAVOUR }}
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+Section: kernel
+Priority: optional
+Depends: {{ DEPS }}
+Conflicts: {{ CONFLICTS }}
+Description: GPU loader policy, NVIDIA open modules on the kernel-pve pair
+ Loader-policy-only deb (no module file): it ships the modprobe policy of
+ the {{ SET }}+NVIDIA profile and pins the linux-modules-nvidia-pve pair
+ built against the kernel-pve packaging of this repo. The in-tree
+ (daemoncores-kernel) sets of debian-bootc play no role here; the deb
+ conflicts with its debian-tree counterpart over the modprobe policy it
+ ships for one profile.
