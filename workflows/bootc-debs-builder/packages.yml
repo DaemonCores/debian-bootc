@@ -382,13 +382,21 @@ packages:
       # symbol table and modpost fails with tens of thousands of
       # unresolved-symbol errors. Both are required, so a missing one is a bug
       # in this build, not a case to tolerate.
+      # PER-FLAVOUR build tree (owner 04/11, unpack collision): the path is
+      # part of the deb's file list, so two flavours (x64v1+x64v3
+      # installed side by side on a PVE host) unpacking into the same
+      # /usr/lib/linux-kernel-build directory refuse with "trying to
+      # overwrite". Each flavour ships its own suffix (KERNEL_SUFFIX, the
+      # same key the module entries read) — the plain flavour keeps the
+      # unsuffixed path so the published debs stay compatible.
       test -f /tmp/linux-kernel.config \
         || { echo "ERROR: kernel build produced no .config" >&2; exit 1; }
       test -f Module.symvers \
         || { echo "ERROR: kernel build produced no Module.symvers" >&2; exit 1; }
-      mkdir -p "${REPACK_DIR}/usr/lib/linux-kernel-build"
-      cp /tmp/linux-kernel.config "${REPACK_DIR}/usr/lib/linux-kernel-build/config"
-      cp Module.symvers "${REPACK_DIR}/usr/lib/linux-kernel-build/Module.symvers"
+      KERNEL_BUILD_DIR="usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}"
+      mkdir -p "${REPACK_DIR}/${KERNEL_BUILD_DIR}"
+      cp /tmp/linux-kernel.config "${REPACK_DIR}/${KERNEL_BUILD_DIR}/config"
+      cp Module.symvers "${REPACK_DIR}/${KERNEL_BUILD_DIR}/Module.symvers"
 
       # The device modules Depend on daemoncores-kernel-<KVER>, which the
       # Provides above satisfies for each (arch, page size).
@@ -539,9 +547,9 @@ packages:
       # the built-in kernel symbols the modules reference (__fentry__,
       # __x86_return_thunk…) and fails with tens of thousands of
       # undefined-symbol errors.
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" \
         || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" Module.symvers
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" Module.symvers
       # modules-only.symvers is the OUTPUT written by modpost; do not pre-seed it
 
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
@@ -636,26 +644,47 @@ packages:
       test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
-  # linux-modules-nvidia — the NVIDIA open kernel modules as a plan deb, the
-  # same deps/waves module pattern as the device entries: built in CI against
-  # the kernel of the SAME build (linux-image dep), .config + Module.symvers
-  # seeded from the published kernel deb. NOT DKMS: nothing compiles on the
-  # target. Installed by the derived lane at install (the NVIDIA image,
-  # built FROM the standard one so the kernel is the same); the standard image
-  # does not carry it. The module is the MIT open-gpu-kernel-modules; its version
-  # is the one of the Debian NVIDIA user-space (a module and its user-space
-  # must be the same release), read from the apt index at build time. amd64
-  # only — arm64 has no shipped NVIDIA compute target.
+  # linux-modules-nvidia — the NVIDIA open kernel modules as a pair deb,
+  # VARIANTS per (kernel-tree, flavour) (owner 04/11: the single entry used
+  # to pair the x64v1 kernel only — one Depends, while the lane publishes a
+  # 7-flavour matrix; expand now emits one pair per flavour, each pinned to
+  # ITS daemoncores-kernel deb). The same deps/waves module pattern as the
+  # device entries: built in CI against the kernel of the SAME build
+  # (linux-image dep), .config + Module.symvers seeded from the published
+  # kernel deb. NOT DKMS: nothing compiles on the target. Installed by the
+  # derived lane at install (the NVIDIA image, built FROM the standard one
+  # so the kernel is the same); the standard image does not carry it. The
+  # module is the MIT open-gpu-kernel-modules; its version is the one of the
+  # Debian NVIDIA user-space (a module and its user-space must be the same
+  # release), read from the apt index at build time. amd64 only — arm64 has
+  # no shipped NVIDIA compute target. The kernel-pve tree pair lives in the
+  # proxmox-ve-bootc lane (built beside its kernel-pve build, exactly the
+  # same release string the deb installs).
   - name: linux-modules-nvidia
     when:
       arch: amd64
-    deps:
-      - linux-image
-    deb-glob: "linux-modules-nvidia_*"
+    variant-name-prefix: "linux-modules-nvidia"
+    variant-env: KERNEL_SUFFIX
+    deb-glob: "linux-modules-nvidia{variant}_*"
+    variant-deps:
+      - linux-image{variant}
     sources:
       - nvidia
     env:
       HELPERS_VER: 10
+    variants:
+      "":
+        env:
+          KERNEL_ARCH_LEVEL: x64v1
+      "-x64v2":
+        env:
+          KERNEL_ARCH_LEVEL: x64v2
+      "-x64v3":
+        env:
+          KERNEL_ARCH_LEVEL: x64v3
+      "-x64v4":
+        env:
+          KERNEL_ARCH_LEVEL: x64v4
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
@@ -690,9 +719,9 @@ packages:
       # modules rebuild none of them. The NVIDIA conftest
       # (module_symvers_sanity_check) also requires vmlinux exports in this
       # file, in the kernel output tree.
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+      test -f "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" \
         || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" "${SRCDIR}/Module.symvers"
+      cp "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" "${SRCDIR}/Module.symvers"
 
       # Upstream NVIDIA open kernel modules at the release of the user-space
       # the image installs, from NVIDIA's own APT repository (libcuda1 is
@@ -738,8 +767,14 @@ packages:
         SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
 
       # Install the modules into the packaging tree under the kernel's
-      # /lib/modules/<KVER> so modprobe on the target resolves them.
-      DESTDIR="/output/linux-modules-nvidia"
+      # /lib/modules/<KVER> so modprobe on the target resolves them. KVER
+      # carries the flavour LOCALVERSION (7.2.15-x64v2-xanmod1), the deb
+      # name and its Package field carry the same suffix — the pairs of
+      # different flavours coexist in the APT pool (different names, the
+      # same NVIDIA release).
+      NV_SUFFIX="${KERNEL_SUFFIX:-}"
+      NV_PKG="linux-modules-nvidia${NV_SUFFIX}"
+      DESTDIR="/output/linux-modules-nvidia${NV_SUFFIX}"
       rm -rf "${DESTDIR}"
       mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
       [ -f modules.builtin ] || touch modules.builtin
@@ -772,6 +807,7 @@ packages:
       # the kernel deb version exactly.
       MOD_VER="${NVIDIAOPEN_VER}+${BUILT_VER}"
       sed -i \
+        -e "s|^Package: linux-modules-nvidia$|Package: ${NV_PKG}|" \
         -e "s|Version: {{ VER }}|Version: ${MOD_VER}|g" \
         -e "s|{{ VER }}|${BUILT_VER}|g" \
         -e "s|{{ KVER }}|${KVER}|g" \
@@ -783,9 +819,9 @@ packages:
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
-        "/debs/linux-modules-nvidia_${MOD_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/linux-modules-nvidia_${MOD_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output linux-modules-nvidia deb empty" >&2; exit 1; }
+        "/debs/${NV_PKG}_${MOD_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/${NV_PKG}_${MOD_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: output ${NV_PKG} deb empty" >&2; exit 1; }
 
   # linux-modules-gpu — the four GPU module sets (GPU FINAL, owner
   # 2026-11-03): gpu-ia (compute: amdgpu without Display Core, HSA/KFD on,
@@ -907,9 +943,9 @@ packages:
         # Seed Module.symvers from the kernel deb (the modules-only build has
         # no vmlinux.o; the vmlinux-only filter and the modpost flag live in
         # the device entry build, this block replicates it verbatim).
-        test -f "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" \
+        test -f "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" \
           || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
-        cp "${SEED_DIR}/usr/lib/linux-kernel-build/Module.symvers" Module.symvers
+        cp "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" Module.symvers
         awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
         if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
            && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
