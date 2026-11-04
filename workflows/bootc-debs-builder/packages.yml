@@ -687,6 +687,9 @@ packages:
       - nvidia
     env:
       HELPERS_VER: 10
+      # The Pages pool path of the published kernel lane debs (the URL =
+      # base + the pinned per-variant file name).
+      PVE_HEADERS_BASE: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/"
     variants:
       "":
         env:
@@ -887,22 +890,22 @@ packages:
       x64v1:
         env:
           KERNEL_ARCH_LEVEL: x64v1
-          PVE_HEADERS_URL: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/linux-headers-7.0.14-x64v1-xanmod1-g892799b0a2b8_7.0.14-g892799b0a2b8-1_amd64.deb"
+          PVE_HEADERS_DEB: "linux-headers-7.0.14-x64v1-xanmod1-g892799b0a2b8_7.0.14-g892799b0a2b8-1_amd64.deb"
           PVE_HEADERS_SHA256: "4255be6384bdfd2d0a40ca15c42a42c1742234762674aec1020307516e038207"
       x64v2:
         env:
           KERNEL_ARCH_LEVEL: x64v2
-          PVE_HEADERS_URL: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/linux-headers-7.0.14-x64v2-xanmod1-gd3b8692057ec_7.0.14-gd3b8692057ec-1_amd64.deb"
+          PVE_HEADERS_DEB: "linux-headers-7.0.14-x64v2-xanmod1-gd3b8692057ec_7.0.14-gd3b8692057ec-1_amd64.deb"
           PVE_HEADERS_SHA256: "8a2e23b72bcc84b1be316260ae0e6cca5e6b4c9793cbd5d8170538f94db33a41"
       x64v3:
         env:
           KERNEL_ARCH_LEVEL: x64v3
-          PVE_HEADERS_URL: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/linux-headers-7.0.14-x64v3-xanmod1-gcf8997a12e3b_7.0.14-gcf8997a12e3b-1_amd64.deb"
+          PVE_HEADERS_DEB: "linux-headers-7.0.14-x64v3-xanmod1-gcf8997a12e3b_7.0.14-gcf8997a12e3b-1_amd64.deb"
           PVE_HEADERS_SHA256: "986f70be4bccb21b60dd390662be1ac6cf0379d63fcca55d4e39491cf746e33b"
       x64v4:
         env:
           KERNEL_ARCH_LEVEL: x64v4
-          PVE_HEADERS_URL: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/linux-headers-7.0.14-x64v4-xanmod1-ge6f83d9603c4_7.0.14-ge6f83d9603c4-1_amd64.deb"
+          PVE_HEADERS_DEB: "linux-headers-7.0.14-x64v4-xanmod1-ge6f83d9603c4_7.0.14-ge6f83d9603c4-1_amd64.deb"
           PVE_HEADERS_SHA256: "35a51c499fc588571d0c7e81a45a15fc957ad559f966ed2d1adb676be8b0a706"
     build: |
       set -euo pipefail
@@ -916,11 +919,11 @@ packages:
       # lockfile pattern) — an artifact that does not match the pin is a
       # refusal, never a build, so a kernel lane rebuild can never silently
       # drift the ABI under our modules.
-      test -n "${PVE_HEADERS_URL:-}" -a -n "${PVE_HEADERS_SHA256:-}" \
-        || { echo "ERROR: the PVE headers variant carries no URL/sha256 pin" >&2; exit 1; }
+      test -n "${PVE_HEADERS_DEB:-}" -a -n "${PVE_HEADERS_SHA256:-}" \
+        || { echo "ERROR: the PVE headers variant carries no file/sha256 pin" >&2; exit 1; }
       apt-get install -y --no-install-recommends curl zstandard >/dev/null 2>&1 || curl --version >/dev/null
       HDR_DEB=/tmp/pve-headers.deb
-      curl -fsSL -o "${HDR_DEB}" "${PVE_HEADERS_URL}" \
+      curl -fsSL -o "${HDR_DEB}" "${PVE_HEADERS_BASE}${PVE_HEADERS_DEB}" \
         || { echo "ERROR: cannot download the pinned PVE headers artifact" >&2; exit 1; }
       test "$(sha256sum "${HDR_DEB}" | cut -d' ' -f1)" == "${PVE_HEADERS_SHA256}" \
         || { echo "ERROR: PVE headers artifact sha256 mismatch (pin drift — re-pin the variant)" >&2; exit 1; }
