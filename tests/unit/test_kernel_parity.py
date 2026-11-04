@@ -200,9 +200,7 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     # The fork consumes the vanilla base image: the base manifest FROM is
     # the published proxmox-ve-bootc image, not debian-bootc, and the fork
     # keeps deriving FROM that published image (thin twins only).
-    ve_base = (
-        REPO.parent / 'DaemonCores-VE' / 'Containerfile.base'
-    )
+    ve_base = (REPO.parent / 'DaemonCores-VE' / 'Containerfile.base')
     assert ve_base.is_file()
     assert 'FROM ghcr.io/daemoncores/proxmox-ve-bootc:latest_' \
         in ve_base.read_text(encoding='utf-8')
