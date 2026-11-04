@@ -6,6 +6,11 @@ The GPU module set is an install-time variable like the usage profile and
 the NVIDIA EULA acceptance: the image ships NONE of the four sets
 (gpu-ia, gpu-gaming, gpu-ia-nvidia, gpu-gaming-nvidia), the installer
 records the choice and this helper delivers it to the deployed target.
+The derive engine is selectable with ``DC_GPU_DERIVE_ENGINE``: ``podman``
+(the bootc-image-builder lane) or ``apt2ostree`` — the owner arbitration
+of 04/11 makes apt2ostree the dependency of the NVIDIA flow: at install
+it composes the derived deployment (the base tree + the NVIDIA user-space
+debs of the signed NVIDIA repo).
 
 Commands:
 
@@ -19,7 +24,13 @@ Commands:
                                 local compose — base payload, the signed
                                 NVIDIA repo and the -nvidia module set
                                 deb; prints and records the derived ref
-    derived                     print the recorded derived image ref
+    derived                         print the recorded derived image ref
+    fetch-tool <dir>                fetch the apt2ostree tool from its
+                                upstream repo (stb-tester/apt2ostree)
+                                into <dir> — live-build step, the tool
+                                is never hosted by us (no licence
+                                redistribution: it is a live clone at
+                                the pin APT2OSTREE_PIN)
     install <name> [root]       deliver the set to the target root: the
                                 loader policy conf is always copied into
                                 <root>/etc/modprobe.d/, and the set deb is
@@ -36,7 +47,9 @@ installer GPU step); ``install`` is idempotent and run by fisherman after
 the deployment, so a re-run over the same target converges.
 """
 
+import hashlib
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -75,6 +88,20 @@ NVIDIA_REPO_BASE = os.environ.get(
 DERIVE_CMD = os.environ.get(
     "DC_GPU_DERIVE_CMD", ""
 )  # overridable compose command, {CONTEXT}/{CONTAINERFILE}/{DERIVED}/{SET}
+# Derive engine of the NVIDIA flow (owner 04/11: apt2ostree is the dependency
+# of that flow). ``podman`` (default) keeps the proven bib lane compose; the
+# ``apt2ostree`` engine composes the derived deployment with the tool from the
+# upstream stb-tester/apt2ostree repository.
+DERIVE_ENGINE = os.environ.get("DC_GPU_DERIVE_ENGINE", "podman").strip().lower()
+# The tool is NEVER hosted by us: it is fetched from the upstream repository at
+# live-build (Containerfile.iso apt2ostree-fetch step) and the fetch script
+# here documents the pin. d5c31086 (2026-10-16, resolute merge) is exactly
+# the revision read and proven at code level (arbitration rows).
+APT2OSTREE_UPSTREAM = "https://github.com/stb-tester/apt2ostree"
+APT2OSTREE_PIN = "d5c31086b763703d0097df0a584593e9ba07a102"
+APT2OSTREE_TOOL_DIR = Path(
+    os.environ.get("DC_APT2OSTREE", "/usr/lib/apt2ostree")
+)
 SETS = (
     "gpu-ia",
     "gpu-gaming",
@@ -404,14 +431,315 @@ def _derive_command(
 def cmd_derive(set_name: str, base: str | None) -> int:
     """Build the derived NVIDIA image of this install and record its ref.
 
+    The engine is the one recorded in ``DC_GPU_DERIVE_ENGINE``: ``podman``
+    (default, the proven bib lane) or ``apt2ostree`` (owner arbitration
+    04/11: apt2ostree is the dependency of the NVIDIA flow, the tool is
+    fetched from upstream at live-build).
+
     Args:
         set_name: One of ``SETS`` with the ``-nvidia`` suffix (the consent
             gate already ran in the installer step before this command).
-        base: The base image reference (the installer payload ref).
+        base: The base image reference (the installer payload ref, or an
+            ``ostree:<repo>#<ref>`` deployment ref for the apt2ostree engine).
 
     Returns:
         0 when the derived image exists and its ref was recorded; 1 when
         the compose failed or the set/open-set mismatch was refused.
+    """
+    if set_name not in SETS:
+        fail(f"{set_name}: unknown GPU set")
+    if not set_name.endswith("-nvidia"):
+        fail(
+            f"{set_name}: only the -nvidia sets are derived images "
+            "(the open sets are debs pulled from the APT repo)"
+        )
+    if DERIVE_ENGINE == "apt2ostree":
+        return cmd_derive_apt2ostree(set_name, base or "")
+    if DERIVE_ENGINE != "podman":
+        fail(f"unknown derive engine {DERIVE_ENGINE!r}: podman or apt2ostree")
+    return cmd_derive_podman(set_name, base)
+
+
+def _parse_ostree_base(base: str) -> tuple[Path, str]:
+    """Split the ``ostree:<repo>#<ref>`` base reference.
+
+    Args:
+        base: The recorded base reference.
+
+    Returns:
+        The (repository path, ref) pair.
+
+    Raises:
+        ValueError: When the reference does not carry both parts.
+    """
+    label, _, rest = base.partition(":")
+    repo, sep, ref = rest.rpartition("#")
+    if label != "ostree" or not sep or not repo or not ref:
+        raise ValueError(
+            "the apt2ostree engine composes on an ostree deployment: "
+            "base = ostree:<repo>#<ref>, got " + repr(base)
+        )
+    return Path(repo), ref
+
+
+def collected_debs(set_name: str) -> list[Path]:
+    """Return the NVIDIA debs the derivation layers on the base tree.
+
+    The set deb and any NVIDIA user-space packages already cached this
+    install session come first; missing user-space packages are pulled
+    unpinned from the configured repos (`apt-get download`), loudly for each
+    miss — the derived deployment the owner asked for carries the proprietary
+    user-space, a partial compose refuses to run.
+
+    Args:
+        set_name: One of ``SETS`` with the ``-nvidia`` suffix.
+
+    Returns:
+        The deb files, one per package.
+    """
+    cache = apt_cache_dir()
+    debs: dict[str, Path] = {}
+    for deb in sorted(cache.glob("*.deb")):
+        debs.setdefault(deb.name.split("_")[0], deb)
+    missing: list[str] = []
+    for pkg in (*NVIDIA_PKGS, set_name):
+        if pkg in debs:
+            continue
+        done = subprocess.run(
+            ["apt-get", "download", pkg],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=APT_TIMEOUT,
+            cwd=str(cache),
+        )
+        got = sorted(cache.glob(f"{pkg}_*.deb"))
+        if done.returncode == 0 and got:
+            debs[pkg] = got[-1]
+        else:
+            missing.append(pkg)
+    if missing:
+        fail(
+            "apt2ostree derive needs the NVIDIA user-space, "
+            f"no deb for: {', '.join(missing)}"
+        )
+    return [debs[p] for p in (*NVIDIA_PKGS, set_name)]
+
+
+def _apt2ostree_driver(
+    tool_dir: Path,
+    debs: dict[str, Path],
+    arch: str,
+    base: tuple[Path, str],
+    mirror: Path,
+    set_name: str,
+) -> str:
+    """Generate the configure.py driver on top of the upstream apt2ostree API.
+
+    The build input is only the NVIDIA deb set (the upstream tool composes
+    one repository per lockfile, README limitation) in its unpack stage;
+    the combine step of the tool layers that tree on the pulled base
+    deployment ref, which is the closest model the upstream code supports
+    (documented gap: the dpkg metadata of the base tree is not re-merged and
+    the maintainer scripts of the NVIDIA debs are not configured).
+
+    Args:
+        tool_dir: The directory the upstream tool is fetched at.
+        debs: Package name to deb file.
+        arch: The architecture of the dpkg_base.
+        base: The (repo, ref) of the established deployment.
+        mirror: The local directory the deb file names are served from.
+        set_name: One of ``SETS`` with the ``-nvidia`` suffix.
+
+    Returns:
+        The driver source text.
+    """
+    names = sorted(debs)
+    lines = [
+        "#!/usr/bin/env python3",
+        '"Generated by gpu-set-stage: NVIDIA derived deployment"',
+        "import sys",
+        f"sys.path.insert(0, {str(tool_dir)!r})",
+        "from apt2ostree import Apt, Ninja",
+        "from apt2ostree.apt import AptSource",
+        "from apt2ostree.ostree import ostree_combine",
+        "with Ninja([sys.argv[0]], standalone=False) as ninja:",
+        '    ninja.variable("ostree_repo", "ostree")',
+        "    apt = Apt(ninja)",
+        "    debs = apt.build_image(",
+        "        'nvidia.lock',",
+        f"        {names!r},",
+        "        [AptSource(",
+        f"            architecture={arch!r},",
+        "            distribution='nvidia',",
+        f"            archive_url={f'file://{mirror}'!r},",
+        "            components='main',",
+        "            keyrings='')],",
+        "        unpack_only=True)",
+        "    derived = ostree_combine.build(",
+        "        ninja, inputs=[debs.filename,",
+        f"                       f'ostree/refs/heads/{base[1]}'],",
+        f"        branch={f'install/nvidia/{set_name}/derived'!r})",
+        "    ninja.default(derived.filename)",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
+    """Compose the derived deployment with the upstream apt2ostree tool.
+
+    The tool is the one fetched from stb-tester/apt2ostree at live-build
+    (`apt2ostree-fetch`, never hosted by us). The derived ref is committed
+    into the base ostree repository next to the established deployment; the
+    installer deploys it (`ostree admin deploy <derived ref> in the
+    stateroot`), this command never rewrites an established deployment.
+
+    Args:
+        set_name: One of ``SETS`` with the ``-nvidia`` suffix.
+        base: The recorded base reference, ``ostree:<repo>#<ref>``.
+
+    Returns:
+        0 when the derived ref exists in the base repo; 1 on any refusal.
+    """
+    if not APT2OSTREE_TOOL_DIR.joinpath("apt2ostree").is_dir():
+        fail(
+            f"apt2ostree tool missing at {APT2OSTREE_TOOL_DIR}: it is "
+            f"fetched at live-build from {APT2OSTREE_UPSTREAM} (pin "
+            f"{APT2OSTREE_PIN[:7]}) by apt2ostree-fetch, never hosted by us"
+        )
+    try:
+        where, ref = _parse_ostree_base(base or State("derived-base").read())
+    except ValueError as error:
+        fail(str(error))
+    debs_list = collected_debs(set_name)
+    workdir = apt_cache_dir().parent / "derive-a2o" / set_name
+    workdir.mkdir(parents=True, exist_ok=True)
+    mirror = workdir / "_build" / "apt" / "mirror"
+    mirror.mkdir(parents=True, exist_ok=True)
+    debs: dict[str, Path] = {}
+    for deb in debs_list:
+        name = deb.name.split("_")[0]
+        debs[name] = deb
+        target = mirror / deb.name
+        if target != deb.resolve():
+            shutil.copyfile(deb, target)
+    lockfile = workdir / "nvidia.lock"
+    with lockfile.open("w", encoding="utf-8") as handle:
+        for name, deb in sorted(debs.items()):
+            fields = subprocess.run(
+                [
+                    "dpkg-deb", "-f",
+                    str(deb), "Package", "Version", "Architecture"
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.splitlines()
+            got = {
+                line.split(": ")[0]: line.split(": ", 1)[1]
+                for line in fields if ": " in line
+            }
+            digest = hashlib.sha256(deb.read_bytes()).hexdigest()
+            handle.write(
+                f"Package: {got.get('Package', name)}\n"
+                f"Version: {got.get('Version', '')}\n"
+                f"Architecture: {got.get('Architecture', '')}\n"
+                f"Filename: {deb.name}\n"
+                f"SHA256: {digest}\n\n"
+            )
+    arch = subprocess.run(
+        ["dpkg", "--print-architecture"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip() or {
+        "x86_64": "amd64",
+        "aarch64": "arm64",
+    }.get(platform.uname().machine, "")
+    driver = workdir / "configure.py"
+    driver.write_text(
+        _apt2ostree_driver(
+            APT2OSTREE_TOOL_DIR, debs, arch, (where, ref), mirror, set_name
+        ),
+        encoding="utf-8",
+    )
+    # The upstream tool expects the build ostree repo to exist BEFORE
+    # configure/ninja (README: `ostree init` step); the base deployment ref
+    # is pulled into it here, so the combine layers the NVIDIA debs onto it.
+    repo = workdir / "ostree"
+    for step2 in (
+        ["ostree", f"--repo={repo}", "init", "--mode=bare-user"],
+        ["ostree", f"--repo={repo}", "pull-local",
+         str(where), ref],
+    ):
+        done = subprocess.run(
+            step2,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=APT_TIMEOUT,
+        )
+        if done.returncode != 0:
+            print(done.stderr[-800:], file=sys.stderr)
+            print(
+                f"gpu-set-stage: base deployment {ref} not pulled: "
+                f"{step2[0]} failed",
+                file=sys.stderr,
+            )
+            return 1
+    for step in (
+        [sys.executable, "configure.py"],
+        ["ninja"],
+    ):
+        done = subprocess.run(
+            step,
+            cwd=str(workdir),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=APT_TIMEOUT * 30,
+        )
+        if done.returncode != 0:
+            print(done.stdout[-800:] if done.stdout else "", file=sys.stderr)
+            print(done.stderr[-800:] if done.stderr else "", file=sys.stderr)
+            print(
+                f"gpu-set-stage: apt2ostree derive failed at {step[0]}",
+                file=sys.stderr,
+            )
+            return 1
+    derived = f"install/nvidia/{set_name}/derived"
+    done = subprocess.run(
+        [
+            "ostree", f"--repo={where}", "pull-local",
+            str(workdir / "ostree"), derived
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        print(done.stderr[-800:], file=sys.stderr)
+        print(
+            "gpu-set-stage: derived ref not pulled in the base repo",
+            file=sys.stderr
+        )
+        return 1
+    State("derived-engine").write("apt2ostree")
+    State("derived-imgref").write(f"ostree:{where}#{derived}")
+    print(f"ostree:{where}#{derived}")
+    return 0
+
+
+def cmd_derive_podman(set_name: str, base: str | None) -> int:
+    """The bib-lane compose: build the derived container image of this install.
+
+    Args:
+        set_name: One of ``SETS`` with the ``-nvidia`` suffix.
+        base: The base payload image reference.
+
+    Returns:
+        0 when the derived image exists and its ref was recorded; 1 when
+        the compose failed.
     """
     if set_name not in SETS:
         fail(f"{set_name}: unknown GPU set")
@@ -489,6 +817,59 @@ def cmd_install(name: str, root: str | None) -> int:
     return 0
 
 
+def cmd_fetch_tool(dest: str) -> int:
+    """Fetch the apt2ostree tool from its upstream repository (live-build).
+
+    Never hosted by us: the tool is a live clone of ``stb-tester/apt2ostree``
+    checked out at the audited pin, so we neither redistribute a binary nor
+    touch the (absent) upstream licence.
+
+    Args:
+        dest: The directory to clone the tool in (the live image carries
+            ``/usr/lib/apt2ostree``).
+
+    Returns:
+        0 when the pinned checkout exists at dest; 1 when the fetch failed.
+    """
+    target = Path(dest).resolve()
+    if target.joinpath("apt2ostree").is_dir():
+        print(f"apt2ostree-fetch: already present at {target}")
+        return 0
+    target.parent.mkdir(parents=True, exist_ok=True)
+    for step in (
+        ["git", "clone", "--quiet", APT2OSTREE_UPSTREAM,
+         str(target)],
+        ["git", "-C",
+         str(target), "checkout", "--quiet", APT2OSTREE_PIN],
+    ):
+        done = subprocess.run(
+            step,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=APT_TIMEOUT * 5
+        )
+        if done.returncode != 0:
+            print(done.stderr[-800:], file=sys.stderr)
+            print(
+                f"apt2ostree-fetch: fetching {APT2OSTREE_UPSTREAM} failed",
+                file=sys.stderr,
+            )
+            shutil.rmtree(target, ignore_errors=True)
+            return 1
+    head = subprocess.run(["git", "-C",
+                           str(target), "rev-parse", "HEAD"],
+                          capture_output=True,
+                          text=True,
+                          check=False).stdout.strip()
+    if head != APT2OSTREE_PIN:
+        print(f"apt2ostree-fetch: unexpected HEAD {head}", file=sys.stderr)
+        shutil.rmtree(target, ignore_errors=True)
+        return 1
+    print(f"apt2ostree-fetch: {target} at {head[:7]}")
+    return 0
+
+
 def main() -> NoReturn:
     """Entry point: dispatch the command line."""
     args: list[str] = sys.argv[1:]
@@ -508,13 +889,16 @@ def main() -> NoReturn:
     if command == "derived" and not rest:
         print(State("derived-imgref").read())
         sys.exit(0)
+    if command == "fetch-tool" and len(rest) == 1:
+        sys.exit(cmd_fetch_tool(rest[0]))
     if command == "derive" and len(rest) in (1, 2):
         sys.exit(cmd_derive(rest[0], rest[1] if len(rest) == 2 else None))
     if command == "install" and len(rest) in (1, 2):
         sys.exit(cmd_install(rest[0], rest[1] if len(rest) == 2 else None))
     fail(
         "usage: gpu-set-stage {sets|set <name>|status|base <ref>|"
-        "derive <name> [base_ref]|derived|install <name> [root]}"
+        "derive <name> [base_ref]|derived|install <name> [root]|"
+        "fetch-tool <dir>}"
     )
 
 

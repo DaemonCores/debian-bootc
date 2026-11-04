@@ -101,6 +101,13 @@ RUN IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
         /etc/bootc-installer/recipe.json \
     && rm -rf /tmp/recipe-gen /usr/libexec/debian-bootc/gen-recipe.py
 
+# apt2ostree (owner 2026-11-04: the dependency of the NVIDIA install flow):
+# fetched from its upstream repository at LIVE-BUILD and shipped in the live
+# environment for the install-time derive; never hosted or redistributed by
+# us (a live clone of the audited pin, no upstream licence is touched).
+RUN [ -d /usr/lib/apt2ostree ] \
+    || /usr/libexec/debian-bootc/apt2ostree-fetch /usr/lib/apt2ostree
+
 # -----------------------------------------------------------------------------
 # Phase 1.5: osbuild stage prerequisites on the deployed tree
 #

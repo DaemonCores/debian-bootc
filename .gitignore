@@ -50,3 +50,6 @@ htmlcov/
 *.swp
 .DS_Store
 /.ci/
+
+# The apt2ostree tool is fetched from upstream at live-build, never hosted
+src/buildisopreinstall/usr/lib/apt2ostree/

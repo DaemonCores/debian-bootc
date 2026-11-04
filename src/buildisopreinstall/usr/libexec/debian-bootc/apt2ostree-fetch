@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# apt2ostree-fetch - fetch the apt2ostree tool from its upstream repo at
+# live-build (owner arbitration 2026-11-04: apt2ostree is the dependency of
+# the NVIDIA flow). The tool is NEVER hosted by us: a live clone of
+# stb-tester/apt2ostree checked out at the gpu-set-stage pin, so we neither
+# redistribute a binary nor touch the (absent) upstream licence.
+# Usage: apt2ostree-fetch <dest> (default /usr/lib/apt2ostree).
+set -euo pipefail
+DEST=${1:-/usr/lib/apt2ostree}
+PIN=d5c31086b763703d0097df0a584593e9ba07a102
+UPSTREAM=https://github.com/stb-tester/apt2ostree
+if [ -n "$(find "$DEST" -maxdepth 2 -type d -name apt2ostree 2>/dev/null)" ]
+then
+  echo "apt2ostree-fetch: already present at $DEST"
+  exit 0
+fi
+mkdir -p "$(dirname "$DEST")"
+git clone --quiet "$UPSTREAM" "$DEST"
+if [ "$(git -C "$DEST" rev-parse HEAD)" != "$PIN" ]; then
+  git -C "$DEST" checkout --quiet "$PIN"
+fi
+[ "$(git -C "$DEST" rev-parse HEAD)" = "$PIN" ] || {
+  echo "apt2ostree-fetch: unexpected HEAD at $DEST (pin $PIN)" >&2
+  rm -rf "$DEST"
+  exit 1
+}
+[ -d "$DEST/apt2ostree" ] || {
+  echo "apt2ostree-fetch: no apt2ostree package at $DEST" >&2
+  rm -rf "$DEST"
+  exit 1
+}
+rm -rf "$DEST/.git"
+echo "apt2ostree-fetch: $DEST at ${PIN:0:7}"
