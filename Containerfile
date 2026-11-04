@@ -123,7 +123,6 @@ RUN apt update \
         openresolv \
         isc-dhcp-client \
         wpasupplicant \
-        firstboot-user-setup \
         ${BOOT_PKG} \
         firmware-ath9k-htc \
         firmware-carl9170 \

@@ -538,11 +538,15 @@ tests:
           print(p, struct.unpack('<I', open(p, 'rb').read(12)[8:12])[0])" 2>&1
 
   # ── first-boot tooling shipped ─────────────────────────────────────────
-  # firstboot-user-setup is installed in the image.
-  - name: firstboot wizard present
-    run: test -x /usr/local/bin/firstboot-user-setup
+  # ── install-side system setup (bootc-installer replaces the first-boot wizard) ─
+  # The image ships NO first-boot wizard: user, root password, sudo, ssh
+  # policy, hostname, hosts bootstrap, locale and keyboard are all applied at
+  # install by the bootc-installer system step through the recipe.
+  - name: firstboot wizard removed
+    run: test ! -e /usr/local/bin/firstboot-user-setup
     diag: |
-      ls -la /usr/local/bin/firstboot-user-setup 2>&1
+      test -e /usr/local/bin/firstboot-user-setup && ls -la /usr/local/bin/firstboot-user-setup || true
+      cat /etc/hosts 2>&1
   - name: bootc-finalize helper present
     run: test -x /usr/local/bin/bootc-finalize
     diag: |

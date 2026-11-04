@@ -25,35 +25,6 @@
 # mirror). HELPERS_VER is hashed per class entry; bump it whenever
 # deb_helpers.sh changes (other repository, invisible to the content hash).
 packages:
-  - name: firstboot-user-setup
-    sources:
-      - firstbootpostinstall
-      - preinstall/output/firstboot-user-setup
-    env:
-      FIRSTBOOT_VER: "1.0.2"
-    build: |
-      set -euo pipefail
-      SAVE_PWD=$(pwd)
-
-      cp -r "${SAVE_PWD}"/workflows/bootc-debs-builder/firstbootpostinstall/* \
-        /output/firstboot-user-setup/
-
-      chmod 755 \
-        /output/firstboot-user-setup/usr/local/bin/firstboot-user-setup
-
-      sed -i \
-        -e "s|{{ VER }}|${FIRSTBOOT_VER}|g" \
-        -e "s|, {{ DEPS }}||g" \
-        /output/firstboot-user-setup/DEBIAN/control
-
-      # Content check: our entrypoint is present, executable and valid shell.
-      f=/output/firstboot-user-setup/usr/local/bin/firstboot-user-setup
-      test -x "${f}" && bash -n "${f}" \
-        || { echo "ERROR: firstboot-user-setup script broken" >&2; exit 1; }
-
-      dpkg-deb --build /output/firstboot-user-setup \
-        /debs/firstboot-user-setup_${FIRSTBOOT_VER}_all.deb
-
   # ===========================================================================
   # Kernel packages — ONE kernel build per page size + ONE modules entry per
   # ARM device. The kernel (vmlinuz + common modules) is compiled in the
@@ -1297,7 +1268,7 @@ packages:
   # deb_overlay_tree in DaemonCores-CI (bump HELPERS_VER there when done).
   #
   # PENDING — the other classes: the from-source packages below
-  # (firstboot-user-setup, bootupd, libcomposefs, ostree, bootc, fisherman,
+  # (bootupd, libcomposefs, ostree, bootc, fisherman,
   # bootc-installer, grub-efi-{amd64,arm64}-signed) keep their verbatim builds.
   # None maps cleanly onto deb_custom/deb_overlay_tree (they clone upstream and
   # compile via meson/cargo/go, install their deps, or gate on when.arch with

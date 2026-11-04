@@ -23,7 +23,7 @@ The repository is under active development. The amd64 path is the current instal
 
 ## Implemented components
 
-- Debian packages for bootc, OSTree, composefs, bootupd, a BLS-capable GRUB build, first-boot setup, and bootc-specific service integration.
+- Debian packages for bootc, OSTree, composefs, bootupd, a BLS-capable GRUB build, and bootc-specific service integration.
 - A signed APT repository published from the package manifest in `workflows/bootc-debs-builder/packages.yml`.
 - A full image assembled from Debian Trixie (the NVIDIA stack is derived at install time, never hosted as a separate image).
 - Native amd64 and arm64 jobs in the shared CI, content-addressed package reuse, GHCR publication, and cosign signing with a key owned by the repository.
@@ -35,7 +35,7 @@ The repository is under active development. The amd64 path is the current instal
 
 | Source | Tag family | Purpose |
 | --- | --- | --- |
-| `Containerfile` | `latest` | General-purpose Debian bootc system with SSH, Podman, ifupdown2, firmware, troubleshooting tools, and the first-boot wizard. |
+| `Containerfile` | `latest` | General-purpose Debian bootc system with SSH, Podman, ifupdown2, firmware, troubleshooting tools. The first-boot wizard is replaced: user, root password, sudo, ssh policy, hostname, hosts, locale and keyboard are set at install by bootc-installer. |
 
 Each image is published once per tag, with automatic updates on by default (a symlink in `/etc` switches them off). The CI publishes architecture-specific tags and then creates manifest-list tags after successful builds.
 

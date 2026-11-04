@@ -31,7 +31,7 @@ The project is under active development. Security fixes target the current defau
 - Published images are signed with a cosign key owned by the repository (repository secrets); the images ship its public key and a policy so hosts only accept signed updates. The private key must never appear in artifacts or logs.
 - Secure Boot signing keys are repository secrets and must never appear in artifacts or logs.
 - Installer jobs and bootc installation perform privileged disk operations.
-- The current installer does not embed a shared root password; the tty1 first-boot wizard provisions the initial user and root credentials.
+- The current installer does not embed a shared root password; the bootc-installer system step provisions the initial user, root password, sudo and SSH policy at install time (the tty1 first-boot wizard is removed).
 - Runtime tests reduce integration risk but do not certify arbitrary hardware.
 
 Reports involving the package cache, signature verification, installer target selection, credential masking, boot chain, or writable-state boundaries are in scope.

@@ -1,6 +1,5 @@
-diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
---- a/fisherman/cmd/fisherman/main.go	2026-11-03 00:00:00.000000000 +0100
-+++ b/fisherman/cmd/fisherman/main.go	2026-11-03 09:20:03.625364185 +0100
+--- a/fisherman/cmd/fisherman/main.go
++++ b/fisherman/cmd/fisherman/main.go
 @@ -211,6 +211,33 @@
  	return nil
  }
@@ -44,10 +43,18 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  		Target:                activeTargetMount,
  		ScratchDir:            scratchDir,
  		NeedsPull:             imageCheck.NeedsPull,
-@@ -864,6 +891,52 @@
+@@ -864,6 +891,60 @@
  		fatal("writing hostname: %v", err)
  	}
  
++	// The 127.0.1.1 bootstrap line of /etc/hosts must always resolve the
++	// live hostname (pmxcfs and pve-ssl resolve the node name over loopback
++	// before any network is up): the installer replaces the shipped
++	// placeholder with one derived from the recipe hostname.
++	if err := post.WriteHostsBootstrap(activeTargetMount, r.Hostname); err != nil {
++		fatal("writing hosts bootstrap: %v", err)
++	}
++
 +	if r.Locale != "" {
 +		progress.Info(fmt.Sprintf("Writing locale: %s", r.Locale))
 +		if err := post.WriteLocale(activeTargetMount, r.Locale); err != nil {
@@ -97,7 +104,7 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  	// Write /var fstab entry if a separate /var disk was used.
  	if hasVarDisk {
  		varUUID := disk.UUID(r.VarDisk.Disk)
-@@ -878,6 +951,13 @@
+@@ -878,6 +959,13 @@
  		}
  	}
  
@@ -111,7 +118,7 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
  	if r.User.Username != "" {
  		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))
-@@ -900,6 +980,17 @@
+@@ -900,6 +988,17 @@
  		progress.Info(fmt.Sprintf("Added Plymouth boot args to %d loader entr%s", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
  	}
  
