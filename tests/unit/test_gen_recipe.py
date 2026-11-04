@@ -98,6 +98,25 @@ def test_main_updates_only_images_fields(tmp_path: Path) -> None:
     assert len(data["images"]) == 2
 
 
+def test_tracked_recipe_is_a_static_template_only() -> None:
+    """The tracked recipe.json carries NO hardcoded image catalog (P-196b).
+
+    src/buildisopreinstall/etc/bootc-installer/recipe.json is the STATIC
+    template of the ISO build (branding, tour, steps…): the image catalog is
+    generated from the Containerfiles by gen-recipe.py in every build path
+    that consumes it. A catalog hardcoded in the tracked file would drift from
+    what the CI is programmed to build.
+    """
+    tracked = (
+        Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' /
+        'etc' / 'bootc-installer' / 'recipe.json'
+    )
+    data = json.loads(tracked.read_text(encoding='utf-8'))
+    assert data['images'] == [], data['images']
+    assert 'imgref' not in data
+    assert data.get('distro_name'), 'static template fields must stay'
+
+
 def test_main_usage_error() -> None:
     """Wrong argument count exits with status 1."""
     result = subprocess.run([sys.executable, str(SCRIPT)],

@@ -2,36 +2,10 @@
     "log_file": "/var/log/bootc-installer.log",
     "distro_name": "DaemonCores",
     "distro_logo": "resource:///org/bootcinstaller/Installer/assets/welcome.png",
-    "imgref": "ghcr.io/daemoncores/debian-bootc:latest_amd64",
-    "images": [
-        {
-            "name": "DaemonCores Standard (amd64)",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:latest_amd64",
-            "bootloader": "auto",
-            "filesystem": "btrfs",
-            "composefs": false,
-            "needs_user_creation": true,
-            "filesystems": [
-                "btrfs",
-                "xfs"
-            ]
-        },
-        {
-            "name": "DaemonCores Standard (arm64)",
-            "imgref": "ghcr.io/daemoncores/debian-bootc:latest_arm64",
-            "bootloader": "auto",
-            "filesystem": "btrfs",
-            "composefs": false,
-            "needs_user_creation": true,
-            "filesystems": [
-                "btrfs",
-                "xfs"
-            ]
-        }
-    ],
+    "images": [],
     "live_image_selection": true,
     "welcome_title": "Install DaemonCores",
-    "welcome_subtitle": "A minimal Debian 13 Trixie bootc system \u2014 atomic updates, rollback on failure, managed as a container image.",
+    "welcome_subtitle": "A minimal Debian 13 Trixie bootc system — atomic updates, rollback on failure, managed as a container image.",
     "credits_data": "/org/bootcinstaller/Installer/data/credits.json",
     "tour": {
         "welcome": {

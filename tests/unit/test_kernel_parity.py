@@ -55,26 +55,32 @@ def test_thp_arbitration_debian_lane_is_always() -> None:
 def test_shared_functional_pins_present() -> None:
     """The functional set travels with the canonical fragment, both lanes.
 
-    IO_URING=y, NTSYNC=m (Wine/Proton), the BORE knob and the XanMod timing host
-    profile (HZ_1000 + full preemption) live in the shared file.
+    IO_URING=y, NTSYNC=m (Wine/Proton) and the XanMod timing host profile
+    (HZ_1000 + full preemption) live in the shared file. SCHED_BORE is
+    deliberately absent: the bore sibling is DORMANT (proven 2026-11-04, the
+    CachyOS hunks no longer apply to any vanilla tree), and the pin was
+    REMOVED from the fragment — a dead pin kills the gate until upstream
+    ships a matching bore patch again.
     """
     cfg = _cfg()
     for line in (
         'CONFIG_IO_URING=y',
         'CONFIG_NTSYNC=m',
-        'CONFIG_SCHED_BORE=y',
         'CONFIG_HZ_1000=y',
         'CONFIG_PREEMPT=y',
         'CONFIG_PREEMPT_DYNAMIC=y',
     ):
         assert f'{line}\n' in cfg
+    assert 'CONFIG_SCHED_BORE' not in cfg
 
 
 def test_canonical_patch_set_shape() -> None:
-    """One patch list, two consumers: 17 xanmod + 3 clearlinux + bore + carrier.
+    """One patch list, two consumers: 18 xanmod + 3 clearlinux + dormant bore + carrier.
 
     The module carrier (rocknix-btrtl, moved from packages.yml by the 13:05
-    arbitration) rides on the arm64 kernel builds.
+    arbitration) rides on the arm64 kernel builds. The bore sibling stays in
+    the canonical list DORMANT (exclude-series filter on 7.0..7.3) and its
+    upstream file is the renamed 0001-bore-cachy.patch.
 
     0004-ata-before-graphics and 0003-kbuild-sms-pipelining must stay out (they
     no longer apply to the tracked series trees).
@@ -83,8 +89,8 @@ def test_canonical_patch_set_shape() -> None:
     names = re.findall(r'- name: ([^\s]+)', text)
     assert '0004-ata-before-graphics' not in names
     assert '0003-kbuild-sms-pipelining' not in names
-    assert '0001-bore.patch' in text
-    assert 'rocknix-btrtl-rtl8733bu' in names
+    assert '0001-bore-cachy.patch' in text
+    assert 'bore' in names
     assert len(names) == 22
 
 
