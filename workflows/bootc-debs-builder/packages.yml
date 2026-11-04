@@ -286,6 +286,24 @@ packages:
       # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
       # modules built later inherit it from the .config shipped in the deb.
       if [ "${DEB_ARCH}" = "arm64" ]; then
+        # The arm flavour fragment (LOCALVERSION -armv8.0-default1,
+        # -armv8.2-lse1, -armv9-sve21) of THIS variant. Only the coded arm
+        # flavours get one: their kernelrelease would otherwise collide with
+        # the plain baseline — same Package daemoncores-kernel-7.2.15 with
+        # different bytes — and reprepro refuses the second include in the
+        # APT pool (seen live: run 41794169405, publish jobs exit 254, repack
+        # builds 5 arm64 kernels all named daemoncores-kernel-7.2.15). The
+        # plain baseline ("" and -16k) keeps NO flavour LOCALVERSION: the
+        # device module packages Depend on the plain
+        # daemoncores-kernel-<KVER>, and the page size alone (pages/16k
+        # LOCALVERSION) separates the 4 KB and 16 KB kernels.
+        case "${KERNEL_ARCH_LEVEL:-}" in
+          armv8.0|armv8.2-lse|armv9-sve2)
+            test -f "${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg" \
+              || { echo "ERROR: arm flavour fragment ${KERNEL_ARCH_LEVEL}.cfg missing from the engine export" >&2; exit 1; }
+            CONFIG_FILES+=("${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg")
+            ;;
+        esac
         PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
         test -f "${PAGES_OVERLAY}" \
           || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
