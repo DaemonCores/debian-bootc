@@ -698,12 +698,30 @@ packages:
       # the image installs, from NVIDIA's own APT repository (libcuda1 is
       # versioned like the whole NVIDIA stack there, e.g. 615.71.10-1 -> tag
       # 615.71.10); Debian's user-space is too old for the image kernel.
+      # The release must pair on BOTH sides: the repo user-space candidate
+      # AND an existing open-gpu-kernel-modules tag. NVIDIA has shipped
+      # user-space releases whose module source was not tagged (620.70.06,
+      # 2026-11-04: candidate without any 620 tag — the clone died on a
+      # missing branch and killed the lane). Walk every repo release
+      # (newest first) and pick the first one whose tag exists; the tag
+      # check keeps module and user-space the SAME release the derived
+      # image then pins (gpu-set-stage.py), so the pairing gate can never
+      # straddle two releases.
       "${SAVE_PWD}/src/nvidiapreinstall/usr/sbin/nvidia-apt-repo"
       apt-get update -qq
-      NVIDIAOPEN_VER=$(apt-cache policy libcuda1 \
-        | awk '/Candidate:/ { sub(/-[^-]*$/, "", $2); print $2 }')
-      test -n "${NVIDIAOPEN_VER}" && [ "${NVIDIAOPEN_VER}" != "(none)" ] \
-        || { echo "ERROR: no libcuda1 candidate in the apt index" >&2; exit 1; }
+      NVIDIA_REPO="https://github.com/NVIDIA/open-gpu-kernel-modules.git"
+      NVIDIAOPEN_VER=""
+      while IFS=' |' read -r _ v _; do
+        [ -n "${v}" ] || continue
+        v="${v%-*}"
+        if [ -z "${NVIDIAOPEN_VER}" ] \
+          && git ls-remote --exit-code --tags "${NVIDIA_REPO}" \
+               "refs/tags/${v}" > /dev/null 2>&1; then
+          NVIDIAOPEN_VER="${v}"
+        fi
+      done < <(apt-cache madison libcuda1)
+      test -n "${NVIDIAOPEN_VER}" \
+        || { echo "ERROR: no NVIDIA user-space release has a matching open-gpu-kernel-modules tag" >&2; exit 1; }
       rm -rf /build/nvidia-open
       git clone --quiet --depth=1 --branch "${NVIDIAOPEN_VER}" \
         https://github.com/NVIDIA/open-gpu-kernel-modules.git /build/nvidia-open

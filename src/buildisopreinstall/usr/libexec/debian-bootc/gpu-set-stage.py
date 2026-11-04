@@ -343,9 +343,18 @@ RUN base="{NVIDIA_REPO_BASE}" \\
     && dpkg -i "$work/cuda-keyring.deb" \\
     && rm -rf "$work"
 RUN apt-get update \\
-    && apt-get install -y --no-install-recommends {pkgs} {set_name} \\
     && module_release=$(dpkg-query -W -f='\\${{Version}}' \\
          linux-modules-nvidia | sed 's/-.*//; s/+.*//') \\
+    && pinned="" \\
+    && for p in {pkgs}; do \\
+         v=$(apt-cache madison "$p" \\
+              | awk -v r="$module_release" '$3 ~ "^"r"-[0-9]+$" {{print $3}}' \\
+              | head -n 1); \\
+         [ -n "$v" ] \\
+           || {{ echo "no NVIDIA user-space $p=$module_release in the repo" >&2; exit 1; }}; \\
+         pinned="$pinned $p=$v"; \\
+       done \\
+    && apt-get install -y --no-install-recommends $pinned {set_name} \\
     && userspace_release=$(dpkg-query -W -f='\\${{Version}}' \\
          libcuda1 | sed 's/-.*//') \\
     && {{ [ "$module_release" = "$userspace_release" ] \\
