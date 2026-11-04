@@ -156,6 +156,28 @@ packages:
       # written by the bootc-installer, default on) — never a second kernel
       # package. Secure Boot and the EFI signatures apply to every build.
       KERNEL_SIGNING_ENFORCE: "no"
+      # TEMPORARY KERNEL PIN replaces the `track:` resolution (2026-11-04,
+      # runs 41762298671): the engine probe (`require-patches: engine`) only
+      # checks a patch URL's PRESENCE, not its applicability, so the stable
+      # probe let 7.3.1 through while the CachyOS bore sibling
+      # (7.3/sched/0001-bore-cachy.patch) targets Cachy's own 7.3 tree — the
+      # build failed with `ERROR: patch bore does not apply to 7.3.1`, and a
+      # local dry-run on the vanilla 7.3 tree fails the bore hunks even with
+      # the whole XanMod+clearlinux set applied first. The patch data and the
+      # probe are engine data (DaemonCores-CI): both out of this lane. UNTIL
+      # CachyOS rebases bore for the vanilla 7.3 stable (or the engine probe
+      # verifies the dry-run), the kernel lane stays on the newest release
+      # whose whole shared set applies — the 7.2 series the published kernel
+      # was built from. Restore when unpinning:
+      #   track:
+      #     KERNEL_VER:
+      #       kernel-org: stable
+      #       require-patches: engine
+      #       digests:
+      #         KERNEL_SHA256: "linux-{version}.tar.xz"
+      KERNEL_VER: "7.2.15"
+      # tarball digest of linux-7.2.15.tar.xz, kernel.org sha256sums.asc.
+      KERNEL_SHA256: "d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
     deb-glob: "linux-image-common_*"
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
@@ -176,19 +198,10 @@ packages:
       # shared set are engine data (CI_KERNEL_SHARED, hashed by the engine's
       # shared term); the device module fragments of this lane live HERE
       # (kernel/modules, hashed per modules entry — KERNEL FINAL v2).
-    # Rolling: the kernel is the newest stable or longterm release of kernel.org
-    # whose series every patch source (CachyOS, ROCKNIX) already provides,
-    # PROBED IN THE ENGINE (`require-patches: engine`) — the newest series
-    # whose every patch of the shared set is upstream-available wins (7.3
-    # without a CachyOS bore sibling falls back to 7.2 automatically). Nothing
-    # pinned; version and tarball sha256 resolved before each build. If the
-    # chosen release does not build, the last-good published deb is kept.
-    track:
-      KERNEL_VER:
-        kernel-org: stable
-        require-patches: engine
-        digests:
-          KERNEL_SHA256: "linux-{version}.tar.xz"
+    # TEMPORARY KERNEL PIN (see the env comment above): the `track:` block
+    # was REMOVED so the resolution cannot override the pinned KERNEL_VER —
+    # the restore block is quoted in the env comment. No other kernel entry
+    # keeps a resolution while the pin is on.
     build: |
       set -euo pipefail
 
@@ -479,17 +492,13 @@ packages:
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
       # bump when those helpers change.
       HELPERS_VER: 7
-    # Track the stable kernel version so KERNEL_VER enters the content hash.
-    # The modules build derives their actual version from the kernel dep deb
-    # (kernel_prepare), not from KERNEL_VER directly, but the track entry
-    # ensures the cache is invalidated whenever the kernel bumps: without it
-    # the module content hash is constant, the modules are never rebuilt, and
-    # they keep a pinned `Depends: daemoncores-kernel-<old_ver>` that breaks
-    # once the APT repo only carries the newer kernel.
-    track:
-      KERNEL_VER:
-        kernel-org: stable
-        require-patches: engine
+      # TEMPORARY KERNEL PIN (see the linux-image env): the module lane pins
+      # KERNEL_VER with the kernel lane instead of following the `track:`
+      # resolution — the module debs are built against the linux-image dep deb
+      # (kernel_prepare), and the pinned value keeps their content hash in
+      # step with the image (no stale `Depends: daemoncores-kernel-<old_ver>`
+      # once the APT repo only carries the kernel the lane ships).
+      KERNEL_VER: "7.2.15"
     sources:
       - preinstall/output/linux-modules-arm-device
       # The device fragments of this repo (per-DEVICE overlay of the build):
@@ -511,6 +520,17 @@ packages:
       test -f "${OVERLAY}" \
         || { echo "ERROR: device module overlay kernel/modules/${DEVICE} missing" >&2; exit 1; }
 
+      # The engine shared set is the canonical patch data (arbitration
+      # 2026-11-03 13:05): the builder exports PATCHES_JSON only from the
+      # manifest's native `patches:` list (none in production, same
+      # arbitration), so the module lane resolves it from the SAME engine
+      # export the kernel lane consumes — never a carbon copy of the data.
+      # The class filter of the helper picks only this tree's patches per
+      # call (kernel vs module).
+      test -f "${CI_KERNEL_SHARED}/patches-shared.yml" \
+        || { echo "ERROR: engine kernel-shared/patches-shared.yml missing" >&2; exit 1; }
+      PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
+      export PATCHES_JSON
       # Bootstrap shared by the kernel module entries: locate the kernel deb,
       # download the kernel source, seed .config (kernel_prepare).
       # The seeded .config is the kernel's own (base + arm overlay + pages), so
@@ -651,6 +671,15 @@ packages:
       set -euo pipefail
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
+
+      # The engine shared set (see linux-modules-arm-device): the same
+      # PATCHES_JSON export the device entries resolve, consumed by
+      # kernel_prepare's class loop (kernel patches, then the module class —
+      # none on amd64).
+      test -f "${CI_KERNEL_SHARED}/patches-shared.yml" \
+        || { echo "ERROR: engine kernel-shared/patches-shared.yml missing" >&2; exit 1; }
+      PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
+      export PATCHES_JSON
 
       # Bootstrap shared by the kernel module entries: locate the kernel deb,
       # download the kernel source, seed .config (kernel_prepare).
@@ -803,20 +832,17 @@ packages:
         env: {GPU_SET: gaming, GPU_NVIDIA: "yes"}
     variant-name-prefix: "gpu-"
     variant-env: GPU_VARIANT
-    # Track the stable kernel version so KERNEL_VER enters the content hash:
-    # without it the set debs would keep a pinned Depends on the old kernel
-    # once the APT repo dropped it (same reason as linux-modules-arm-device).
-    track:
-      KERNEL_VER:
-        kernel-org: stable
-        require-patches: engine
+    # TEMPORARY KERNEL PIN (see the linux-image env): same logic as the
+    # device module entries — the set debs stay in step with the pinned
+    # kernel lane, their Depends keeping the exact kernel version.
+    env:
+      KERNEL_VER: "7.2.15"
+      HELPERS_VER: 7
     sources:
       - preinstall/output/linux-modules-gpu
       # The per-set kconfig overlays and the loader-policy confs of this
       # repo: a profile change rebuilds only the touched set.
       - kernel/modules/gpu
-    env:
-      HELPERS_VER: 7
     build: |
       set -euo pipefail
       # GPU_SET is injected by the CI from the variant env (ia|gaming);
@@ -860,6 +886,12 @@ packages:
         test -f "${OVERLAY}" \
           || { echo "ERROR: gpu module overlay kernel/modules/gpu/${GPU_SET} missing" >&2; exit 1; }
 
+        # The engine shared set (see linux-modules-arm-device): the same
+        # PATCHES_JSON export consumed by kernel_prepare's class loop.
+        test -f "${CI_KERNEL_SHARED}/patches-shared.yml" \
+          || { echo "ERROR: engine kernel-shared/patches-shared.yml missing" >&2; exit 1; }
+        PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
+        export PATCHES_JSON
         kernel_prepare
         kernel_merge_config "${SRCDIR}" "${OVERLAY}"
         kernel_signing_setup
