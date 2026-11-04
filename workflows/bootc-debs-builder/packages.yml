@@ -2293,6 +2293,22 @@ packages:
       test -s "/debs/bootc-installer_${BOOTC_INSTALLER_VER}_all.deb" \
         || { echo "ERROR: bootc-installer deb empty or missing" >&2; exit 1; }
 
+      # The first-boot questions are native Libadwaita pages (owner 04/11):
+      # hostname, locale, keyboard, root account and the SSH root policy ride
+      # the system page, the NVIDIA EULA consent the gpu-security page; the
+      # tty firstboot wizard is gone. The pages live inside the compiled
+      # GResource bundle, checked here so a lost compile input fails the deb
+      # build instead of shipping an ISO without its setup screens.
+      _res=$(find /output/bootc-installer/usr -name "*.gresource" | head -1)
+      test -n "${_res}" && test -s "${_res}" \
+        || { echo "ERROR: GResource bundle missing" >&2; exit 1; }
+      _sys=$(grep -ac "default-system" "${_res}" || true)
+      test "${_sys}" -ge 1 \
+        || { echo "ERROR: system page missing from the GResource bundle" >&2; exit 1; }
+      _gpu=$(grep -ac "default-gpu-security" "${_res}" || true)
+      test "${_gpu}" -ge 1 \
+        || { echo "ERROR: gpu-security page missing from the GResource bundle" >&2; exit 1; }
+
   # ===========================================================================
   # podman — the bootc-image-builder type `bootc-installer` runs osbuild INSIDE
   # the installer image and drives the payload image with the podman of that
