@@ -933,7 +933,7 @@ packages:
 
       # The headers deb IS the module-ready tree of the PVE kernel (the ABI
       # contract). Module.symvers comes along at the canonical path the
-      # kernel lane injected.
+      # kernel lane injected (idempotent: src==dest if the deb already ships it inner).
       rm -rf /build/pve-tree && mkdir -p /build
       dpkg-deb -R "${HDR_DEB}" /build/pve-tree
       KREL=$(dpkg-deb -f "${HDR_DEB}" Package | sed 's/^linux-headers-//')
@@ -945,7 +945,7 @@ packages:
       SYMVERS=$(find "${SRCDIR}/.." -maxdepth 3 -name Module.symvers | head -1)
       test -s "${SYMVERS}" \
         || { echo "ERROR: the PVE headers deb carries no Module.symvers (the kernel lane pin is stale)" >&2; exit 1; }
-      cp "${SYMVERS}" "${SRCDIR}/Module.symvers"
+      test "$(readlink -f "${SYMVERS}")" == "$(readlink -f "${SRCDIR}/Module.symvers")" || cp "${SYMVERS}" "${SRCDIR}/Module.symvers"
 
       # The vmlinux-only modpost filter of the in-tree sets is NOT applied:
       # the nvidia conftest's module_symvers_sanity_check requires vmlinux
