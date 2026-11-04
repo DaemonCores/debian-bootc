@@ -350,8 +350,8 @@ RUN apt-get update \\
          v=$(apt-cache madison "$p" \\
               | awk -v r="$module_release" '$3 ~ "^"r"-[0-9]+$" {{print $3}}' \\
               | head -n 1); \\
-         [ -n "$v" ] \\
-           || {{ echo "no NVIDIA user-space $p=$module_release in the repo" >&2; exit 1; }}; \\
+         [ -n "$v" ] || {{
+           echo "no NVIDIA user-space $p=$module_release" >&2; exit 1; }}; \
          pinned="$pinned $p=$v"; \\
        done \\
     && apt-get install -y --no-install-recommends $pinned {set_name} \\
