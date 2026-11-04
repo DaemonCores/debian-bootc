@@ -63,7 +63,8 @@ YAML_SRCS := \
 
 PYTHON_SRCS := \
 	src/buildisopreinstall/usr/libexec/debian-bootc/gen-recipe.py \
-	src/buildisopreinstall/usr/libexec/debian-bootc/nvidia-eula-stage
+	src/buildisopreinstall/usr/libexec/debian-bootc/nvidia-eula-stage \
+	src/buildisopreinstall/usr/libexec/debian-bootc/gpu-set-stage
 PYTHON_TESTS := tests
 
 # ---- venv bootstrap ------------------------------------------------------- #

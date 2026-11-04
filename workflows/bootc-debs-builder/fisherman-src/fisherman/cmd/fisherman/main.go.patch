@@ -44,7 +44,7 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  		Target:                activeTargetMount,
  		ScratchDir:            scratchDir,
  		NeedsPull:             imageCheck.NeedsPull,
-@@ -864,6 +891,45 @@
+@@ -864,6 +891,52 @@
  		fatal("writing hostname: %v", err)
  	}
  
@@ -87,10 +87,17 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
 +		}
 +	}
 +
++	if r.GPUSet != "" {
++		progress.Info("Writing GPU module set")
++		if err := post.WriteGPUModuleSet(activeTargetMount, r.GPUSet); err != nil {
++			fatal("writing GPU module set: %v", err)
++		}
++	}
++
  	// Write /var fstab entry if a separate /var disk was used.
  	if hasVarDisk {
  		varUUID := disk.UUID(r.VarDisk.Disk)
-@@ -878,6 +944,13 @@
+@@ -878,6 +951,13 @@
  		}
  	}
  
@@ -104,7 +111,7 @@ diff --git a/fisherman/cmd/fisherman/main.go b/fisherman/cmd/fisherman/main.go
  	// Create a user account if the recipe requests one (e.g. Bazzite has no OOBE).
  	if r.User.Username != "" {
  		progress.Info(fmt.Sprintf("Creating user: %s", r.User.Username))
-@@ -900,6 +973,17 @@
+@@ -900,6 +980,17 @@
  		progress.Info(fmt.Sprintf("Added Plymouth boot args to %d loader entr%s", n, map[bool]string{true: "y", false: "ies"}[n == 1]))
  	}
  
