@@ -886,6 +886,9 @@ packages:
       - kernel-pve
     env:
       HELPERS_VER: 10
+      # The Pages pool path of the published PVE headers debs (the URL =
+      # base + the pinned per-variant file name).
+      PVE_HEADERS_BASE: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/"
     variants:
       x64v1:
         env:
