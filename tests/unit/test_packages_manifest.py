@@ -407,6 +407,9 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
     tree — amdgpu/Kconfig selects the DRM_DISPLAY_* helpers directly, and
     the FULL-SET rewrite dropped them (asserting them would re-introduce
     dead symbols the kconfig gate would reject).
+
+    Returns:
+        None. Asserts the set overlays pin their profile shape.
     """
     mod = (
         REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modules' /
@@ -414,6 +417,14 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
     )
 
     def _txt(sub: str) -> str:
+        """The concatenated .cfg text of one GPU module-set directory.
+
+        Args:
+            sub: the set subdirectory ('ia' or 'gaming').
+
+        Returns:
+            The newline-joined text of every .cfg file, sorted by name.
+        """
         return '\n'.join(
             p.read_text(encoding='utf-8')
             for p in sorted((mod / sub).glob('*.cfg'))
