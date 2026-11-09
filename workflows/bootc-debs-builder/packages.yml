@@ -120,62 +120,62 @@ packages:
       # ---- IA profile: the AI compute kernel (DC off, THP always) --------
       "ia-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v1_* linux-headers-ia-*x64v1*"
+        deb-glob: "linux-image-common-ia-x64v1_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-ia-x64v1"}
       "ia-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v2_* linux-headers-ia-*x64v2*"
+        deb-glob: "linux-image-common-ia-x64v2_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-ia-x64v2"}
       "ia-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v3_* linux-headers-ia-*x64v3*"
+        deb-glob: "linux-image-common-ia-x64v3_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-ia-x64v3"}
       "ia-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v4_* linux-headers-ia-*x64v4*"
+        deb-glob: "linux-image-common-ia-x64v4_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-ia-x64v4"}
       "ia-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.0_* linux-headers-ia-*armv8.0*"
+        deb-glob: "linux-image-common-ia-armv8.0_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-ia-armv8.0", KERNEL_PAGES: "4k"}
       "ia-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.2-lse_* linux-headers-ia-*armv8.2-lse*"
+        deb-glob: "linux-image-common-ia-armv8.2-lse_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-ia-armv8.2-lse"}
       "ia-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv9-sve2_* linux-headers-ia-*armv9-sve2*"
+        deb-glob: "linux-image-common-ia-armv9-sve2_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-ia-armv9-sve2"}
       # ---- VM profile: the PVE-host kernel (NO gpu overlay — VM ≠ GPU,
       # owner 05/11 15:1x; the profile delta = the THP NEVER fragment +
       # the hypervisor opts folded in the base config) --------------------
       "vm-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v1_* linux-headers-vm-*x64v1*"
+        deb-glob: "linux-image-common-vm-x64v1_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-vm-x64v1"}
       "vm-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v2_* linux-headers-vm-*x64v2*"
+        deb-glob: "linux-image-common-vm-x64v2_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-vm-x64v2"}
       "vm-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v3_* linux-headers-vm-*x64v3*"
+        deb-glob: "linux-image-common-vm-x64v3_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-vm-x64v3"}
       "vm-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v4_* linux-headers-vm-*x64v4*"
+        deb-glob: "linux-image-common-vm-x64v4_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-vm-x64v4"}
       "vm-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.0_* linux-headers-vm-*armv8.0*"
+        deb-glob: "linux-image-common-vm-armv8.0_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-vm-armv8.0", KERNEL_PAGES: "4k"}
       "vm-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.2-lse_* linux-headers-vm-*armv8.2-lse*"
+        deb-glob: "linux-image-common-vm-armv8.2-lse_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-vm-armv8.2-lse"}
       "vm-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv9-sve2_* linux-headers-vm-*armv9-sve2*"
+        deb-glob: "linux-image-common-vm-armv9-sve2_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-vm-armv9-sve2"}
     build: |
       set -euo pipefail
