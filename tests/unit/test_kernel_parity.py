@@ -91,8 +91,11 @@ def test_canonical_patch_set_shape() -> None:
     ARM OPTI (owner mandate 2026-11-09): +2 clearlinux generic completions
     (0166 sched-fair upper-limit, 0174 memcg CHARGE_BATCH 128, both
     sha256-pinned) and +1 arm64 additive (msm-adreno devfreq IFPC relax,
-    lore URL + sha256); -mcpu flavour proof side lives in the engine
-    kernel_flavour_kcflags. Count 22 -> 25 (17 xanmod, 3 clearlinux carried
+    lore URL + sha256; -mcpu flavour proof side lives in the engine
+    kernel_flavour_kcflags. msm IFPC arm64 = K-PORT BOTH siblings (run
+    42715501467, linux-image-ia-armv8.0): the [16/17] a6xx X1-85 enablement
+    fails raw AND [17/17] needs its ADRENO_QUIRK_IFPC, so the arm64 build
+    dies at msm_gpu_devfreq.c:162 — re-arm both siblings later. Count 22 -> 25 (17 xanmod, 3 clearlinux carried
     by XanMod 0001/0002/0003, 2 new clearlinux, bore dormant, rocknix
     module carrier, msm arm64 additive).
     """
@@ -102,11 +105,13 @@ def test_canonical_patch_set_shape() -> None:
     assert '0003-kbuild-sms-pipelining' not in names
     assert '0001-bore-cachy.patch' in text
     assert 'bore' in names
-    for new in ('0166-sched-fair-remove-upper-limit',
-                '0174-memcg-charge-batch-128',
-                'msm-adreno-devfreq-ifpc-relax'):
-        assert new in names, new
-    assert len(names) == 25
+    assert '0166-sched-fair-remove-upper-limit' in names
+    assert '0174-memcg-charge-batch-128' not in names
+    assert 'msm-adreno-devfreq-ifpc-relax' not in names
+    assert len(names) == 23
+    # K-PORT: 0174 memcg (run 42713342754, BUILD_BUG_ON vs S8_MAX) and
+    # msm IFPC 17/17 (run 42715501467, ADRENO_QUIRK_IFPC from the dropped
+    # [16/17] sibling). Dry-run proved the application, never the build.
 
 
 def test_no_carbon_copy_of_the_engine_data() -> None:
