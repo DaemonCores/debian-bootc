@@ -1,22 +1,16 @@
-# Intel (i915/xe) kernel-tree patch set — DRM-tree patches applied to the
+# Intel (i915/xe) kernel-tree patch set — GAMING (DISPLAY) PROFILE — DRM-tree patches applied to the
 # kernel source NEXT TO patches-shared.yml (same run, same schema, same
 # all-or-nothing dry-run; the VE lane resolves the same manifest). {series}
 # resolves to the kernel series of the packaging tree.
 #
-# DEFAULT BUILD STATE: the set below is EMPTY — waiting for the owner's
-# choice. demandes.jsonl names NO precise i915/xe patchset.
+# GAMING (DISPLAY) profile source here: the CachyOS rt-i915 compat entry
+# (RT rework touching intel_crtc.c — display-side), series-sibling pattern
+# identical to the bore entry of the shared set. The Xe GuC sigid chain and
+# the TTM/numa RFC series are IA (compute) profile and live ONLY in the ia
+# mirror: kernel-src/patches/gpu/ia/intel.yml (source of truth + statuses).
 #
 # CANDIDATES (proof = fetched file + sha256, 2026-11-04):
-# OWNER LEADS (04/11 20:3x) — anchors verified live on lore (gnuweeb mirror),
-# exact mbox per patch to be pinned when the owner picks the entry:
-# 1. DRM batch oct 2026 (kernel dispatch): the xe_mmio_wait32 rework rides
-#    the GuC failure report series:
-#    https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-15-umesh.nerlige.ramappa@intel.com/
-#    the pinned_link work rides the NUMA placement RFC series:
-#    https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-16-himal.prasad.ghimiray@intel.com/
-# 2. AuxCCS — rides [git pull] drm for 7.1 (Airlie):
-#    https://lore-kernel.gnuweeb.org/dri-devel/CAPM=9tyvKEU6-6O=Le9wVjTJqd3NdrUr-pA_eHxt3Bj-Cv7zMw@mail.gmail.com/
-# 3. CachyOS/kernel-patches {series}/misc/0001-rt-i915.patch — EXISTS for the
+# CachyOS/kernel-patches {series}/misc/0001-rt-i915.patch — EXISTS for the
 #    current series (7.2 AND 7.3 today), series-sibling pattern identical to
 #    the bore entry of the shared set; content is the RT-i915 compat rework,
 #    NOT a perf patch (proof of what actually applies to 7.x, though):
@@ -31,85 +25,23 @@
 #    drm-intel / xe) — patches exist individually but there is NO published
 #    curated per-series patchlist repo; assembling one is the unchosen work.
 #
-# MATERIALIZATION 05/11 (owner order GO): candidate mboxes split to per-atom
-# patch files under intel-patches/, each sha256-pinned; per-atom statuses are
-# `patch -p1 --fuzz=0 --dry-run` on a PRISTINE COPY of /tmp/linux-7.2.15 (guc
-# and numa series kept as sequential chain; series targeting drm-next/7.3 so
-# held out of the current series via exclude-series until re-based).
+# MATERIALIZATION 05/11 (owner order GO): the rt-i915 candidate is material:
+# file deposited under intel-patches/, sha256-pinned, dry-ran fuzz-0 on a
+# PRISTINE COPY of /tmp/linux-7.2.15 (series-sibling entry rides {series}).
+#
+# FAILURE POLICY: the FAIL status stays an ENTRY — the apply decision is
+# the owner's, via exclude-series / explicit deactivation comment.
 
+# UPSTREAM RE-PIN 2026-11-09: the local patches/<profile>/*-patches/ deposits are
+# REMOVED — every entry below pins a raw UPSTREAM URL (lore-kernel.gnuweeb.org
+# is the lore mirror fetched by the build helper; lore.kernel.org /raw 403s a
+# plain-curl fetch, which is what kernel_apply_patches does) + a re-probed
+# sha256 of the fetched bytes. GitHub entries (CachyOS) are byte-identical to
+# the old deposit — sha unchanged.
+# (re-probe digest 1/1 byte-identical to the old deposit — GitHub entries).
 patches:
   - name: intel-rt-i915-cachyos-series-compat
-    # status: dry-run-7.2.15: FAIL hunk#3/3 intel_crtc.c@752 fuzz-0 (Kconfig + intel_cursor + ksysfs hunks OK); series-sibling entry rides {series}
-    url: patches/gpu/gaming/intel-patches/001-rt-i915-cachyos.patch
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#3/3 intel_crtc.c@752 fuzz-0 (Kconfig + intel_cursor + ksysfs hunks OK); series-sibling entry rides {series}
+    url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/7.2/misc/0001-rt-i915.patch
     sha256: cfc0f69ca9bdf97cd269c5abebed5ff97c8b5f88402c3fd5d0b77ea5a647000b
     series: "7.2"
-  - name: intel-guc-drm-xe-guc-use-different-error-codes-for-guc-load-errors
-    # status: dry-run-7.2.15: OK pristine fuzz-0 (offsets -19)
-    url: patches/gpu/gaming/intel-patches/001-drm-xe-guc-use-different-error-codes-for-guc-load-errors.patch
-    sha256: e078b4d86d158beb26563e126d4d1b20ee8c498618112c62470a6a686e6a7660
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-guc-drm-xe-guc-handle-crash-and-exception-g2h-with-separate-helpers
-    # status: dry-run-7.2.15: OK chain step (offsets -101/-104)
-    url: patches/gpu/gaming/intel-patches/002-drm-xe-guc-handle-crash-and-exception-g2h-with-separate-helpers.patch
-    sha256: 8d26ffe75f76f7d831d62891253828d427ed66d7c7964ad6498c5c89d55e7dbb
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-guc-drm-xe-guc-make-ct-dead-capture-available-on-non-debug-config
-    # status: dry-run-7.2.15: FAIL hunk#6/6 @2389 chain
-    url: patches/gpu/gaming/intel-patches/003-drm-xe-guc-make-ct_dead_capture-available-on-non-debug-config.patch
-    sha256: 6a9688b2ef1eec50e031925181c9d22044386bcb2b2a9a2c4221327476af9fb1
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-guc-drm-xe-guc-cleanup-error-codes-and-handling-for-ct-errors
-    # status: dry-run-7.2.15: FAIL hunks #3,5,7,11 chain
-    url: patches/gpu/gaming/intel-patches/004-drm-xe-guc-cleanup-error-codes-and-handling-for-ct-errors.patch
-    sha256: 7592195c72fb10eba1e3f9d71aad248dade6817c62b9c941952cf51a9f5b4b47
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-guc-drm-xe-uc-report-dma-failure-using-sigid
-    # status: dry-run-7.2.15: OK chain step (offset -7)
-    url: patches/gpu/gaming/intel-patches/005-drm-xe-uc-report-dma-failure-using-sigid.patch
-    sha256: 59c37718ec6eaf63c5c48d1d4f2f78d7cb723d1fb48f483f648f0168c43a1058
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-guc-drm-xe-guc-report-major-guc-failures-using-sigid
-    # status: dry-run-7.2.15: FAIL hunk#4/5 @1224 chain
-    url: patches/gpu/gaming/intel-patches/006-drm-xe-guc-report-major-guc-failures-using-sigid.patch
-    sha256: 9ddfda42f3159b63ebe998588e85fc3d32fbdb15d76caf665900b20c734909ac
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-guc-drm-xe-guc-report-errors-that-cause-a-ct-shutdown-using-sigid
-    # status: dry-run-7.2.15: FAIL hunks #2,6,7,8,11,12 chain
-    url: patches/gpu/gaming/intel-patches/007-drm-xe-guc-report-errors-that-cause-a-ct-shutdown-using-sigid.patch
-    sha256: 24da5d0981e3eea57e9cc7b0a883cb326f060bca1f2ec42dbac26a80b62fd73a
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-ttm-pool-add-ttm-pool-alloc-node-for-caller-selected-numa-node
-    # status: dry-run-7.2.15: FAIL hunk#2/7 @189 pristine fuzz-0
-    url: patches/gpu/gaming/intel-patches/001-drm-ttm-pool-add-ttm_pool_alloc_node-for-caller-selected-numa-node.patch
-    sha256: ce2436f5cad552b60a8060da3d7ae1c3a765b6eebc8a4cfeb547f12054eee7d0
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-ttm-add-numa-node-aware-restore-helpers
-    # status: dry-run-7.2.15: FAIL hunk#3/3 @1037 chain
-    url: patches/gpu/gaming/intel-patches/002-drm-ttm-add-numa-node-aware-restore-helpers.patch
-    sha256: ed4a84fbc268f9100a0e4a0550088ed5df0a0f76abcfc456df7bb543c42209ce
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-ttm-pool-enforce-per-node-cache-limits-on-free
-    # status: dry-run-7.2.15: OK chain step (offset -78)
-    url: patches/gpu/gaming/intel-patches/003-drm-ttm-pool-enforce-per-node-cache-limits-on-free.patch
-    sha256: c3ad4b19849f3466618e323ee4d73fa08e1abd461b125da4622b42237f0eb00e
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-xe-bo-plumb-a-per-bo-host-numa-node-hint-into-tt-populate
-    # status: dry-run-7.2.15: OK chain step (fuzz 0)
-    url: patches/gpu/gaming/intel-patches/004-drm-xe-bo-plumb-a-per-bo-host-numa-node-hint-into-tt-populate.patch
-    sha256: ed6604bf2b043df6e7f23df5d5ef161ee0cb7a624cc50e5b9163828f20902aad
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-xe-bo-preserve-the-host-numa-node-across-backup-restore
-    # status: dry-run-7.2.15: FAIL 1/1 hunk @676 chain
-    url: patches/gpu/gaming/intel-patches/005-drm-xe-bo-preserve-the-host-numa-node-across-backup-restore.patch
-    sha256: c3b017b35e4481aaff25ee43a3a36d371344eb2f48f08a3299a89839e4150caa
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-xe-uapi-add-gem-create-numa-node-placement-property
-    # status: dry-run-7.2.15: OK chain step
-    url: patches/gpu/gaming/intel-patches/006-drm-xe-uapi-add-gem_create-numa-node-placement-property.patch
-    sha256: 955f4466c56b798ffa7ff7e2d895ec9bd03997f9b0b067d9b3969f24470374fc
-    exclude-series: "7.0 7.1 7.2 7.3"
-  - name: intel-numa-rfc-drm-xe-uapi-wire-up-gem-create-numa-node-placement-handler
-    # status: dry-run-7.2.15: FAIL hunks #1,2 chain
-    url: patches/gpu/gaming/intel-patches/007-drm-xe-uapi-wire-up-gem_create-numa-node-placement-handler.patch
-    sha256: 4d448b9ef9a078b162b46d42e375160d7c946a14beae15ebfdea81a2775bd3c1
-    exclude-series: "7.0 7.1 7.2 7.3"

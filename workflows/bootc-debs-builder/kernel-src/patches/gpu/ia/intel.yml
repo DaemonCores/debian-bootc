@@ -1,10 +1,13 @@
-# Intel (i915/xe) kernel-tree patch set — DRM-tree patches applied to the
+# Intel (i915/xe) kernel-tree patch set — IA (COMPUTE) PROFILE — DRM-tree patches applied to the
 # kernel source NEXT TO patches-shared.yml (same run, same schema, same
 # all-or-nothing dry-run; the VE lane resolves the same manifest). {series}
 # resolves to the kernel series of the packaging tree.
 #
-# DEFAULT BUILD STATE: the set below is EMPTY — waiting for the owner's
-# choice. demandes.jsonl names NO precise i915/xe patchset.
+# IA (COMPUTE) profile source: the Xe GuC sigid chain (drm-xe GuC robustness
+# series) and the TTM/numa RFC series live HERE — NOT duplicated in the
+# gaming mirror. The CachyOS rt-i915 compat entry is GAMING (display)
+# profile and lives ONLY in the gaming mirror:
+#   kernel-src/patches/gpu/gaming/intel.yml.
 #
 # CANDIDATES (proof = fetched file + sha256, 2026-11-04):
 # OWNER LEADS (04/11 20:3x) — anchors verified live on lore (gnuweeb mirror),
@@ -17,9 +20,9 @@
 # 2. AuxCCS — rides [git pull] drm for 7.1 (Airlie):
 #    https://lore-kernel.gnuweeb.org/dri-devel/CAPM=9tyvKEU6-6O=Le9wVjTJqd3NdrUr-pA_eHxt3Bj-Cv7zMw@mail.gmail.com/
 # 3. CachyOS/kernel-patches {series}/misc/0001-rt-i915.patch — EXISTS for the
-#    current series (7.2 AND 7.3 today), series-sibling pattern identical to
-#    the bore entry of the shared set; content is the RT-i915 compat rework,
-#    NOT a perf patch (proof of what actually applies to 7.x, though):
+#    current series (7.2 AND 7.3 today); content is the RT-i915 compat
+#    rework touching intel_crtc.c — GAMING (display) profile, entered in
+#    the gaming mirror:
 #    https://github.com/CachyOS/kernel-patches/tree/master/{series}/misc
 #    proof sha256 7.2 (7.3 byte-identical, same digest):
 #      cfc0f69ca9bdf97cd269c5abebed5ff97c8b5f88402c3fd5d0b77ea5a647000b
@@ -36,80 +39,86 @@
 # `patch -p1 --fuzz=0 --dry-run` on a PRISTINE COPY of /tmp/linux-7.2.15 (guc
 # and numa series kept as sequential chain; series targeting drm-next/7.3 so
 # held out of the current series via exclude-series until re-based).
+#
+# FAILURE POLICY: the FAIL dry-run statuses stay ENTRIES — the apply
+# decision is the owner's, via exclude-series / explicit deactivation
+# comment (chain hunks target the drm-next/7.3 base).
 
+# UPSTREAM RE-PIN 2026-11-09: the local patches/<profile>/*-patches/ deposits are
+# REMOVED — every entry below pins a raw UPSTREAM URL (lore-kernel.gnuweeb.org
+# is the lore mirror fetched by the build helper; lore.kernel.org /raw 403s a
+# plain-curl fetch, which is what kernel_apply_patches does) + a re-probed
+# sha256 of the fetched bytes. GitHub entries (CachyOS) are byte-identical to
+# the old deposit — sha unchanged.
+# (re-probe digest 0/14 byte-identical to the old deposit — GitHub entries).
 patches:
-  - name: intel-rt-i915-cachyos-series-compat
-    # status: dry-run-7.2.15: FAIL hunk#3/3 intel_crtc.c@752 fuzz-0 (Kconfig + intel_cursor + ksysfs hunks OK); series-sibling entry rides {series}
-    url: patches/gpu/ia/intel-patches/001-rt-i915-cachyos.patch
-    sha256: cfc0f69ca9bdf97cd269c5abebed5ff97c8b5f88402c3fd5d0b77ea5a647000b
-    series: "7.2"
   - name: intel-guc-drm-xe-guc-use-different-error-codes-for-guc-load-errors
-    # status: dry-run-7.2.15: OK pristine fuzz-0 (offsets -19)
-    url: patches/gpu/ia/intel-patches/001-drm-xe-guc-use-different-error-codes-for-guc-load-errors.patch
-    sha256: e078b4d86d158beb26563e126d4d1b20ee8c498618112c62470a6a686e6a7660
+    # status: dry-run-7.2.15 (bytes upstream): OK pristine fuzz-0 (offsets -19)
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-10-umesh.nerlige.ramappa@intel.com/raw
+    sha256: 0b539c4f7fe34f04fb30343b226f2b2ca882a75feccf9343888c42e8475c5af6
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-guc-drm-xe-guc-handle-crash-and-exception-g2h-with-separate-helpers
-    # status: dry-run-7.2.15: OK chain step (offsets -101/-104)
-    url: patches/gpu/ia/intel-patches/002-drm-xe-guc-handle-crash-and-exception-g2h-with-separate-helpers.patch
-    sha256: 8d26ffe75f76f7d831d62891253828d427ed66d7c7964ad6498c5c89d55e7dbb
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step (offsets -101/-104)
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-11-umesh.nerlige.ramappa@intel.com/raw
+    sha256: 0bfcbfe8437ddce07dc95bb85c0d797f0690be3449501babb0353627f9e2ba7c
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-guc-drm-xe-guc-make-ct-dead-capture-available-on-non-debug-config
-    # status: dry-run-7.2.15: FAIL hunk#6/6 @2389 chain
-    url: patches/gpu/ia/intel-patches/003-drm-xe-guc-make-ct_dead_capture-available-on-non-debug-config.patch
-    sha256: 6a9688b2ef1eec50e031925181c9d22044386bcb2b2a9a2c4221327476af9fb1
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#6/6 xe_guc_ct.c @2389 chain
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-12-umesh.nerlige.ramappa@intel.com/raw
+    sha256: 2dbc8c38383602c12332314ae5106514e750a6d81a368f9671016349c66dbc0b
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-guc-drm-xe-guc-cleanup-error-codes-and-handling-for-ct-errors
-    # status: dry-run-7.2.15: FAIL hunks #3,5,7,11 chain
-    url: patches/gpu/ia/intel-patches/004-drm-xe-guc-cleanup-error-codes-and-handling-for-ct-errors.patch
-    sha256: 7592195c72fb10eba1e3f9d71aad248dade6817c62b9c941952cf51a9f5b4b47
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 4/18 hunks (xe_guc_ct.c #3,5,7,11) chain
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-13-umesh.nerlige.ramappa@intel.com/raw
+    sha256: 5ce6138af5945a43c06b628074ad1d351b9e258a8998db88c21918631ae9e010
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-guc-drm-xe-uc-report-dma-failure-using-sigid
-    # status: dry-run-7.2.15: OK chain step (offset -7)
-    url: patches/gpu/ia/intel-patches/005-drm-xe-uc-report-dma-failure-using-sigid.patch
-    sha256: 59c37718ec6eaf63c5c48d1d4f2f78d7cb723d1fb48f483f648f0168c43a1058
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step (offset -7)
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-14-umesh.nerlige.ramappa@intel.com/raw
+    sha256: 2d5e1201337ca24ff38b52ae804170c52a1d29605fbb55fcdab6b8e32bba4d3f
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-guc-drm-xe-guc-report-major-guc-failures-using-sigid
-    # status: dry-run-7.2.15: FAIL hunk#4/5 @1224 chain
-    url: patches/gpu/ia/intel-patches/006-drm-xe-guc-report-major-guc-failures-using-sigid.patch
-    sha256: 9ddfda42f3159b63ebe998588e85fc3d32fbdb15d76caf665900b20c734909ac
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step fuzz-0 (offsets -19) — former FAIL was old-bytes corruption; upstream bytes apply green
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-15-umesh.nerlige.ramappa@intel.com/raw
+    sha256: d994896a3bcf4415e7fdfcb1c34dcc7f4ed159c8a638072f97c0aab97b5bde9e
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-guc-drm-xe-guc-report-errors-that-cause-a-ct-shutdown-using-sigid
-    # status: dry-run-7.2.15: FAIL hunks #2,6,7,8,11,12 chain
-    url: patches/gpu/ia/intel-patches/007-drm-xe-guc-report-errors-that-cause-a-ct-shutdown-using-sigid.patch
-    sha256: 24da5d0981e3eea57e9cc7b0a883cb326f060bca1f2ec42dbac26a80b62fd73a
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 6/15 hunks (xe_guc_ct.c #2,6,7,11,12,15) chain
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261016204354.364846-16-umesh.nerlige.ramappa@intel.com/raw
+    sha256: 28314aa2627b469b1f37ada2819024c528dd2fbdd98de8e51b600e85a04d2432
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-ttm-pool-add-ttm-pool-alloc-node-for-caller-selected-numa-node
-    # status: dry-run-7.2.15: FAIL hunk#2/7 @189 pristine fuzz-0
-    url: patches/gpu/ia/intel-patches/001-drm-ttm-pool-add-ttm_pool_alloc_node-for-caller-selected-numa-node.patch
-    sha256: ce2436f5cad552b60a8060da3d7ae1c3a765b6eebc8a4cfeb547f12054eee7d0
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#2/7 ttm_pool.c @189 pristine fuzz-0
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-10-himal.prasad.ghimiray@intel.com/raw
+    sha256: 511dff3dad3dadd9fe3058046f3b6a9870a4f7eb04f1054ac75d5c69e02ef33e
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-ttm-add-numa-node-aware-restore-helpers
-    # status: dry-run-7.2.15: FAIL hunk#3/3 @1037 chain
-    url: patches/gpu/ia/intel-patches/002-drm-ttm-add-numa-node-aware-restore-helpers.patch
-    sha256: ed4a84fbc268f9100a0e4a0550088ed5df0a0f76abcfc456df7bb543c42209ce
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#3/3 ttm_pool.c @1037 chain
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-11-himal.prasad.ghimiray@intel.com/raw
+    sha256: 5f392772541e26502799a13258119ad2d0c2ea134f72a674c8f3304fb1696844
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-ttm-pool-enforce-per-node-cache-limits-on-free
-    # status: dry-run-7.2.15: OK chain step (offset -78)
-    url: patches/gpu/ia/intel-patches/003-drm-ttm-pool-enforce-per-node-cache-limits-on-free.patch
-    sha256: c3ad4b19849f3466618e323ee4d73fa08e1abd461b125da4622b42237f0eb00e
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step (offset -78)
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-12-himal.prasad.ghimiray@intel.com/raw
+    sha256: 230fc142cc8d121cce7833d75914f085ab235d91da5c78d9a03cdfce8e159c44
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-xe-bo-plumb-a-per-bo-host-numa-node-hint-into-tt-populate
-    # status: dry-run-7.2.15: OK chain step (fuzz 0)
-    url: patches/gpu/ia/intel-patches/004-drm-xe-bo-plumb-a-per-bo-host-numa-node-hint-into-tt-populate.patch
-    sha256: ed6604bf2b043df6e7f23df5d5ef161ee0cb7a624cc50e5b9163828f20902aad
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step fuzz-0 (offsets -23/-71/-12)
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-13-himal.prasad.ghimiray@intel.com/raw
+    sha256: b088e0e37a283ddc7af995af8b8f534f473f9515e3416bbc28ab4aeb8341b9ac
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-xe-bo-preserve-the-host-numa-node-across-backup-restore
-    # status: dry-run-7.2.15: FAIL 1/1 hunk @676 chain
-    url: patches/gpu/ia/intel-patches/005-drm-xe-bo-preserve-the-host-numa-node-across-backup-restore.patch
-    sha256: c3b017b35e4481aaff25ee43a3a36d371344eb2f48f08a3299a89839e4150caa
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step fuzz-0 (offset -23) — former FAIL was old-bytes corruption; upstream bytes apply green
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-14-himal.prasad.ghimiray@intel.com/raw
+    sha256: 71f58703d5d871dae1174a47399e5680ab3b0fa163bd4e4eeface45f070b459f
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-xe-uapi-add-gem-create-numa-node-placement-property
-    # status: dry-run-7.2.15: OK chain step
-    url: patches/gpu/ia/intel-patches/006-drm-xe-uapi-add-gem_create-numa-node-placement-property.patch
-    sha256: 955f4466c56b798ffa7ff7e2d895ec9bd03997f9b0b067d9b3969f24470374fc
+    # status: dry-run-7.2.15 (bytes upstream): OK chain step fuzz-0 (xe_drm.h)
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-15-himal.prasad.ghimiray@intel.com/raw
+    sha256: 2e38763a59c326de1df86d731fac2858fa7d5d1b46563ff18fe8ea632a0993b3
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: intel-numa-rfc-drm-xe-uapi-wire-up-gem-create-numa-node-placement-handler
-    # status: dry-run-7.2.15: FAIL hunks #1,2 chain
-    url: patches/gpu/ia/intel-patches/007-drm-xe-uapi-wire-up-gem_create-numa-node-placement-handler.patch
-    sha256: 4d448b9ef9a078b162b46d42e375160d7c946a14beae15ebfdea81a2775bd3c1
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunks: tests/xe_bo.c #1,2 (89,183), tests/xe_dma_buf.c hunk#2/2 @215, tests/xe_migrate.c hunk#4/4 @979, xe_bo.c hunk#9/18 @2967 chain
+    url: https://lore-kernel.gnuweeb.org/intel-xe/20261102101803.455921-16-himal.prasad.ghimiray@intel.com/raw
+    sha256: 350b451587ac2f4deed0b77ede3834fbae6d9a8d9724158be525f2283933c966
     exclude-series: "7.0 7.1 7.2 7.3"

@@ -1,4 +1,4 @@
-# AMD (amdgpu) kernel-tree patch set — DRM-tree patches applied to the
+# AMD (amdgpu) kernel-tree patch set — IA (COMPUTE) PROFILE — DRM-tree patches applied to the
 # kernel source NEXT TO patches-shared.yml, inside the SAME patch run of the
 # kernel build (debian-bootc linux-image; the PVE lane resolves the same
 # manifest). Canonical schema as patches-shared.yml: {series} resolves to
@@ -6,12 +6,10 @@
 # filter exactly like the shared set; a patch that does not dry-run clean
 # fails the build (all-or-nothing).
 #
-# DEFAULT BUILD STATE: the set below is EMPTY — waiting for the owner's
-# choice. demandes.jsonl ("les rebuild optimiser des driveer c'est fait ?")
-# NEVER names a precise amdgpu patchset; the honest status is:
-#   NO maintained GitHub patchset repo carries current (7.x-series) amdgpu
-#   perf patches as patch files. Everything found is either legacy series,
-#   a CPU patch misleadingly named, or a source tree rather than a patch set.
+# IA (COMPUTE) profile source: userq robustness chain + amd IOMMU PerfOpt
+# entry live HERE — NOT duplicated in the gaming mirror. The gaming mirror
+# (kernel-src/patches/gpu/gaming/amd.yml) carries ONLY the transverse IOMMU
+# PerfOpt entry (no AMD display patchset exists in the sweep pool).
 #
 # CANDIDATES (proof = fetched file + sha256, 2026-11-04):
 # OWNER LEADS (04/11 20:3x, verified live) — lore.kernel.org mboxes, pinned
@@ -22,26 +20,29 @@
 #      proof sha256: c23da0c9c7232f9beb6a112519cc84f4403d4fc0d35fcecc8d3224fff436bbf0
 #    (newer v4 exists: 20260930162401.273907-1-superm1@kernel.org,
 #    t.mbox.gz sha256 c27410e24871c6c9... — owner arbitrates the version).
+#    TRANSVERSE: compute (LLM-task gain) + gaming (iommu/amd part) — the
+#    only amd entry entered in BOTH mirrors, marked '# transverse'.
 # 2. userq/hung-queue — Jesse Zhang, 21 patches (20260921075326.2409021-1,
 #    lore archive rows 153406/153407 2026-September are its patches 09/10).
 #    Mbox: https://lore.kernel.org/amd-gfx/20260921075326.2409021-1-Jesse.Zhang@amd.com/t.mbox.gz
 #      proof sha256: ac74122280c077224d8bb479ad0f07dc9058698fe7b2921d6caf5641dee8d76f
+#    IA-SIDE ONLY (compute robustness chain) — never in the gaming mirror.
 # 3. CachyOS/kernel-patches AMD dir — maintained repo, but the amdgpu-file
 #    content is old (5.15) and the newer amd-* patches are CPU-side
 #    (pstate/cache), NOT amdgpu:
 #    https://github.com/CachyOS/kernel-patches/tree/master/5.15/AMD
 #    proof sha256 5.15/AMD/0001-amd-gpu.patch:
 #      b2550e2b5827c8a3c66d3b371d5ee7abe8f362427b2412cb567b3bb1b4523037
-# 2. amd-cache-optimizer (CachyOS 6.12): named amd but CPU-cache side,
+#   2. amd-cache-optimizer (CachyOS 6.12): named amd but CPU-cache side,
 #    listed only so the owner sees the file was checked, not confused:
 #    https://github.com/CachyOS/kernel-patches/blob/master/6.12/0001-amd-cache-optimizer.patch
 #    proof sha256:
 #      3a8e756865e88ff5dff486e15e6f888d17714d3b555c9a87f918e70b8b454fc1
-# 3. Upstream amd-staging-drm-next (gitlab.freedesktop.org/drm/misc/kernel
+#   3. Upstream amd-staging-drm-next (gitlab.freedesktop.org/drm/misc/kernel
 #    / drm-next) — the REAL source of amdgpu perf work (DCN, scheduler,
 #    backlight, per-crtc changes) but a TREE, not a patch list: adopting it
 #    means cherry-picking onto the 7.x base, an owner arbitration.
-# 4. Frogging-Family/community-patches (linux*-tkg) — legacy series only
+#   4. Frogging-Family/community-patches (linux*-tkg) — legacy series only
 #    (5.x amdgpu-si-cik-default). https://github.com/Frogging-Family/community-patches
 #
 # MATERIALIZATION 05/11 (owner order GO): every candidate above is now a
@@ -52,104 +53,119 @@
 # OK steps). The v2 mbox (20260908041207) is SUPERSEDED by the v4 entered
 # above. Frogging-Family: NOT fetchable as GPU patches (linux72-tkg carries
 # only bbr3.mypatch; amdgpu-si-cik-default is 5.x-era script material).
+#
+# FAILURE POLICY: statuses from the deleg_3a21950f lane report are kept
+# verbatim; FAIL entries stay ENTRIES — the apply decision is the owner's,
+# via exclude-series / explicit deactivation comment. OK userq chain steps
+# (001→020/021) apply green; the FAIL series targets a 7.3-rc2 drm-next
+# base or is mbox-corruption material — rebase/port lanes only, never
+# hand-forced.
 
+# UPSTREAM RE-PIN 2026-11-09: the local patches/<profile>/*-patches/ deposits are
+# REMOVED — every entry below pins a raw UPSTREAM URL (lore-kernel.gnuweeb.org
+# is the lore mirror fetched by the build helper; lore.kernel.org /raw 403s a
+# plain-curl fetch, which is what kernel_apply_patches does) + a re-probed
+# sha256 of the fetched bytes. GitHub entries (CachyOS) are byte-identical to
+# the old deposit — sha unchanged.
+# (re-probe digest 2/24 byte-identical to the old deposit — GitHub entries).
 patches:
   - name: amd-iommu-perfopt-v4-0001-make-perfopt-compulsory
-    # status: dry-run-7.2.15: FAIL 3/7 hunks (drivers/iommu/amd) + 6/6 hunks (amdgpu) pristine fuzz-0 — targets 7.3-rc2 drm-next base
-    url: patches/gpu/ia/amd-patches/001-iommu-amd-make-perfopt-compulsory.patch
-    sha256: ecaa8c65e13ea64b3657ea83b9cd8d1fba30fc6f67fceb78b5f4bcd8faebfa52
+    # transverse: ia+gaming — entered in BOTH mirrors (compute LLM-task gain + gaming iommu/amd part)
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 3/7 hunks (init.c 1977,3088,3153) + 6/6 (iommu.c) — amdgpu side + iommu headers ALREADY merged in 7.2.15 (Reversed/previously-applied detected); targets 7.3-rc2 drm-next
+    url: https://lore-kernel.gnuweeb.org/linux-iommu/20260930162401.273907-1-superm1@kernel.org/raw
+    sha256: 71dbde143aaabc87eecc2eef4287e74c621a32cbcdf108666e885786a33cd1ad
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: amd-userq-drm-amdgpu-gfx-add-a-detect-hung-queue-callback
-    # status: dry-run-7.2.15: OK step1 chain (hunk1 offset -8, fuzz 0)
-    url: patches/gpu/ia/amd-patches/001-drm-amdgpu-gfx-add-a-detect_hung_queue-callback.patch
-    sha256: cf6543049eaccddbfd1e870af0e9f1c90453c2c133657c49e4028dbcd04f7e81
+    # status: dry-run-7.2.15 (bytes upstream): OK step1 chain (offset -8, fuzz 0)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-1-Jesse.Zhang@amd.com/raw
+    sha256: 5a6089d98c42492d7aa2a01b5cf149fcf6b63702e557a852a209a8066e5c5434
   - name: amd-userq-drm-amdgpu-gfx12-implement-detect-hung-queue
-    # status: dry-run-7.2.15: FAIL hunk#3/3 amdgpu_gfx.c@5051 fuzz-0 (chain after 001=OK)
-    url: patches/gpu/ia/amd-patches/002-drm-amdgpu-gfx12-implement-detect_hung_queue.patch
-    sha256: 01c947d4d05210ce25cc80331fff96401189442c9f2ebdd27aed07eb848bb577
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#3/3 amdgpu_gfx.c @5051 fuzz-0 (chain after 001=OK)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-2-Jesse.Zhang@amd.com/raw
+    sha256: d6b495adf91cab35ed0570b66b9bb53eef4f94d24494d3bd102030f8ca7b5d20
   - name: amd-userq-drm-amdgpu-gfx11-implement-detect-hung-queue
-    # status: dry-run-7.2.15: OK step3 chain (fuzz 0, offsets -5)
-    url: patches/gpu/ia/amd-patches/003-drm-amdgpu-gfx11-implement-detect_hung_queue.patch
-    sha256: 8a688134d9110a5316325f68a684a4f24ca2f9fef8c697818ccab6cac58fcf64
+    # status: dry-run-7.2.15 (bytes upstream): OK step3 chain (offsets -5, fuzz 0)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-3-Jesse.Zhang@amd.com/raw
+    sha256: c5795d155f74c5ed701d7a889635a1d81f41a51356726be7c9e6183670d7d6f4
   - name: amd-userq-drm-amdgpu-gfx-export-amdgpu-gfx-mqd-reset-restore
-    # status: dry-run-7.2.15: FAIL 2/2 hunks (gfx.c@379, ring.c@699) chain
-    url: patches/gpu/ia/amd-patches/004-drm-amdgpu-gfx-export-amdgpu_gfx_mqd_reset_restore.patch
-    sha256: d2684a2ce0ad00cc7c8d29a68b49a5a05072d5db2c4063e61057b548d48d4a5e
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 2/2 hunks (amdgpu_gfx.c @379, amdgpu_gfx.h @699) chain
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-4-Jesse.Zhang@amd.com/raw
+    sha256: addf8379f56ac9a693c13a04a834d33112eb3b2e72aeb143b1a6d85f345d5448
   - name: amd-userq-drm-amdgpu-mes12-restore-collateral-gfx-queues-after-pipe-reset
-    # status: dry-run-7.2.15: FAIL 5/5 hunks
-    url: patches/gpu/ia/amd-patches/005-drm-amdgpu-mes12-restore-collateral-gfx-queues-after-pipe-reset.patch
-    sha256: 7756e51f2b9691bbeea70f68e63697a72b237d19d811b3311748174f5a18950f
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 5/5 hunks (mes_v12_0.c 425,438,463,679,1106)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-5-Jesse.Zhang@amd.com/raw
+    sha256: 64ea0b3fda62bfa9487b479737cca0dca091e214fbe340a12aaabffa93d48caa
   - name: amd-userq-drm-amdgpu-mes11-restore-collateral-gfx-queues-after-pipe-reset
-    # status: dry-run-7.2.15: FAIL 4/5 hunks (offset -232)
-    url: patches/gpu/ia/amd-patches/006-drm-amdgpu-mes11-restore-collateral-gfx-queues-after-pipe-reset.patch
-    sha256: 1df2fa4922e4124881f0e202bbaece79ec9ddb5dc80e5a767783d7ca11781252
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 4/5 hunks (mes_v11_0.c; hunk4 @490 offset -232)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-6-Jesse.Zhang@amd.com/raw
+    sha256: 4abc1ce9d3fe9955602be9cdabcd5d4093d84a468a169b22fb61651cc456a109
   - name: amd-userq-drm-amdgpu-mes11-read-the-gfx-user-queue-vmid-for-mmio-reset
-    # status: dry-run-7.2.15: FAIL hunk#4/4 @1169 (offsets -298)
-    url: patches/gpu/ia/amd-patches/007-drm-amdgpu-mes11-read-the-gfx-user-queue-vmid-for-mmio-reset.patch
-    sha256: ecfc969ab11681831ebcbec97a7b2bb4bc19da847f3efdf6180aaca18b1898dd
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#4/4 mes_v11_0.c @1169 (offsets -298)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-7-Jesse.Zhang@amd.com/raw
+    sha256: 1e2d280f72dc7953018959578450a40d0534cd6d6a3ef5dc66d3a7c8ac1cd238
   - name: amd-userq-drm-amdgpu-mes12-read-the-gfx-user-queue-vmid-for-mmio-reset
-    # status: dry-run-7.2.15: FAIL hunk#4/4 @1189 (offsets -248)
-    url: patches/gpu/ia/amd-patches/008-drm-amdgpu-mes12-read-the-gfx-user-queue-vmid-for-mmio-reset.patch
-    sha256: 63d5da518d3075e0911c3de92eaa556289e82209ac9e45389aa2df8fc99c00c6
+    # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#4/4 mes_v12_0.c @1189 (offsets -248)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-8-Jesse.Zhang@amd.com/raw
+    sha256: 920f8ca654c6e7358068d0ca47d25714c6680861f824afa31f5ac717593a8b8d
   - name: amd-userq-drm-amdgpu-gfx12-set-kmd-queue-for-kernel-gfx-queues
-    # status: dry-run-7.2.15: OK step9 chain (offset -15, fuzz 0)
-    url: patches/gpu/ia/amd-patches/009-drm-amdgpu-gfx12-set-kmd_queue-for-kernel-gfx-queues.patch
-    sha256: b75274d59a9b5d9f4a9c034612c7e495a8d2715d72c8abfd543ec0c0745f4713
+    # status: dry-run-7.2.15 (bytes upstream): OK step9 chain (offset -15, fuzz 0)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-9-Jesse.Zhang@amd.com/raw
+    sha256: 6f0acfb089db4d5325d4ac2c67f869dc538dd9e1c9ea088cce8d5b5aacd6a4f4
   - name: amd-userq-drm-amdgpu-gfx11-set-kmd-queue-for-kernel-gfx-queues
-    # status: dry-run-7.2.15: OK step10 chain (offset -65, fuzz 0)
-    url: patches/gpu/ia/amd-patches/010-drm-amdgpu-gfx11-set-kmd_queue-for-kernel-gfx-queues.patch
-    sha256: 88842a43d3070522d0e3fe42dd11fa6caccc7bb3a984b99a233c7fecfa25513c
+    # status: dry-run-7.2.15 (bytes upstream): OK step10 chain (offset -27, fuzz 0)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-10-Jesse.Zhang@amd.com/raw
+    sha256: 1d1cea967c61c5e873423c6f45d154e65853030bc20abb8dfa4afcf01504ca5b
   - name: amd-userq-drm-amdgpu-support-non-guilty-job-save-on-ring-backup
-    # status: dry-run-7.2.15: FAIL 2/2 hunks (733, 804)
-    url: patches/gpu/ia/amd-patches/011-drm-amdgpu-support-non-guilty-job-save-on-ring-backup.patch
-    sha256: c69fcc68e75747261d6546529dfdad4942ea09993329435e48120808ffe1214b
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 2/2 hunks (amdgpu_fence.c 733, 804)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-11-Jesse.Zhang@amd.com/raw
+    sha256: 03876dc690fcde1b4b22a7c6feaaaa741cf63efbacffb4101391eea20903ad6e
   - name: amd-userq-drm-amdgpu-fix-empty-fence-backup-and-replay-intervals
-    # status: dry-run-7.2.15: FAIL 4/5 hunks
-    url: patches/gpu/ia/amd-patches/012-drm-amdgpu-fix-empty-fence-backup-and-replay-intervals.patch
-    sha256: d833d82c891462e3e5244aab888d0afd388d4aa664aa26676b34072cc226de54
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 4/5 hunks (amdgpu_fence.c 724,801,815,829)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-12-Jesse.Zhang@amd.com/raw
+    sha256: 1d7d1bb5af06aee71b088f509f6afdb3291994199ce08c2ab2342351eedd8450
   - name: amd-userq-drm-amdgpu-factor-out-the-mes-user-queue-reset-body
-    # status: dry-run-7.2.15: FAIL 2/2 hunks + 1/1 (psr.h@26)
-    url: patches/gpu/ia/amd-patches/013-drm-amdgpu-factor-out-the-mes-user-queue-reset-body.patch
-    sha256: 9010e291e0eb81c739c1e9925c9a6cd7b428dc8252fa3f8dc49dd29b9018c2f2
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 2/2 hunks (mes_userqueue.c 207,244) + 1/1 (mes_userqueue.h @26)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-13-Jesse.Zhang@amd.com/raw
+    sha256: a87dfd4f2158d74c0a2f98b6114f9c21e9f2b461545fdce874ffe9b658931e18
   - name: amd-userq-drm-amdgpu-gfx-add-a-shared-gfx-pipe-reset-helper
-    # status: dry-run-7.2.15: FAIL malformed patch @25 — quoted-printable context mangling in mbox body
-    url: patches/gpu/ia/amd-patches/014-drm-amdgpu-gfx-add-a-shared-gfx-pipe-reset-helper.patch
-    sha256: 87ca8c55605d64681a8e2c90fcb3ffc9994aba2c004dbbff685eaa0c5e1f191a
+    # status: dry-run-7.2.15 (bytes upstream): FAIL malformed patch @17 upstream raw (amdgpu_gfx.c) — lore mbox body itself is mangled, no local-QP cause anymore
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-14-Jesse.Zhang@amd.com/raw
+    sha256: 85fac82269c3751b68bf7fd8776a862f925e4890f1da0fa5f16fa4172e41004a
   - name: amd-userq-drm-amdgpu-gfx-add-a-gfx-me-pipe-reset-capability-helper
-    # status: dry-run-7.2.15: FAIL 1/1 hunk x2 (2376, 707)
-    url: patches/gpu/ia/amd-patches/015-drm-amdgpu-gfx-add-a-gfx-me-pipe-reset-capability-helper.patch
-    sha256: b8c20b816423d99a87deb1af8f1b7be03b2ccd38321d3d7ad2765f0d31cd420c
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 1/1 hunk x2 (amdgpu_gfx.c @2376, amdgpu_gfx.h @707)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-15-Jesse.Zhang@amd.com/raw
+    sha256: 9b8114b310e95fca3ac96226319d648593e90a1bbd87fcf9208a682a6a86c6d2
   - name: amd-userq-drm-amdgpu-gfx-preserve-collateral-rings-during-gfx-pipe-reset
-    # status: dry-run-7.2.15: FAIL 1/1 hunk @2181
-    url: patches/gpu/ia/amd-patches/016-drm-amdgpu-gfx-preserve-collateral-rings-during-gfx-pipe-reset.patch
-    sha256: 82ac41cebe452a564f3eb80d9b82bc2d407c4b40e4161f1ce3d8e5c80595df0c
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 1/1 hunk (amdgpu_gfx.c @2181)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-16-Jesse.Zhang@amd.com/raw
+    sha256: d3e7052ece0d3e89379a7705a16ed8b5cb3252512b7045176dc09b9f1f0cb630
   - name: amd-userq-drm-amdgpu-userq-preserve-kernel-rings-during-gfx-pipe-reset
-    # status: dry-run-7.2.15: FAIL 1/1 hunk @240
-    url: patches/gpu/ia/amd-patches/017-drm-amdgpu-userq-preserve-kernel-rings-during-gfx-pipe-reset.patch
-    sha256: 3cf56574545b93f04857462f7db251a192f0aca85cd8b7a25c03448f0fd4779d
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 1/1 hunk (mes_userqueue.c @240)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-17-Jesse.Zhang@amd.com/raw
+    sha256: 319853b508f89a215b9df1bf5a492e1445c464a095c9faf3cd372eb9dd5ae0f5
   - name: amd-userq-drm-amdgpu-mes11-gate-gfx-pipe-reset-on-per-pipe
-    # status: dry-run-7.2.15: FAIL 2/2 hunks (404, 480)
-    url: patches/gpu/ia/amd-patches/018-drm-amdgpu-mes11-gate-gfx-pipe-reset-on-per_pipe.patch
-    sha256: 067c172574dbd1abcc510fe147cdfe9970ab4f089e9e60fa6165a8a7797fe9e2
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 2/2 hunks (mes_v11_0.c 404, 480)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-18-Jesse.Zhang@amd.com/raw
+    sha256: f2519cec0febb8521e3b2f65d21e3a5e9646908542f52549d88d0976aa95e305
   - name: amd-userq-drm-amdgpu-mes12-gate-gfx-pipe-reset-on-per-pipe
-    # status: dry-run-7.2.15: FAIL 2/2 hunks (418, 493)
-    url: patches/gpu/ia/amd-patches/019-drm-amdgpu-mes12-gate-gfx-pipe-reset-on-per_pipe.patch
-    sha256: b0c80b32e91a260f282d0d7c0da6ed89e4addae8760b0ee48b794ea3eddeb729
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 2/2 hunks (mes_v12_0.c 418, 493)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-19-Jesse.Zhang@amd.com/raw
+    sha256: d8c515797e5352ffa2dcf491810c1c2cb7fce7b3b9571d67d818e166dedc2814
   - name: amd-userq-drm-amdgpu-gfx11-defer-gfx-pipe-reset-enablement
-    # status: dry-run-7.2.15: OK step20 chain (offset -47, fuzz 0)
-    url: patches/gpu/ia/amd-patches/020-drm-amdgpu-gfx11-defer-gfx-pipe-reset-enablement.patch
-    sha256: e67ac2a50e854d471f09389c7db15bde54ce1eb9a5ba98e170bbf2b2d28fc1fd
+    # status: dry-run-7.2.15 (bytes upstream): OK step20 chain (offset -9, fuzz 0)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-20-Jesse.Zhang@amd.com/raw
+    sha256: 07b91e81f3b42e48d4674d6e21cebe9c44397016227b26dbdafd0179f4757ffe
   - name: amd-userq-drm-amdgpu-gfx12-defer-gfx-pipe-reset-enablement
-    # status: dry-run-7.2.15: OK step21 chain (offset -11, fuzz 0)
-    url: patches/gpu/ia/amd-patches/021-drm-amdgpu-gfx12-defer-gfx-pipe-reset-enablement.patch
-    sha256: 5e222d7523d64b5478f0a07ded7149b520b74ba93e7bebba0062b6dfc1a19213
+    # status: dry-run-7.2.15 (bytes upstream): OK step21 chain (offset -11, fuzz 0)
+    url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-21-Jesse.Zhang@amd.com/raw
+    sha256: a82cb4717cb23eeb5bc7b747acbf5b732051f735965d7e12d6d6a9661777070a
   - name: amd-cachyos-515-0001-amd-gpu-legacy
-    # status: dry-run-7.2.15: FAIL 3/3 hunks (drivers/gpu/drm/amd @734,757,1568) — 5.15-only patch
-    url: patches/gpu/ia/amd-patches/001-amd-gpu-cachyos-5.15.patch
+    # status: dry-run-7.2.15 (bytes upstream): FAIL 3/3 hunks (amdgpu_amdkfd_gpuvm.c @734,757,1568) — 5.15-only patch
+    url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/5.15/AMD/0001-amd-gpu.patch
     sha256: b2550e2b5827c8a3c66d3b371d5ee7abe8f362427b2412cb567b3bb1b4523037
     exclude-series: "7.0 7.1 7.2 7.3"
   - name: amd-cachyos-612-cache-optimizer
-    # status: dry-run-7.2.15: FAIL 1/1 hunk x2 (fs @19 @4) — CPU-cache side, not amdgpu; documented candidate
-    url: patches/gpu/ia/amd-patches/002-amd-cache-optimizer-cachyos-6.12.patch
+    # status: dry-run-7.2.15 (bytes upstream): FAIL — amd_x3d_vcache sysfs doc + driver ALREADY merged in 7.2.15 (file-exists/Reversed); Kconfig+Makefile hunks @19/@4 FAIL
+    url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/6.12/0001-amd-cache-optimizer.patch
     sha256: 3a8e756865e88ff5dff486e15e6f888d17714d3b555c9a87f918e70b8b454fc1
     exclude-series: "7.0 7.1 7.2 7.3"

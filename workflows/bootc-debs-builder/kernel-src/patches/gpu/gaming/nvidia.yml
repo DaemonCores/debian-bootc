@@ -1,10 +1,16 @@
-# NVIDIA open-gpu-kernel-modules patch set — GAMING (display) PROFILE MIRROR
+# NVIDIA open-gpu-kernel-modules patch set — GAMING (DISPLAY) PROFILE MIRROR
 # — the module-tree patches applied
 # to /build/nvidia-open BEFORE make modules (debian-bootc lane
 # linux-modules-nvidia; the PVE pair lane consumes the same manifest). Same
 # canonical schema as patches-shared.yml (name/url/topic/stage, optional
 # class/fuzz/exclude-series/sha256); {series} resolves to the KERNEL series
 # (7.2, 7.3...), the series the module tree is built against.
+#
+# GAMING (DISPLAY) profile source: the two CachyOS src/common DISPLAY
+# patches (0002-dsc, 0003-dp-war-db) are the entered set HERE. The
+# nv-p2p-core compute entry is IA (compute) profile and lives ONLY in the
+# ia mirror kernel-src/patches/gpu/ia/nvidia.yml — no display-unrelated
+# compute entry is duplicated here (owner rule: never a blind copy).
 #
 # OWNER ORDER 05/11 17:0x — the NVIDIA patch pool found in the web sweep
 # enters this manifest (supersedes the 04/11 "no third-party set exists"
@@ -16,21 +22,33 @@
 # dry-run ALL all-or-nothing BEFORE any touch — dependent chains CANNOT pass
 # it); everything else is a documented K-PORT block with its fetchable diff
 # below.
+# RE-PROOF ON THE NEW PIN (owner order 05/11 — the pin upgrades
+# 595.104.02 -> 620.70.06; shallow clone of the tag, HEAD e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9,
+# dry-run 2026-11-09): BOTH entered display entries below still apply
+# CLEAN pristine fuzz-0 on 620.70.06 — 0002-dsc on
+# src/common/modeset/timing/nvt_dsc_pps.c and 0003-dp-war-db on
+# src/common/displayport/src/dp_wardatabase.cpp; the gaming set rides
+# the new pin unchanged. (The ia-side compute nv-p2p-core drifted on
+# 620.70.06 and left the entered set there — K-PORT in the ia mirror.)
 #
 # ENTERED (proof = the real helper run: kernel_apply_patches fetches the
 # pinned bytes, checksums, dry-runs, applies — CORE-E2E-GREEN on 2026-11-05
-# against a checkout of the pinned tree; compute perf, stage common — the
-# ia and gaming module builds share ONE manifest, the profile split stays
-# CONFIGURATION-side per the owner's "même set" arbitration 10/31; see the
-# debian-bootc mirrors kernel-src/patches/gpu/{ia,gaming}/nvidia.yml).
+# against a checkout of the pinned tree for the ia-side compute core; the
+# gaming display entries were materialized separately, see below). The ia
+# and gaming module builds share ONE manifest, the profile split stays
+# CONFIGURATION-side per the owner's "même set" arbitration 10/31; the ia
+# mirror carries the compute core entry.
 #
 # K-PORT — verified NOT applying on 595.104.02 pristine (2026-11-05);
-# fetchable diff sources pinned; never hand-forced, port lanes only:
+# fetchable diff sources pinned; never hand-forced, port lanes only. The
+# compute-side blocks (1-5) are documented here for the manifest's
+# completeness — the compute CORE entry and its port lanes belong to the ia
+# mirror; the display-relevant block is 6:
 # 1. nv-48g-method3 CHAIN (Duanyll/open-gpu-kernel-modules branch
-#    595.71.05-p2p-48g, on top of the entered core; hw-validated: full 48G
-#    usable with P2P, NCCL busbw 25.15 GB/s) — the 5 commits apply green
-#    ONLY SEQUENTIALLY after the core commit (proven: patch -p1 --fuzz=0
-#    chained = all green on 595.104.02) and each FAILS the pristine
+#    595.71.05-p2p-48g, on top of the ia-side entered core; hw-validated:
+#    full 48G usable with P2P, NCCL busbw 25.15 GB/s) — the 5 commits apply
+#    green ONLY SEQUENTIALLY after the core commit (proven: patch -p1
+#    --fuzz=0 chained = all green on 595.104.02) and each FAILS the pristine
 #    all-or-nothing pre-flight (nv_gpu_ops.c/kern_bus_gh100.c hunks chain on
 #    the previous commit's state), so they stay BLOCKED as a chain pending
 #    either a chain-aware application stage or an owner-decided squash into
@@ -58,8 +76,8 @@
 #      proof sha256: ea0c7f33b3a0e095d7b619d0dcca314b4aa3b4ea0f05d456067a1ec26cf5612e
 #      dry-run FAIL: creates kernel-open/nvidia-uvm/uvm_devmem.c (absent in
 #      595.104.02) + g_kern_bus_nvoc.c@340 drift — 615 tree diverged; the
-#      fork ALSO carries 595.71.05-p2p whose core IS the entered entry
-#      (same lineage, nearer base).
+#      fork ALSO carries 595.71.05-p2p whose core IS the ia-side entered
+#      entry (same lineage, nearer base).
 #    - hugepage cudaHostRegister commit 43cb9fb726350598a72c2763eb5f87809829cdce
 #      proof sha256: 7646a6785e48f1148d46877a27d39fac842adeeeeec25ad57464f3786b5b842e
 #      dry-run FAIL (kernel-open/nvidia/nv-dma.c@158).
@@ -73,8 +91,8 @@
 #    - core P2P commit 2bf60686d9886cb4598dc1b3d2a0b9a4304a50e5
 #      proof sha256: ac2c19b1b51e5431d231f6ef8393ad9a073f2495e72ab1b98a144950ea97092d
 #      dry-run GREEN on 595.104.02 TOO (older/smaller variant of the same
-#      force-enable) — NOT retained: redundant with the entered core which
-#      also covers 5090 + NVLink.
+#      force-enable) — NOT retained: redundant with the ia-side entered core
+#      which also covers 5090 + NVLink.
 #    - pool trim, unified-memory commit 0d2c68ca87d663aac4b3b3d0bd4400850080864d
 #      proof sha256: db05f0f871daae5853095c87e48d46252b12a13de4862c49379ed1363c59ba91
 #      dry-run FAIL (nv-proto.h@56, nv-vm.c context) — true K-PORT lane.
@@ -88,12 +106,11 @@
 # 5. xiaoyanzi191/open-gpu-kernel-modules-p2p — second provenance of the
 #    Duanyll line (mirrors 590.48.01-p2p-48g / 595.71.05-p2p-48g), same
 #    Method 3 code; kept as fallback source only.
-# 6. CachyOS/kernel-patches {series}/misc/nvidia/ (probed 2026-11-04): the
-#    Linux-side compat patches do NOT apply (paired to a different NVIDIA
-#    release); the two src/common DISPLAY patches 7.2 0002 (dsc) and 0003
-#    (dp war db) dry-run CLEAN on 595.104.02 but were never chosen —
-#    display work, documented in the gaming profile mirror
-#    kernel-src/patches/gpu/gaming/nvidia.yml (proof shas there).
+# 6. CachyOS/kernel-patches {series}/misc/nvidia/ DISPLAY candidates (probed
+#    2026-11-04, MATERIALIZED 05/11): the two src/common display patches
+#    7.2 0002 (dsc) and 0003 (dp war db) dry-run CLEAN on 595.104.02 — the
+#    entered gaming set below. The {series}/misc/nvidia/ LINUX-side compat
+#    patches do NOT apply (paired to a different NVIDIA release).
 #
 # LEGAL-GRAY — DOCUMENTED, NON-RETENU (owner arbitration stands):
 # - keylase/nvidia-patch (+ forks): NVENC/NvFBC session-unlock as a
@@ -108,47 +125,32 @@
 #   the GSP-off knob we ALREADY ship (NVreg_EnableGpuFirmware=0 in
 #   dc-gpu-{ia,gaming}-nvidia.conf) and warn against patched userspace.
 
-patches:
-  - name: nv-p2p-core-geohot-5090-nvlink
-    # status: dry-run-595.104.02: OK pristine fuzz-0 (CORE-E2E-GREEN 2026-11-05)
-    # See K-PORT block 1 for what a future Method-3 chain entry would add.
-    # Forces the native BAR1 P2P path NVIDIA leaves disabled on GeForce
-    # (p2pOverride=0x11, pre-Hopper HAL rerouting Turing/Ampere/Ada, 5090
-    # support by nimlgen, NVLink by valdemardi; based on tinygrad's P2P
-    # patch). Kernel modules only — userspace stays NVIDIA-verbatim.
-    # Upstream hw-measured: NCCL all-reduce busbw 4.1 -> 25.15 GB/s on
-    # 4x 4090-48G; 8x3090 LLM serving +36..58%. Runtime side-conditions
-    # (ReBAR, IOMMU passthrough, NCCL_P2P_LEVEL=SYS) are documentation
-    # material, not build patches.
-    url: https://github.com/aikitoria/open-gpu-kernel-modules/commit/97fdda09db0ef010ef45884ca6d853e0e9d77930.patch
-    topic: nvidia-geforce-p2p-bar1
-    stage: common
-    sha256: 685ca3908517825ed4966ac1a87edd0888e4620406da193143e122b28777c14c
-#
-# GAMING PROFILE STATUS (owner order 05/11 17:0x): ONE nvidia manifest
-# drives both module builds (the profile split is CONFIGURATION-side, owner
-# arbitration 10/31) — the P2P compute entry rides this mirror too and is
-# display-inert. Display-side candidates are documented NOT ENTERED: the
-# two CachyOS src/common display patches that dry-run CLEAN on 595.104.02
-# wait for an owner choice (K-PORT block 6 above); no gaming/display
-# performance patchset exists in the sweep pool found on 2026-11-05.
-# Display candidates proof shas (fetched 2026-11-04, clean dry-run):
-#   CachyOS 7.2/0002-dsc:   sha256 71008a4f65...
-#   CachyOS 7.2/0003-dp-war-db: sha256 bb652257e5...
-
-#
-# MATERIALIZATION 05/11 (owner order GO): the two CachyOS src/common display
-# candidates are now material: files DEPOSITED under nvidia-patches/,
-# sha256 verified against the documented proof digests (71008a4f65... /
-# bb652257e5...) and dry-ran fuzz-0 clean on a fresh shallow clone of the
-# pinned tree (open-gpu-kernel-modules tag 595.104.02, HEAD ac24e02fc090c).
-
+# UPSTREAM RE-PIN 2026-11-09: the local patches/<profile>/*-patches/ deposits are
+# REMOVED — every entry below pins a raw UPSTREAM URL (lore-kernel.gnuweeb.org
+# is the lore mirror fetched by the build helper; lore.kernel.org /raw 403s a
+# plain-curl fetch, which is what kernel_apply_patches does) + a re-probed
+# sha256 of the fetched bytes. GitHub entries (CachyOS) are byte-identical to
+# the old deposit — sha unchanged.
+# (re-probe digest 2/2 byte-identical to the old deposit — GitHub entries).
 patches:
   - name: nv-display-0002-dsc-correct-RC-parameter-tables-VESA-DS-cachyos
     # status: dry-run-595.104.02: OK pristine fuzz-0 on open-gpu-kernel-modules 595.104.02 (HEAD ac24e02f), file src/common/modeset/timing/nvt_dsc_pps.c
-    url: patches/gpu/gaming/nvidia-patches/0002-fix-dsc-correct-RC-parameter-tables-to-match-VESA-DS.patch
+    # status: dry-run-620.70.06: OK pristine fuzz-0 on 620.70.06 (HEAD e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9), file src/common/modeset/timing/nvt_dsc_pps.c
+    url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/7.2/misc/nvidia/0002-fix-dsc-correct-RC-parameter-tables-to-match-VESA-DS.patch
     sha256: 71008a4f65cd598c2346e22046e87f88aaa8c04f04402f025ebc9888c8fa443b
   - name: nv-display-0003-dp-add-Bigscreen-Beyond-VR-headset-to-WAR-database-cachyos
     # status: dry-run-595.104.02: OK pristine fuzz-0 on 595.104.02, file src/common/displayport/src/dp_wardatabase.cpp
-    url: patches/gpu/gaming/nvidia-patches/0003-fix-dp-add-Bigscreen-Beyond-VR-headset-to-WAR-databa.patch
+    # status: dry-run-620.70.06: OK pristine fuzz-0 on 620.70.06 (HEAD e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9), file src/common/displayport/src/dp_wardatabase.cpp
+    url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/7.2/misc/nvidia/0003-fix-dp-add-Bigscreen-Beyond-VR-headset-to-WAR-databa.patch
     sha256: bb652257e5cb0dea432a83c971d01406b7acf9cbdb054adf8954c564be0e4e74
+#
+# GAMING PROFILE STATUS (owner order 05/11 17:0x): the two CachyOS src/common
+# display patches above are ENTERED (MATERIALIZATION 05/11, owner order GO —
+# files DEPOSITED under nvidia-patches/, sha256 verified against the
+# documented proof digests 71008a4f65... / bb652257e5..., dry-ran fuzz-0
+# clean on a fresh shallow clone of the pinned tree open-gpu-kernel-modules
+# tag 595.104.02, HEAD ac24e02fc090c; RE-DRY-RUN GREEN on the new pin
+# 620.70.06, HEAD 2589e9bd8bd9 — 2026-11-09). The compute P2P core entry is IA-side
+# (kernel-src/patches/gpu/ia/nvidia.yml, K-PORT on 620.70.06); no
+# gaming/display performance patchset beyond this exists in the sweep pool
+# found on 2026-11-05.
