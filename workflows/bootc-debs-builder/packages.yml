@@ -1266,10 +1266,13 @@ packages:
       # the vN-compiled mesa_clc dies SIGILL on a runner that does not carry
       # the level (run 42681037593, x64v4).
       BUILD_MACHINE=/tmp/dc-gpu-build-machine.ini
-      # llvm-config is resolved first so the echo lands inside [binaries]:
-      # in a cross build find_program reads ONLY [binaries]; Debian ships
-      # llvm-config-19 versioned, no unversioned alias.
-      LLVM_CFG=$(command -v llvm-config-19 || command -v llvm-config || true)
+      # llvm-config is resolved AFTER the llvm-dev install below and lands
+      # inside [binaries]: in a cross build find_program reads ONLY
+      # [binaries], and meson REJECTS the unversioned default target for
+      # cross use ('Default target is not allowed for cross use') — Debian
+      # ships llvm-config-19 versioned, no unversioned alias. Resolving it
+      # at block start on a fresh runner yields an EMPTY entry and the LLVM
+      # dependency dies (run 427, 'llvm-config binary missing').
       {
         echo "[binaries]"
         echo "c = 'cc'"
@@ -1279,9 +1282,6 @@ packages:
         echo "pkg-config = 'pkg-config'"
         echo "rust = 'rustc'"
         echo "cargo = 'cargo'"
-        if [ -n "${LLVM_CFG}" ]; then
-          echo "llvm-config = '${LLVM_CFG}'"
-        fi
         echo "[host_machine]"
         echo "system = 'linux'"
         echo "cpu_family = 'x86_64'"
@@ -1336,6 +1336,18 @@ packages:
       fi
       apt-get install -y --no-install-recommends \
         build-essential meson ninja-build pkgconf curl xz-utils dpkg-dev binutils llvm-dev libudev-dev
+
+      # llvm-config resolved here — AFTER the llvm-dev install (run 427:
+      # resolved at block start on a fresh runner, the cross file carried an
+      # EMPTY entry and meson died 'Neither a subproject directory nor a
+      # llvm.wrap file was found'). Versioned only: meson rejects the
+      # unversioned default target for cross use.
+      LLVM_CFG=$(command -v llvm-config-19 \
+        || ls /usr/bin/llvm-config-* 2>/dev/null | sort -V | tail -1 \
+        || true)
+      test -n "${LLVM_CFG}" \
+        || { echo "ERROR: no versioned llvm-config after the llvm-dev install" >&2; exit 1; }
+      sed -i "/^cargo = /a llvm-config = '${LLVM_CFG}'" "${BUILD_MACHINE}"
 
       rm -rf /build/mesa /build/mesa-src
       mkdir -p /build/mesa-src
