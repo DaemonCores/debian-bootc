@@ -1056,10 +1056,10 @@ packages:
             || { echo "ERROR: no NVIDIA release resolved for the fusion" >&2; exit 1; }
           SET_VER="${BUILT_VER}+r1nv${NVIDIAOPEN_VER}"
         fi
-        # The set deb REPLACES the files the seed profile kernel owns
-        # (the concrete daemoncores-kernel-<profile>-<KVER> deb — dpkg
-        # checks the OWNING package name, a virtual name protects nothing);
-        # the Depends pins the same exact kernel version.
+        # The set deb REPLACES the files the seed profile kernel owns (the
+        # concrete daemoncores-kernel-ia-<KVER> deb: the GAMING sets build on
+        # the SAME ia-profile kernel, only ia/vm kernels exist, NO gaming
+        # kernel package — owner order 05/11 kept 09/11) and pins it exact.
         DEPS="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
         REPLACES="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
         # Exactly one in-tree set may be installed: enumerate the OTHER
