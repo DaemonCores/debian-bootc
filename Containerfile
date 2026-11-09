@@ -209,10 +209,17 @@ ARG GPU_INTEL_PKGS="firmware-intel-graphics intel-media-va-driver-non-free libze
 ARG GPU_INTEL_ARCHES="amd64"
 # The pattern matches every gpu-userspace deb the plan built for this
 # architecture (profiles and levels come from the manifest, not from here).
+# GÉNÉRIQUE = POUBELLE (owner 05/11 19:2x): no generic arm64 build exists —
+# the arm64 leg installs the Debian user-space packages only, the CI
+# userspace debs are amd64-only and the pattern is skipped elsewhere.
 # Nothing is active until dc-gpu-apply.service runs `dc-gpu apply` at boot, which
 # activates the stored profile (`auto` when the installer recorded none).
 RUN apt-get update \
-    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} 'gpu-userspace-*' \
+    && set -- ${GPU_COMMON_PKGS} ${GPU_AMD_PKGS} \
+    && case "$(dpkg --print-architecture)" in \
+         amd64) set -- "$@" 'gpu-userspace-*' ;; \
+         *) echo "no CI gpu-userspace deb for this arch (generic retired): Debian packages only" ;; \
+       esac \
     && arch=$(dpkg --print-architecture) \
     && case " ${GPU_INTEL_ARCHES} " in \
          *" ${arch} "*) set -- "$@" ${GPU_INTEL_PKGS} ;; \

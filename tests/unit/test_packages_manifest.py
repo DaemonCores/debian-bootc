@@ -362,7 +362,11 @@ def _expand(arch: str) -> list[dict[str, Any]]:
 
 
 def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
-    """Each profile expands to one package per CPU level of its arch."""
+    """Each profile expands to one package per CPU level of its arch.
+
+    GÉNÉRIQUE = POUBELLE (owner 05/11 19:2x): no generic variant anywhere —
+    the arm64 leg carries NO gpu userspace build at all.
+    """
     amd64 = {p['name']: p for p in _expand('amd64')}
     arm64 = {p['name'] for p in _expand('arm64')}
     for profile in ('gaming', 'ia'):
@@ -372,9 +376,10 @@ def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
             assert entry['env']['GPU_LEVEL'] == level
             assert entry['env']['GPU_VARIANT'] == f'{profile}-{level}'
             assert 'gpu-userspace' in entry['sources']
-        assert f'gpu-userspace-{profile}-generic' in arm64
-        assert f'gpu-userspace-{profile}-generic' not in amd64
-        assert not any(f'gpu-userspace-{profile}-x64' in n for n in arm64)
+        assert not any(
+            name.startswith(f'gpu-userspace-{profile}') for name in arm64
+        ), profile
+    assert not any('generic' in name for name in list(amd64) + list(arm64))
 
 
 def test_gpu_userspace_lists_no_vendor_and_no_fixed_march() -> None:

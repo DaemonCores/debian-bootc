@@ -1182,9 +1182,11 @@ packages:
     # One variant per (usage profile, CPU level), the transverse-variant
     # transverse-variant strategy of the PVE kernel build (DaemonCores-VE
     # packages.yml): the
-    # level is a build variable (GPU_LEVEL x64v1/x64v2/x64v3 on amd64, mapped
-    # to -march by the CI helper kernel_flavour_kcflags, the same mapping the
-    # kernels use; `generic` on arm64 = one build, no microarch matrix). All
+    # level is a build variable (GPU_LEVEL x64v1/x64v2/x64v3/x64v4 on amd64,
+    # mapped to -march by the CI helper kernel_flavour_kcflags, the same
+    # mapping the kernels use). GÉNÉRIQUE = POUBELLE (owner 05/11 19:2x): no
+    # generic variant left anywhere — arm64 carries no gpu userspace build.
+    # All
     # variants are installed side by side; ld.so picks the level per CPU through
     # glibc-hwcaps directories, no boot-time switch (x64v1 = baseline).
     variants:
@@ -1200,9 +1202,6 @@ packages:
       gaming-x64v4:
         when: {arch: amd64}
         env: {GPU_PROFILE: gaming, GPU_LEVEL: x64v4}
-      gaming-generic:
-        when: {arch: arm64}
-        env: {GPU_PROFILE: gaming, GPU_LEVEL: generic}
       ia-x64v1:
         when: {arch: amd64}
         env: {GPU_PROFILE: ia, GPU_LEVEL: x64v1}
@@ -1215,9 +1214,6 @@ packages:
       ia-x64v4:
         when: {arch: amd64}
         env: {GPU_PROFILE: ia, GPU_LEVEL: x64v4}
-      ia-generic:
-        when: {arch: arm64}
-        env: {GPU_PROFILE: ia, GPU_LEVEL: generic}
     variant-name-prefix: "gpu-userspace-"
     variant-env: GPU_VARIANT
     sources:
@@ -1230,7 +1226,6 @@ packages:
       DEB_ARCH=$(dpkg --print-architecture)
       PKG="gpu-userspace-${GPU_PROFILE}-${GPU_LEVEL}"
       BASE_PKG="gpu-userspace-${GPU_PROFILE}-x64v1"
-      [ "${GPU_LEVEL}" != generic ] || BASE_PKG="${PKG}"
       PREFIX="/usr/lib/dc-gpu/${GPU_PROFILE}"
       SHARE="/usr/share/dc-gpu/${GPU_PROFILE}"
       STAGE="/output/${PKG}-stage"
@@ -1257,7 +1252,7 @@ packages:
       MARCH=$(kernel_flavour_kcflags "${GPU_LEVEL}")
       HWCAPS=
       case "${GPU_LEVEL}" in
-        x64v1|generic) ;;
+        x64v1) ;;
         x64v[2-9]) HWCAPS="x86-64-v${GPU_LEVEL#x64v}" ;;
         *) echo "ERROR: unknown CPU level ${GPU_LEVEL}" >&2; exit 1 ;;
       esac
