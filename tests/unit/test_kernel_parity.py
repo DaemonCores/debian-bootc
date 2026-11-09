@@ -16,6 +16,8 @@ silently lose it, plus the consumer contract of THIS repository.
 import re
 from pathlib import Path
 
+import yaml
+
 REPO = Path(__file__).resolve().parents[2]
 CANONICAL_DATA = Path(
     REPO.parent
@@ -132,22 +134,27 @@ def test_no_arch_overlay_merge() -> None:
     # entries (rpi3/rpi4/...), which the fold keeps untouched.
     for stale in ('modules/arm', 'modules/x86_64'):
         assert f'"${{CI_KERNEL_SHARED}}/{stale}"' not in text, stale
-    # KERNEL FINAL v2 (owner 2026-11-03): the per-DEVICE fragment merged by the
-    # device modules entries lives IN THIS REPO (kernel/modules/<device>) —
-    # no engine kernel-shared/modules path on the modules lane, and the nine
-    # device fragments are committed here.
-    mod_uses = re.findall(r'kernel/modules/\$\{DEVICE\}', text)
+    # KERNEL FINAL v2 (owner 2026-11-03; path restructure owner 05/11):
+    # the per-DEVICE fragment merged by the device modules entries lives IN
+    # THIS REPO (kernel-src/modules/embeded/<device>.cfg) — no engine
+    # kernel-shared/modules path on the modules lane, and the nine device
+    # fragments are committed here.
+    mod_uses = re.findall(r'kernel-src/modules/embeded/\$\{DEVICE\}', text)
     assert len(mod_uses) == 2, mod_uses
     assert '"${CI_KERNEL_SHARED}/modules' not in text
-    assert 'kernel/modules' in text
-    # GPU FINAL (owner 2026-11-03): the kernel/modules/gpu directory (the
-    # four GPU module set overlays + modprobe policy) lives next to the
-    # device fragments — a directory, not a device fragment, so it is
-    # excluded from the device-file pin like the device list itself.
+    assert 'kernel-src/modules' in text
+    # 05/11 restructure: NO reference to the former kernel/modules tree
+    # remains anywhere in the manifest.
+    assert 'bootc-debs-builder/kernel/modules' not in text
+    # GPU FINAL (owner 2026-11-03): the kernel-src/modules/gpu directory (the
+    # GPU profile overlays as per-vendor .cfg sets) lives in the kernel-src
+    # tree — a directory of fragments, not a device fragment, so it is
+    # excluded from the device-file pin like the device list itself. The
+    # modprobe loader-policy confs live at kernel-src/modprobe.
     devices = sorted(
-        p.name for p in
-        (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' /
-         'modules').iterdir() if p.is_file()
+        p.stem for p in
+        (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
+         'modules' / 'embeded').iterdir() if p.suffix == '.cfg'
     )
     assert devices == sorted((
         'rpi3',
@@ -161,12 +168,15 @@ def test_no_arch_overlay_merge() -> None:
         'mt8183',
     )), devices
     gpu_dir = (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+        REPO / 'workflows' / 'bootc-debs-builder' /
+        'kernel-src' / 'modules' / 'gpu'
     )
-    assert (gpu_dir / 'ia').is_file()
-    assert (gpu_dir / 'gaming').is_file()
-    assert (gpu_dir / 'modprobe' / 'dc-gpu-ia.conf').is_file()
-    assert (gpu_dir / 'modprobe' / 'dc-gpu-gaming-nvidia.conf').is_file()
+    assert (gpu_dir / 'ia').is_dir()
+    assert (gpu_dir / 'gaming').is_dir()
+    assert (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
+            'modprobe' / 'dc-gpu-ia.conf').is_file()
+    assert (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
+            'modprobe' / 'dc-gpu-gaming-nvidia.conf').is_file()
     cfg = (CANONICAL_DATA / 'config').read_text(encoding='utf-8')
     for section in ('# arm64 built-in', '# amd64 built-in'):
         assert section in cfg, section
@@ -210,20 +220,52 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     assert ve_base.is_file()
     assert 'FROM ghcr.io/daemoncores/proxmox-ve-bootc:latest_' \
         in ve_base.read_text(encoding='utf-8')
-    # Where the kernel lane lives NOW: the vanilla proxmox-ve-bootc repo,
-    # still on the engine-export contract and free of a lane THP pin.
+    # Where the kernel estate lives NOW (owner FINAL architecture, 05/11
+    # 13:0x): the vanilla proxmox-ve-bootc repo builds NO kernel any more —
+    # no kernel-pve entry, no engine kernel export in its manifest. The
+    # unified kernel (14 IA/VM profile lanes) and the headers live on this
+    # debian side; the vanilla keeps only the OpenZFS module pair, built
+    # through the SHARED kernel_build_module gate of DaemonCores-CI.
     vanilla = VANILLA_ROOT / 'workflows' / 'bootc-debs-builder' / 'packages.yml'
     if not vanilla.is_file():
         return
     vtext = vanilla.read_text(encoding='utf-8')
-    assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in vtext
-    assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in vtext
-    thp = (
-        VANILLA_ROOT / 'workflows' / 'bootc-debs-builder' / 'kernel-pve' /
-        'kconfig' / 'sur-rides.cfg'
+    assert '- name: kernel-pve' not in vtext
+    assert 'CI_KERNEL_SHARED' not in vtext
+    assert 'kernel_build_module' in vtext
+    # profile estate pins: 14 variants (7 flavours x IA/VM) on the
+    # debian manifest; the GPU tree carries ONLY gpu/ia + gpu/gaming
+    # (ia compute DC off, gaming display DC on module set) — VM is kconfig
+    # only (kernel-src/kconfig/thp/never.cfg THP-never fragment; VM ≭ GPU,
+    # owner correction 05/11 15:1x).
+    prof = yaml.safe_load(PACKAGES_YML.read_text(encoding='utf-8'))
+    entries = {e['name']: e for e in prof['packages']}
+    profile_entry = entries['linux-image-profile']
+    keys = set(profile_entry['variants'])
+    assert len(keys) == 14
+    assert {k.split('-', 1)[0] for k in keys} == {'ia', 'vm'}
+    assert {k.split('-', 1)[1] for k in keys} == {
+        'x64v1', 'x64v2', 'x64v3', 'x64v4',
+        'armv8.0', 'armv8.2-lse', 'armv9-sve2',
+    }
+    gpu_dir = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
+        'modules' / 'gpu'
     )
-    assert thp.is_file()
-    lane_text = thp.read_text(encoding='utf-8')
-    assert 'CONFIG_TRANSPARENT_HUGEPAGE=y\n' not in lane_text
-    assert 'CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n\n' not in lane_text
-    assert 'CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=n\n' not in lane_text
+    assert sorted(p.name for p in gpu_dir.iterdir()) == ['gaming', 'ia']
+    ia_text = '\n'.join(
+        p.read_text(encoding='utf-8')
+        for p in sorted((gpu_dir / 'ia').glob('*.cfg'))
+    )
+    assert '# CONFIG_DRM_AMD_DC is not set' in ia_text
+    # VM = kconfig ONLY: the THP never fragment is real kconfig, and the VM
+    # delta never references the GPU tree.
+    never = (REPO / 'workflows' / 'bootc-debs-builder' /
+             'kernel-src' / 'kconfig' / 'thp' / 'never.cfg').read_text(
+        encoding='utf-8')
+    assert '# CONFIG_TRANSPARENT_HUGEPAGE is not set' in never
+    profile_build = profile_entry['build']
+    assert 'kernel-src/kconfig/thp/never.cfg' in profile_build
+    assert 'gpu/vm' not in '\n'.join(
+        (str(profile_entry['sources']), profile_build)
+    )

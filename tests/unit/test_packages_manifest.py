@@ -212,7 +212,8 @@ def test_each_arm_module_follows_its_kernel() -> None:
 
 
 def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
-    """Each device module variant carries its kernel/modules/<SoC> fragment.
+    """Each device module variant carries its kernel-src/modules/embeded
+    <SoC>.cfg fragment.
 
     One fragment per SoC family, not per board: the rpi3 fragment covers
     BCM2710A1 (Pi Zero 2 W), rk3566 covers the RK356x, h616 covers the sun50i
@@ -371,7 +372,7 @@ def test_gpu_module_sets_expand_to_the_four_variants() -> None:
     amd64 = _packages()
     set_entry = amd64['linux-modules-gpu']
     assert set_entry['variant-env'] == 'GPU_VARIANT'
-    assert set_entry['sources'][1] == 'kernel/modules/gpu'
+    assert set_entry['sources'][1] == 'kernel-src/modules/gpu'
     variants = amd64['linux-modules-gpu']['variants']
     assert variants['ia']['deps'] == ['linux-image']
     assert variants['gaming']['deps'] == ['linux-image']
@@ -403,25 +404,38 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
 
     gpu-ia: CONFIG_DRM_AMD_DC explicitly unset (the transverse kernel
     fragment default is overridden last-wins by the overlay), HSA/KFD on.
-    gpu-gaming: DC on with its HDCP/DSC/FP dependencies and fbcon.
+    gpu-gaming: DC on with fbcon. HDCP/DSC/FP are DEAD pins on the 7.2.15
+    tree — amdgpu/Kconfig selects the DRM_DISPLAY_* helpers directly, and
+    the FULL-SET rewrite dropped them (asserting them would re-introduce
+    dead symbols the kconfig gate would reject).
     """
     mod = (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' / 'gpu'
+        REPO / 'workflows' / 'bootc-debs-builder' /
+        'kernel-src' / 'modules' / 'gpu'
     )
-    ia = (mod / 'ia').read_text(encoding='utf-8')
-    gaming = (mod / 'gaming').read_text(encoding='utf-8')
+    def _txt(sub: str) -> str:
+        return '\n'.join(
+            p.read_text(encoding='utf-8')
+            for p in sorted((mod / sub).glob('*.cfg'))
+        )
+
+    ia = _txt('ia')
+    gaming = _txt('gaming')
     assert '# CONFIG_DRM_AMD_DC is not set' in ia
     assert 'CONFIG_HSA_AMD=y' in ia
     assert 'CONFIG_HSA_AMD_SVM=y' in ia
     for option in (
         'CONFIG_DRM_AMD_DC=y',
         'CONFIG_DRM_AMD_DC_SI=y',
-        'CONFIG_DRM_AMD_DC_FP=y',
-        'CONFIG_DRM_AMD_DC_HDCP=y',
-        'CONFIG_DRM_AMD_DC_DSC=y',
         'CONFIG_FRAMEBUFFER_CONSOLE=y',
     ):
         assert option in gaming, option
+    for dead in (
+        'CONFIG_DRM_AMD_DC_FP=y',
+        'CONFIG_DRM_AMD_DC_HDCP=y',
+        'CONFIG_DRM_AMD_DC_DSC=y',
+    ):
+        assert dead not in gaming, dead
     assert 'CONFIG_DRM_AMD_DC=y' not in ia
 
 
@@ -434,8 +448,8 @@ def test_gpu_module_sets_ship_their_loader_policy() -> None:
     nvidia_drm modeset.
     """
     conf_dir = (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'modules' /
-        'gpu' / 'modprobe'
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
+        'modprobe'
     )
     assert (conf_dir / 'dc-gpu-ia.conf'
             ).read_text().rstrip().endswith('blacklist nouveau')

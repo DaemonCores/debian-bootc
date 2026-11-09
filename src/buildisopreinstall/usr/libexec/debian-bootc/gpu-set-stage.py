@@ -61,7 +61,7 @@ STATE_DIR = Path(os.environ.get("GPU_SET_STATE_DIR", "/run/bootc-installer"))
 SET_FILE = STATE_DIR / "gpu-set"
 # The conf payloads the live image ships (verbatim copies of the policy
 # files the set debs deliver; a unit test pins them against
-# workflows/bootc-debs-builder/kernel/modules/gpu/modprobe/).
+# workflows/bootc-debs-builder/kernel-src/modprobe/).
 PAYLOAD_DIR = Path(
     os.environ.get(
         "GPU_SET_PAYLOAD_DIR",

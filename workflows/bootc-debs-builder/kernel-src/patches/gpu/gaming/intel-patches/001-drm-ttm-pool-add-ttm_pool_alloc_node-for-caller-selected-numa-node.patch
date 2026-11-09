@@ -1,0 +1,148 @@
+ttm_pool_alloc() always allocates on the pool's default node, although
+the internal TTM helpers (__ttm_pool_alloc(), ttm_pool_alloc_page(),
+ttm_pool_type_take()) already take a nid. Add ttm_pool_alloc_node() to
+let a driver pass that nid for a specific tt.
+
+ttm_pool_alloc() passes NUMA_NO_NODE, keeping current behaviour. An
+explicit node on a dma_alloc pool returns -EOPNOTSUPP, as
+dma_alloc_attrs() can't honor it.
+
+Signed-off-by: Himal Prasad Ghimiray <himal.prasad.ghimiray@intel.com>
+---
+ drivers/gpu/drm/ttm/ttm_pool.c | 59 +++++++++++++++++++++++++++++-----
+ include/drm/ttm/ttm_pool.h     |  2 ++
+ 2 files changed, 53 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/ttm/ttm_pool.c b/drivers/gpu/drm/ttm/ttm_pool.c
+index 1bf37023fed6..54d2f6b5c229 100644
+--- a/drivers/gpu/drm/ttm/ttm_pool.c
++++ b/drivers/gpu/drm/ttm/ttm_pool.c
+@@ -158,9 +158,9 @@ static int ttm_pool_nid(struct ttm_pool *pool)
+ 	return nid;
+ }
+ 
+-/* Allocate pages of size 1 << order with the given gfp_flags */
++/* Allocate pages of size 1 << order with the given gfp_flags on node @nid */
+ static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
+-					unsigned int order)
++					unsigned int order, int nid)
+ {
+ 	const unsigned int beneficial_order = ttm_pool_beneficial_order(pool);
+ 	unsigned long attr = DMA_ATTR_FORCE_CONTIGUOUS;
+@@ -189,7 +189,7 @@ static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
+ 	}
+ 
+ 	if (!ttm_pool_uses_dma_alloc(pool)) {
+-		p = alloc_pages_node(pool->nid, gfp_flags, order);
++		p = alloc_pages_node(nid, gfp_flags, order);
+ 		if (p) {
+ 			p->private = order;
+ 			mod_lruvec_page_state(p, NR_GPU_ACTIVE, 1 << order);
+@@ -783,7 +783,8 @@ static unsigned int ttm_pool_alloc_find_order(unsigned int highest,
+ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+ 			    const struct ttm_operation_ctx *ctx,
+ 			    struct ttm_pool_alloc_state *alloc,
+-			    struct ttm_pool_tt_restore *restore)
++			    struct ttm_pool_tt_restore *restore,
++			    int nid)
+ {
+ 	enum ttm_caching page_caching;
+ 	gfp_t gfp_flags = GFP_USER;
+@@ -818,7 +819,7 @@ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+ 		p = NULL;
+ 		pt = ttm_pool_select_type(pool, page_caching, order);
+ 		if (pt && allow_pools)
+-			p = ttm_pool_type_take(pt, ttm_pool_nid(pool));
++			p = ttm_pool_type_take(pt, nid);
+ 
+ 		/*
+ 		 * If that fails or previously failed, allocate from system.
+@@ -829,7 +830,7 @@ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+ 		if (!p) {
+ 			page_caching = ttm_cached;
+ 			allow_pools = false;
+-			p = ttm_pool_alloc_page(pool, gfp_flags, order);
++			p = ttm_pool_alloc_page(pool, gfp_flags, order, nid);
+ 		}
+ 		/* If that fails, lower the order if possible and retry. */
+ 		if (!p) {
+@@ -900,10 +901,52 @@ int ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+ 
+ 	ttm_pool_alloc_state_init(tt, &alloc);
+ 
+-	return __ttm_pool_alloc(pool, tt, ctx, &alloc, NULL);
++	return __ttm_pool_alloc(pool, tt, ctx, &alloc, NULL, ttm_pool_nid(pool));
+ }
+ EXPORT_SYMBOL(ttm_pool_alloc);
+ 
++/**
++ * ttm_pool_alloc_node - Fill a ttm_tt object, placing pages on a given node
++ *
++ * @pool: ttm_pool to use
++ * @tt: ttm_tt object to fill
++ * @ctx: operation context
++ * @nid: NUMA node id to allocate the backing system pages from, or
++ * NUMA_NO_NODE to use the pool's default node (@ttm_pool.nid)
++ *
++ * Like ttm_pool_alloc(), but allows the caller to override the NUMA node the
++ * backing system pages are allocated from. This only affects the
++ * non-coherent (non dma-alloc) allocation path; coherent/dma pools continue
++ * to use the device-local node. Intended for drivers that expose a
++ * user-selectable host memory NUMA placement.
++ *
++ * Returns: 0 on success, -EOPNOTSUPP if @nid is specified on a coherent/dma
++ * pool, negative error code otherwise.
++ */
++int ttm_pool_alloc_node(struct ttm_pool *pool, struct ttm_tt *tt,
++			struct ttm_operation_ctx *ctx, int nid)
++{
++	struct ttm_pool_alloc_state alloc;
++
++	if (WARN_ON(ttm_tt_is_backed_up(tt)))
++		return -EINVAL;
++
++	/*
++	 * Coherent/dma pools allocate via dma_alloc_attrs(), which places pages
++	 * per device DMA constraints and cannot honor a caller-requested node.
++	 */
++	if (nid != NUMA_NO_NODE && ttm_pool_uses_dma_alloc(pool))
++		return -EOPNOTSUPP;
++
++	if (nid == NUMA_NO_NODE)
++		nid = ttm_pool_nid(pool);
++
++	ttm_pool_alloc_state_init(tt, &alloc);
++
++	return __ttm_pool_alloc(pool, tt, ctx, &alloc, NULL, nid);
++}
++EXPORT_SYMBOL(ttm_pool_alloc_node);
++
+ /**
+  * ttm_pool_restore_and_alloc - Fill a ttm_tt, restoring previously backed-up
+  * content.
+@@ -964,7 +1007,7 @@ int ttm_pool_restore_and_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+ 		}
+ 	}
+ 
+-	return __ttm_pool_alloc(pool, tt, ctx, &alloc, restore);
++	return __ttm_pool_alloc(pool, tt, ctx, &alloc, restore, ttm_pool_nid(pool));
+ }
+ 
+ /**
+diff --git a/include/drm/ttm/ttm_pool.h b/include/drm/ttm/ttm_pool.h
+index 26ee592e1994..6a0b14aca092 100644
+--- a/include/drm/ttm/ttm_pool.h
++++ b/include/drm/ttm/ttm_pool.h
+@@ -79,6 +79,8 @@ struct ttm_pool {
+ 
+ int ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
+ 		   struct ttm_operation_ctx *ctx);
++int ttm_pool_alloc_node(struct ttm_pool *pool, struct ttm_tt *tt,
++			struct ttm_operation_ctx *ctx, int nid);
+ void ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt);
+ 
+ void ttm_pool_init(struct ttm_pool *pool, struct device *dev,
+-- 
+2.43.0
+
+

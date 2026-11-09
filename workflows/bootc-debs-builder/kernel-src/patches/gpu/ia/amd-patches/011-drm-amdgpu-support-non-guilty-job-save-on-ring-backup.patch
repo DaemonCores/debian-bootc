@@ -1,0 +1,57 @@
+amdgpu_ring_backup_unprocessed_commands() is also used to preserve a
+ring that carries no guilty command - for example a collateral kernel
+gfx ring that shares the faulting pipe during a gfx user-queue pipe
+reset. Such a ring is backed up with a NULL guilty_fence and all of its
+unprocessed commands must be saved so they can be replayed after the
+reset rebuilds the ring's MQD.
+
+The early-return that skips an already-seen guilty fence compared
+"ring->guilty_fence == guilty_fence", which is also true when both are
+NULL. A non-guilty save therefore hit the early return and left
+ring_backup_entries_to_copy at 0, so the pending commands were dropped
+when the ring was rebuilt.
+
+Guard the early return with a non-NULL guilty_fence so a NULL fence
+never takes it and every unprocessed command is backed up.
+
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+index 3043ad041bb4..6537e8845fb6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+@@ -733,7 +733,9 @@ void amdgpu_ring_set_fence_errors_and_reemit(struct amdgpu_ring *ring,
+ 	 * we are skipping it on purpose.
+ 	 */
+ 	if (!ring->ring_backup_entries_to_copy) {
+-		amdgpu_fence_driver_force_completion(ring, &guilty_fence->base);
++		if (guilty_fence)
++			amdgpu_fence_driver_force_completion(ring,
++						     &guilty_fence->base);
+ 		return;
+ 	}
+ 	ring->reemit = true;
+@@ -804,12 +806,11 @@ void amdgpu_ring_backup_unprocessed_commands(struct amdgpu_ring *ring,
+ 	seq = ring->fence_drv.sync_seq & ring->fence_drv.num_fences_mask;
+ 	ring->ring_backup_entries_to_copy = 0;
+ 
+-	/* if we've already seen this fence, return early.
+-	 * ring->ring_backup_entries_to_copy is set to 0 so
+-	 * the reemit helper will return early as well to
+-	 * avoid getting stuck in a reemit loop.
++	/*
++	 * Avoid replay loops for a repeated guilty fence. NULL identifies a
++	 * collateral ring, whose pending commands still need backup.
+ 	 */
+-	if (ring->guilty_fence == guilty_fence) {
++	if (guilty_fence && ring->guilty_fence == guilty_fence) {
+ 		ring->guilty_fence = NULL;
+ 		return;
+ 	}
+-- 
+2.49.0
+
+

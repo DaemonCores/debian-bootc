@@ -1,0 +1,38 @@
+Expose amdgpu_gfx_mqd_reset_restore() so MES11/12 pipe reset can rebuild
+collateral kernel rings.
+
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c | 2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+index 7a132e6d7e42..b91bb5166ea8 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+@@ -379,7 +379,7 @@ int amdgpu_gfx_kiq_init(struct amdgpu_device *adev,
+ 	return 0;
+ }
+ 
+-static void amdgpu_gfx_mqd_reset_restore(struct amdgpu_ring *ring)
++void amdgpu_gfx_mqd_reset_restore(struct amdgpu_ring *ring)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+ 	int mqd_idx, mqd_size;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h
+index a158b7f71b2f..c948fd2130a0 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h
+@@ -699,6 +699,7 @@ int amdgpu_gfx_mes_reset_queue(struct amdgpu_ring *ring,
+ 			       unsigned int vmid,
+ 			       struct amdgpu_fence *timedout_fence,
+ 			       bool use_mmio);
++void amdgpu_gfx_mqd_reset_restore(struct amdgpu_ring *ring);
+ 
+ static inline const char *amdgpu_gfx_compute_mode_desc(int mode)
+ {
+-- 
+2.49.0
+
+

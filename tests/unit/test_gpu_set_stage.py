@@ -14,7 +14,7 @@ SCRIPT = (
 )
 MODPROBE_DIR = (
     Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
-    'kernel' / 'modules' / 'gpu' / 'modprobe'
+    'kernel-src' / 'modprobe'
 )
 PAYLOAD_SRC = (
     Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' / 'usr' /

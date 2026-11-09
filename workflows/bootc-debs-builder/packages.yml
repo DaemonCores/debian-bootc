@@ -75,43 +75,43 @@ packages:
       "-x64v2":
         when:
           arch: amd64
-        deb-glob: "linux-image-common-x64v2_*"
+        deb-glob: "linux-image-common-x64v2_* linux-headers-x64v2_*"
         env:
           KERNEL_ARCH_LEVEL: x64v2
       "-x64v3":
         when:
           arch: amd64
-        deb-glob: "linux-image-common-x64v3_*"
+        deb-glob: "linux-image-common-x64v3_* linux-headers-x64v3_*"
         env:
           KERNEL_ARCH_LEVEL: x64v3
       "-x64v4":
         when:
           arch: amd64
-        deb-glob: "linux-image-common-x64v4_*"
+        deb-glob: "linux-image-common-x64v4_* linux-headers-x64v4_*"
         env:
           KERNEL_ARCH_LEVEL: x64v4
       "-armv8.0":
         when:
           arch: arm64
-        deb-glob: "linux-image-common-armv8.0_*"
+        deb-glob: "linux-image-common-armv8.0_* linux-headers-armv8.0_*"
         env:
           KERNEL_ARCH_LEVEL: armv8.0
       "-armv8.2-lse":
         when:
           arch: arm64
-        deb-glob: "linux-image-common-armv8.2-lse_*"
+        deb-glob: "linux-image-common-armv8.2-lse_* linux-headers-armv8.2-lse_*"
         env:
           KERNEL_ARCH_LEVEL: armv8.2-lse
       "-armv9-sve2":
         when:
           arch: arm64
-        deb-glob: "linux-image-common-armv9-sve2_*"
+        deb-glob: "linux-image-common-armv9-sve2_* linux-headers-armv9-sve2_*"
         env:
           KERNEL_ARCH_LEVEL: armv9-sve2
       "-16k":
         when:
           arch: arm64
-        deb-glob: "linux-image-common-16k_*"
+        deb-glob: "linux-image-common-16k_* linux-headers-16k_*"
         env:
           KERNEL_PAGES: "16k"
     env:
@@ -149,7 +149,7 @@ packages:
       KERNEL_VER: "7.2.15"
       # tarball digest of linux-7.2.15.tar.xz, kernel.org sha256sums.asc.
       KERNEL_SHA256: "d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
-    deb-glob: "linux-image-common_*"
+    deb-glob: "linux-image-common_* linux-headers_*"
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
       SB_SIGNING_CERT: SB_SIGNING_CERT
@@ -223,6 +223,18 @@ packages:
           "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
       done
 
+      # THE PVE ADDITIVE SERIES (owner 05/11 13:0x): the same
+      # build-deb/kernel-shared export carries patches-pve.yml (the PVE
+      # rebase-proven part of their series — the 51 clean passants; the 85
+      # exclusions are documented in the manifest itself, series-anchored).
+      # Same dry-run all-or-nothing fuzz-0 semantics, applied after the sets
+      # above, BEFORE the config merge.
+      PVE_PATCHES_YML="${CI_KERNEL_SHARED}/patches-pve.yml"
+      [[ -f "${PVE_PATCHES_YML}" ]] \
+        || { echo "ERROR: engine patches-pve.yml missing (the PVE additive series)" >&2; exit 1; }
+      kernel_apply_patches "${PVE_PATCHES_YML}" \
+        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
+
       cd "${SRCDIR}"
       make mrproper
 
@@ -259,6 +271,9 @@ packages:
         # fragment for the level.
         [[ -s "${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
           CONFIG_FILES+=("${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg")
+        # owner 05/11 16:2x: the kconfig-pve/pve.cfg fragment is GONE — the
+        # PVE deltas are already merged in kernel-src/config.cfg (unified
+        # kernel), re-adding them here would bulldoze that state.
       fi
 
       # The BASE config (filesystems, virtio, serial, disables, AND the folded
@@ -434,6 +449,322 @@ packages:
       # jobs (e.g. grub-efi-amd64-signed) of disk space.
       rm -rf "${SRCDIR}" /tmp/linux-*
 
+  # linux-image-profile — the TWO kernel PROFILES of the unified kernel
+  # estate (owner FINAL architecture, 2026-11-05; VM placement CORRECTED
+  # owner 05/11 15:1x): 7 flavours × 2 profiles = 14 deb lanes, ALL on this
+  # debian side. The flavours are the lane's own matrix (x64v1..v4 amd64,
+  # armv8.0 / armv8.2-lse / armv9-sve2 arm64). VM has NOTHING to do with the
+  # GPU overlays — the GPU tree is only modules/gpu/{ia,gaming} (ia compute
+  # = DC off; gaming display = DC on, and gaming stays a MODULE-level set):
+  #   - IA  (AI compute hosts): the gpu/ia overlay merged LAST in the kernel
+  #     config — CONFIG_DRM_AMD_DC off + HSA/KFD on — and the THP=always pin
+  #     STANDS (the x86-common/base ALWAYS pin wins the merge).
+  #   - VM  (PVE hosts): NO gpu overlay AT ALL (VM ≠ GPU, jamais eu). The
+  #     VM profile delta = kconfig only: the THP NEVER fragment
+  #     (kernel-src/kconfig/thp/never.cfg — the hugepage decision belongs to
+  #     the GUEST via PVE memory 2M/1G, host THP=never) + the hypervisor
+  #     opts already folded in the base config (the virtio/paravirt block).
+  #     It carries plain amdgpu (no DC pin either way).
+  # Naming is EXPLICIT per profile, never merged: expanded entry names
+  # linux-image-<profile>-<flavour>, deb names
+  # linux-image-common-<profile>-<flavour>, kernel build-tree paths
+  # /usr/lib/linux-kernel-build-<profile>-<flavour> (no unpack collision),
+  # packages daemoncores-kernel-<profile>-<KVER>. The RELEASE string stays
+  # the plain flavour string (7.2.15-<flavour>-xanmod1 — no -pve, no
+  # -<profile>) so the vermagic is identical across the estate; the profile
+  # identity lives in the PACKAGING only (owner 05/11 midi). The profile
+  # packages provide the virtual linux-image-<KVER> (satisfying the zfs
+  # module pair Depends) and conflict with the plain kernel deb and the
+  # sibling profile — one kernel of one release string per host.
+  # gaming is NOT a profile of this lane: the gaming concept stays a
+  # MODULE-level set only (the gpu-gaming debs) — never a gaming-kernel.
+  # Headers: NOT republished by this class — the per-flavour linux-headers
+  # deb continues to publish from the linux-image build above, and the
+  # profile delta touches amdgpu only (the zfs/nvidia module ABI of the
+  # three builds is identical). The kernel build vercount follows the lane
+  # pin: KERNEL_BUILD_VER untouched (owner order: no cache rebump).
+  - name: linux-image-profile
+    ccache: true
+    variant-name-prefix: linux-image-
+    variant-env: PROFILE_FLAVOUR
+    env:
+      HELPERS_VER: 7
+      KERNEL_PAGES: "4k"
+      KERNEL_SIGNING_ENFORCE: "no"
+      # TEMPORARY KERNEL PIN: same rationale and same restore block as the
+      # linux-image env above — no track resolution while the pin is on.
+      KERNEL_VER: "7.2.15"
+      KERNEL_SHA256: "d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
+    deb-glob: "linux-image-common-*"
+    sources:
+      # The IA gpu overlay and the profile THP fragments of this repo: a
+      # profile change rebuilds only the touched profile's variants. (VM
+      # carries NO gpu data — VM ≠ GPU, owner correction 05/11 15:1x.)
+      - kernel-src/modules/gpu/ia
+      - kernel-src/kconfig/thp
+    secret-env:
+      SB_SIGNING_KEY: SB_SIGNING_KEY
+      SB_SIGNING_CERT: SB_SIGNING_CERT
+    variants:
+      # ---- IA profile: the AI compute kernel (DC off, THP always) --------
+      "ia-x64v1":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-ia-x64v1_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-ia-x64v1"}
+      "ia-x64v2":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-ia-x64v2_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-ia-x64v2"}
+      "ia-x64v3":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-ia-x64v3_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-ia-x64v3"}
+      "ia-x64v4":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-ia-x64v4_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-ia-x64v4"}
+      "ia-armv8.0":
+        when: {arch: arm64}
+        deb-glob: "linux-image-common-ia-armv8.0_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-ia-armv8.0"}
+      "ia-armv8.2-lse":
+        when: {arch: arm64}
+        deb-glob: "linux-image-common-ia-armv8.2-lse_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-ia-armv8.2-lse"}
+      "ia-armv9-sve2":
+        when: {arch: arm64}
+        deb-glob: "linux-image-common-ia-armv9-sve2_*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-ia-armv9-sve2"}
+      # ---- VM profile: the PVE-host kernel (NO gpu overlay — VM ≠ GPU,
+      # owner 05/11 15:1x; the profile delta = the THP NEVER fragment +
+      # the hypervisor opts folded in the base config) --------------------
+      "vm-x64v1":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-vm-x64v1_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-vm-x64v1"}
+      "vm-x64v2":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-vm-x64v2_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-vm-x64v2"}
+      "vm-x64v3":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-vm-x64v3_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-vm-x64v3"}
+      "vm-x64v4":
+        when: {arch: amd64}
+        deb-glob: "linux-image-common-vm-x64v4_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-vm-x64v4"}
+      "vm-armv8.0":
+        when: {arch: arm64}
+        deb-glob: "linux-image-common-vm-armv8.0_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-vm-armv8.0"}
+      "vm-armv8.2-lse":
+        when: {arch: arm64}
+        deb-glob: "linux-image-common-vm-armv8.2-lse_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-vm-armv8.2-lse"}
+      "vm-armv9-sve2":
+        when: {arch: arm64}
+        deb-glob: "linux-image-common-vm-armv9-sve2_*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-vm-armv9-sve2"}
+    build: |
+      set -euo pipefail
+
+      SAVE_PWD=$(pwd)
+      DEB_ARCH=$(dpkg --print-architecture)
+      case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
+      BASE_CONFIG="${CI_KERNEL_SHARED}/config"
+      test -f "${BASE_CONFIG}" \
+        || { echo "ERROR: engine kernel-shared/config (base) missing" >&2; exit 1; }
+      # PROFILE delta of this variant (ia | vm) — merged after the base
+      # config, the profile is the final word of the merge. IA = the gpu/ia
+      # overlay (AMD64 only — the arm64 flavours carry no amdgpu); VM = the
+      # THP NEVER kconfig fragment ONLY (VM ≠ GPU, owner correction 05/11
+      # 15:1x; the hypervisor opts — virtio/paravirt — are folded in the
+      # base config, never a gpu file).
+      PROFILE_GPU_DIR="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/modules/gpu/${KERNEL_PROFILE}"
+      case "${KERNEL_PROFILE}" in
+        vm) PROFILE_THP="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/thp/never.cfg" ;;
+        *)  PROFILE_THP="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/thp/always.cfg" ;;
+      esac
+      test -f "${PROFILE_THP}" \
+        || { echo "ERROR: profile THP fragment kernel-src/kconfig/thp/${KERNEL_PROFILE} missing" >&2; exit 1; }
+      case "${DEB_ARCH}:${KERNEL_PROFILE}" in
+        amd64:ia)
+          test -d "${PROFILE_GPU_DIR}" \
+            || { echo "ERROR: profile overlay kernel-src/modules/gpu/${KERNEL_PROFILE} missing" >&2; exit 1; }
+          PROFILE_GPU_CFGS=("${PROFILE_GPU_DIR}"/*.cfg)
+          test -s "${PROFILE_GPU_CFGS[0]}" \
+            || { echo "ERROR: profile overlay ${KERNEL_PROFILE} carries no .cfg fragment" >&2; exit 1; }
+          ;;
+      esac
+
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        rsync libudev-dev elfutils dpkg-dev \
+        debhelper kmod libdw-dev curl xz-utils python3
+
+      kernel_fetch_source "${KERNEL_VER}" "${KERNEL_SHA256}"
+
+      # Same unified series as the baseline linux-image build: shared set,
+      # the GPU driver patch sets, then the PVE additive series — the
+      # profile kernels carry the SAME patch provenance; the dry-run
+      # all-or-nothing fuzz-0 semantics live inside the helper.
+      kernel_apply_patches \
+        "${CI_KERNEL_SHARED}/patches-shared.yml" \
+        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
+      for GPU_DRIVER in amd intel; do
+        GPU_PATCH_YML="${CI_KERNEL_SHARED}/patches-gpu/${GPU_DRIVER}.yml"
+        [[ -f "${GPU_PATCH_YML}" ]] \
+          || { echo "ERROR: engine patches-gpu/${GPU_DRIVER}.yml missing" >&2; exit 1; }
+        kernel_apply_patches "${GPU_PATCH_YML}" \
+          "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
+      done
+      PVE_PATCHES_YML="${CI_KERNEL_SHARED}/patches-pve.yml"
+      [[ -f "${PVE_PATCHES_YML}" ]] \
+        || { echo "ERROR: engine patches-pve.yml missing (the PVE additive series)" >&2; exit 1; }
+      kernel_apply_patches "${PVE_PATCHES_YML}" \
+        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
+
+      cd "${SRCDIR}"
+      make mrproper
+      make defconfig
+
+      CONFIG_FILES=()
+      if [ "${DEB_ARCH}" = "amd64" ]; then
+        # Same fragment order as the baseline: shared x86 base, GPU sets,
+        # flavour fragment, PVE deltas fragment (base appended after still
+        # wins its arch built-ins).
+        SHARED_KCFG="${CI_KERNEL_SHARED}/kconfig-shared"
+        CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
+        case "${KERNEL_GPU:-all}" in
+          all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
+          none) ;;
+          *) for PVE_GPU in ${KERNEL_GPU}; do CONFIG_FILES+=("${SHARED_KCFG}/gpu/${PVE_GPU}.cfg"); done ;;
+        esac
+        [[ -s "${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
+          CONFIG_FILES+=("${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg")
+      fi
+      CONFIG_FILES+=("${BASE_CONFIG}")
+      # THE PROFILE, LAST: IA amd64 = gpu/ia (DC off, compute); THP follows
+      # the profile fragment itself (ia = ALWAYS pin, vm = NEVER — real
+      # kconfig lines, appended after the base so the profile wins).
+      if [ "${DEB_ARCH}" = "amd64" ] && [ "${KERNEL_PROFILE}" = ia ]; then
+        for PROFILE_CFG in "${PROFILE_GPU_DIR}"/*.cfg; do
+          CONFIG_FILES+=("${PROFILE_CFG}")
+        done
+      fi
+      CONFIG_FILES+=("${PROFILE_THP}")
+      if [ "${DEB_ARCH}" = "arm64" ]; then
+        case "${KERNEL_ARCH_LEVEL:-}" in
+          armv8.0|armv8.2-lse|armv9-sve2)
+            test -f "${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg" \
+              || { echo "ERROR: arm flavour fragment ${KERNEL_ARCH_LEVEL}.cfg missing from the engine export" >&2; exit 1; }
+            CONFIG_FILES+=("${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg")
+            ;;
+        esac
+        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
+        test -f "${PAGES_OVERLAY}" \
+          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
+        CONFIG_FILES+=("${PAGES_OVERLAY}")
+      fi
+
+      kernel_merge_config "${SRCDIR}" "${CONFIG_FILES[@]}"
+      kernel_signing_setup
+      make olddefconfig
+      kernel_signing_verify
+
+      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . "${CONFIG_FILES[@]}"
+      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . --config .config \
+        "${CONFIG_FILES[@]}" \
+        || echo "::warning::kernel config options not present in the final .config"
+
+      # PROFILE PROOF (olddefconfig silently drops an unmet option): the
+      # profile pins MUST hold in the final .config. IA amd64 = the DC-off
+      # pin (the merged gpu/ia overlay is the last word on the DC symbol);
+      # VM (every arch) = the THP NEVER pin — VM carries NO gpu delta, the
+      # never proves the VM fragment won over the base ALWAYS pin.
+      if [ "${DEB_ARCH}" = "amd64" ] && [ "${KERNEL_PROFILE}" = ia ]; then
+        grep -q '^# CONFIG_DRM_AMD_DC is not set$' "${SRCDIR}/.config" \
+          || { echo "ERROR: ${KERNEL_PROFILE} profile merge lost the DC-off pin" >&2; exit 1; }
+      fi
+      if [ "${KERNEL_PROFILE}" = vm ]; then
+        grep -q '^# CONFIG_TRANSPARENT_HUGEPAGE is not set$' "${SRCDIR}/.config" \
+          || { echo "ERROR: vm profile merge lost the THP-never pin" >&2; exit 1; }
+      fi
+      cp .config /tmp/linux-kernel.config
+
+      KDEB_PKGVERSION="${KERNEL_VER}-1" \
+      KCFLAGS="$(kernel_flavour_kcflags "${KERNEL_ARCH_LEVEL:-}")" \
+      make -j"$(nproc)" bindeb-pkg
+
+      COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
+        ! -name 'linux-image-*-dbg*' | head -1)
+      test -n "${COMMON_IMAGE_DEB}" \
+        || { echo "ERROR: profile linux-image deb not built" >&2; exit 1; }
+      BUILT_VER=$(dpkg-deb -f "${COMMON_IMAGE_DEB}" Version)
+      cp "${COMMON_IMAGE_DEB}" \
+        "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: output profile linux-image-common deb empty" >&2; exit 1; }
+      # Headers NOT republished here: the linux-image lane above remains the
+      # per-flavour headers publisher (the profile delta is amdgpu-only;
+      # the module ABI is identical across the three builds of a flavour).
+
+      REPACK_DIR=/tmp/linux-image-common-repack
+      rm -rf "${REPACK_DIR}"
+      dpkg-deb -R "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
+
+      KERNEL_IMAGES=("${REPACK_DIR}"/boot/vmlinuz-*)
+      test -f "${KERNEL_IMAGES[0]}" \
+        || { echo "ERROR: no /boot/vmlinuz-* in the profile kernel deb" >&2; exit 1; }
+      for img in "${KERNEL_IMAGES[@]}"; do
+        kernel_sign_efi "${img}"
+      done
+
+      # The build tree path carries the profile+flavour suffix: two
+      # flavours of one profile install side by side the same way the
+      # baseline ones do.
+      test -f /tmp/linux-kernel.config \
+        || { echo "ERROR: profile kernel build produced no .config" >&2; exit 1; }
+      test -f Module.symvers \
+        || { echo "ERROR: profile kernel build produced no Module.symvers" >&2; exit 1; }
+      KERNEL_BUILD_DIR="usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}"
+      mkdir -p "${REPACK_DIR}/${KERNEL_BUILD_DIR}"
+      cp /tmp/linux-kernel.config "${REPACK_DIR}/${KERNEL_BUILD_DIR}/config"
+      cp Module.symvers "${REPACK_DIR}/${KERNEL_BUILD_DIR}/Module.symvers"
+
+      ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
+      KVER="${ORIG_PKG#linux-image-}"
+      # Explicit packaging identity: daemoncores-kernel-<profile>-<KVER> —
+      # the release string itself stays the plain flavour string (the
+      # vermagic is identical across the estate; the PACKAGING distinguishes.
+      OTHER_PROFILE=vm; [ "${KERNEL_PROFILE}" = vm ] && OTHER_PROFILE=ia
+      KERNEL_PKG="daemoncores-kernel-${KERNEL_PROFILE}-${KVER}"
+      sed -i -e "s/^Package: .*/Package: ${KERNEL_PKG}/" \
+        -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
+        "${REPACK_DIR}/DEBIAN/control"
+      # Provide BOTH the minimal-image switch name AND the virtual
+      # linux-image-<KVER> (the plain release name the module pairs depend
+      # on). Conflicts keep exactly ONE build of a release string per host:
+      # the plain kernel deb and the sibling profile.
+      PKPROF_FMT='Provides: %s\nProvides: linux-image-%s\nConflicts: %s\nConflicts: %s,'
+      PKPROF_FMT="${PKPROF_FMT} daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: %s,"
+      PKPROF_FMT="${PKPROF_FMT} daemoncores-kernel-%s-%s\n"
+      printf "${PKPROF_FMT}" \
+        "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
+        "${KVER}" \
+        "${ORIG_PKG}" \
+        "daemoncores-kernel-${KVER}" "${KERNEL_PROFILE}" "${KVER}" "${OTHER_PROFILE}" "${KVER}" \
+        "daemoncores-kernel-${KVER}" "${KERNEL_PROFILE}" "${KVER}" \
+        >> "${REPACK_DIR}/DEBIAN/control"
+      dpkg-deb -b "${REPACK_DIR}" \
+        "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
+      test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
+        || { echo "ERROR: repacked profile linux-image-common deb empty" >&2; exit 1; }
+
+      rm -rf "${SRCDIR}" /tmp/linux-*
+
   # linux-modules-arm-device: one template for all ARM device-specific module
   # packages (one per SoC FAMILY, not per board — a fragment covers every
   # board of its SoC generation: rpi3 also serves the Pi Zero 2 W
@@ -517,20 +848,20 @@ packages:
       # their content is hashed here — a fragment change rebuilds only that
       # device's modules entry (KERNEL FINAL v2: the device data of the bootc
       # lane lives in this repository).
-      - kernel/modules
+      - kernel-src/modules
     build: |
       set -euo pipefail
       # DEVICE is injected by the CI from the variant key (rpi3/rpi4/rpi5/rk3588)
       # DEVICE overlay (owner KERNEL FINAL v2, 2026-11-03): the device module
-      # fragments live IN THIS REPO (kernel/modules/<device>) — built uniquely
-      # on the debian-bootc lane; VE consumes the device modules debs through
+      # fragments live IN THIS REPO (kernel-src/modules/embeded/<device>.cfg)
+      # — built uniquely on the debian-bootc lane; VE consumes the device modules debs through
       # the APT repo. The engine export keeps only the common set (patches,
       # kconfig, base config, pages).
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
-      OVERLAY="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel/modules/${DEVICE}"
+      OVERLAY="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/modules/embeded/${DEVICE}.cfg"
       test -f "${OVERLAY}" \
-        || { echo "ERROR: device module overlay kernel/modules/${DEVICE} missing" >&2; exit 1; }
+        || { echo "ERROR: device module overlay kernel-src/modules/embeded/${DEVICE}.cfg missing" >&2; exit 1; }
 
       # The engine shared set is the canonical patch data (arbitration
       # 2026-11-03 13:05): the builder exports PATCHES_JSON only from the
@@ -898,7 +1229,7 @@ packages:
       - preinstall/output/linux-modules-gpu
       # The per-set kconfig overlays and the loader-policy confs of this
       # repo: a profile change rebuilds only the touched set.
-      - kernel/modules/gpu
+      - kernel-src/modules/gpu
     build: |
       set -euo pipefail
       # GPU_SET is injected by the CI from the variant env (ia|gaming);
@@ -907,7 +1238,7 @@ packages:
       DEB_ARCH=$(dpkg --print-architecture)
       WORKTREE="${GITHUB_WORKSPACE:-$(pwd)}"
       WORKFLOW="${WORKTREE}/workflows/bootc-debs-builder"
-      CONF_DIR="${WORKFLOW}/kernel/modules/gpu/modprobe"
+      CONF_DIR="${WORKFLOW}/kernel-src/modprobe"
       GPU_NVIDIA="${GPU_NVIDIA:-no}"
 
       if [ "${GPU_NVIDIA}" = yes ]; then
@@ -938,9 +1269,12 @@ packages:
         # (the linux-modules-arm-device pattern) with the profile overlay
         # merged on top of the seeded .config.
         # -----------------------------------------------------------------
-        OVERLAY="${WORKFLOW}/kernel/modules/gpu/${GPU_SET}"
-        test -f "${OVERLAY}" \
-          || { echo "ERROR: gpu module overlay kernel/modules/gpu/${GPU_SET} missing" >&2; exit 1; }
+        OVERLAY="${WORKFLOW}/kernel-src/modules/gpu/${GPU_SET}"
+        test -d "${OVERLAY}" \
+          || { echo "ERROR: gpu module overlay kernel-src/modules/gpu/${GPU_SET} missing" >&2; exit 1; }
+        OVERLAY_CFGS=("${OVERLAY}"/*.cfg)
+        test -s "${OVERLAY_CFGS[0]}" \
+          || { echo "ERROR: gpu module overlay ${GPU_SET} carries no .cfg fragment" >&2; exit 1; }
 
         # The engine shared set (see linux-modules-arm-device): the same
         # PATCHES_JSON export consumed by kernel_prepare's class loop.
@@ -949,7 +1283,9 @@ packages:
         PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
         export PATCHES_JSON
         kernel_prepare
-        kernel_merge_config "${SRCDIR}" "${OVERLAY}"
+        for GPU_SET_CFG in "${OVERLAY}"/*.cfg; do
+          kernel_merge_config "${SRCDIR}" "${GPU_SET_CFG}"
+        done
         kernel_signing_setup
         make olddefconfig
 
@@ -2258,6 +2594,22 @@ packages:
       # replaces the first-boot setup service and needs the fisherman recipe
       # fields of fisherman-src.
       deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/bootc-installer-src" /build/bootc-installer-src
+
+      # 05/11 restructure: the repo tree flattened one level (the mirror of
+      # the upstream ROOT is upstream's bootc_installer/ subtree, not the
+      # repo dir). deb_overlay_apply mirrors relative paths — so the real
+      # src files of the overlay are re-landed at their upstream
+      # bootc_installer/<sub> paths; the .patch files ride the overlay
+      # apply directly (applied from the overlay dir, -p1) and need no copy.
+      _OVL="${SAVE_PWD}/workflows/bootc-debs-builder/bootc-installer-src"
+      for f in \
+          defaults/autoupdate.py defaults/gpu_security.py defaults/system.py \
+          gtk/default-autoupdate.blp gtk/default-gpu-security.blp gtk/default-system.blp \
+          utils/gpu_config.py utils/locale_config.py utils/mok_stage.py \
+          utils/system_config.py; do
+        install -D -m644 "${_OVL}/${f}" \
+          "/build/bootc-installer-src/bootc_installer/${f}"
+      done
 
       # The fisherman submodule contains data/images/ (distribution logos) that
       # bootc-installer.gresource.xml references at build time. Initialize it so

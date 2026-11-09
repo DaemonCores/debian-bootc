@@ -9,7 +9,7 @@ from pathlib import Path
 
 POLICY_DIR = (
     Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
-    'kernel' / 'modules' / 'gpu' / 'modprobe'
+    'kernel-src' / 'modprobe'
 )
 SET_POLICY = {
     'dc-gpu-ia-nvidia.conf': 'ia',

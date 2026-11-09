@@ -1,0 +1,25 @@
+Use ttm_tt_restore_node() so a BO restored after shrinker backup comes
+back on its requested node instead of the pool default.
+
+Signed-off-by: Himal Prasad Ghimiray <himal.prasad.ghimiray@intel.com>
+---
+ drivers/gpu/drm/xe/xe_bo.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/xe/xe_bo.c b/drivers/gpu/drm/xe/xe_bo.c
+index b0760d5d6bad..fc9bfb436b8e 100644
+--- a/drivers/gpu/drm/xe/xe_bo.c
++++ b/drivers/gpu/drm/xe/xe_bo.c
+@@ -676,7 +676,7 @@ static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
+ 		return 0;
+ 
+ 	if (ttm_tt_is_backed_up(tt) && !xe_tt->purgeable) {
+-		err = ttm_tt_restore(ttm_dev, tt, ctx);
++		err = ttm_tt_restore_node(ttm_dev, tt, ctx, xe_tt->numa_node);
+ 	} else {
+ 		ttm_tt_clear_backed_up(tt);
+ 		err = ttm_pool_alloc_node(&ttm_dev->pool, tt, ctx,
+-- 
+2.43.0
+
+
