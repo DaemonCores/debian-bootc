@@ -267,6 +267,17 @@ packages:
       fi
       CONFIG_FILES+=("${PROFILE_THP}")
       if [ "${DEB_ARCH}" = "arm64" ]; then
+        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
+        test -f "${PAGES_OVERLAY}" \
+          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
+        CONFIG_FILES+=("${PAGES_OVERLAY}")
+        # The arm flavour fragment merges AFTER the pages overlay: the
+        # pages/16k fragment carries its own CONFIG_LOCALVERSION="-16k"
+        # (no flavour in it) which would otherwise be the final word —
+        # armv8.2-lse and armv9-sve2 would merge THE SAME release string
+        # 7.2.15-16k at different bytes and refuse the pool inclusion
+        # (the run-41794169405 class). The page-size pins stay set (the
+        # fragment only appends its LOCALVERSION on top after the merge).
         case "${KERNEL_ARCH_LEVEL:-}" in
           armv8.0|armv8.2-lse|armv9-sve2)
             test -f "${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg" \
@@ -274,10 +285,6 @@ packages:
             CONFIG_FILES+=("${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg")
             ;;
         esac
-        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
-        test -f "${PAGES_OVERLAY}" \
-          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
-        CONFIG_FILES+=("${PAGES_OVERLAY}")
       fi
 
       kernel_merge_config "${SRCDIR}" "${CONFIG_FILES[@]}"
@@ -415,7 +422,7 @@ packages:
         rm -rf "${HREPACK}"
         dpkg-deb -R "${HEADERS_DEB}" "${HREPACK}"
         sed -i "s/^Package: .*/Package: ${HDR_RPKG}/" "${HREPACK}/DEBIAN/control"
-        HDR_FN="linux-headers-${KERNEL_PROFILE}-${HDR_RPKG#linux-headers-}_${HDR_VER}_${DEB_ARCH}.deb"
+        HDR_FN="${HDR_RPKG}_${HDR_VER}_${DEB_ARCH}.deb"
         dpkg-deb -b "${HREPACK}" "/debs/${HDR_FN}"
         test -s "/debs/${HDR_FN}" \
           || { echo "ERROR: repacked profile headers deb empty" >&2; exit 1; }
