@@ -152,9 +152,10 @@ def test_no_arch_overlay_merge() -> None:
     # excluded from the device-file pin like the device list itself. The
     # modprobe loader-policy confs live at kernel-src/modprobe.
     devices = sorted(
-        p.stem for p in
-        (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
-         'modules' / 'embeded').iterdir() if p.suffix == '.cfg'
+        p.stem for p in (
+            REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
+            'modules' / 'embeded'
+        ).iterdir() if p.suffix == '.cfg'
     )
     assert devices == sorted((
         'rpi3',
@@ -168,15 +169,19 @@ def test_no_arch_overlay_merge() -> None:
         'mt8183',
     )), devices
     gpu_dir = (
-        REPO / 'workflows' / 'bootc-debs-builder' /
-        'kernel-src' / 'modules' / 'gpu'
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modules' /
+        'gpu'
     )
     assert (gpu_dir / 'ia').is_dir()
     assert (gpu_dir / 'gaming').is_dir()
-    assert (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
-            'modprobe' / 'dc-gpu-ia.conf').is_file()
-    assert (REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
-            'modprobe' / 'dc-gpu-gaming-nvidia.conf').is_file()
+    assert (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modprobe' /
+        'dc-gpu-ia.conf'
+    ).is_file()
+    assert (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modprobe' /
+        'dc-gpu-gaming-nvidia.conf'
+    ).is_file()
     cfg = (CANONICAL_DATA / 'config').read_text(encoding='utf-8')
     for section in ('# arm64 built-in', '# amd64 built-in'):
         assert section in cfg, section
@@ -244,13 +249,19 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     keys = set(profile_entry['variants'])
     assert len(keys) == 14
     assert {k.split('-', 1)[0] for k in keys} == {'ia', 'vm'}
-    assert {k.split('-', 1)[1] for k in keys} == {
-        'x64v1', 'x64v2', 'x64v3', 'x64v4',
-        'armv8.0', 'armv8.2-lse', 'armv9-sve2',
-    }
+    assert {k.split('-', 1)[1]
+            for k in keys} == {
+                'x64v1',
+                'x64v2',
+                'x64v3',
+                'x64v4',
+                'armv8.0',
+                'armv8.2-lse',
+                'armv9-sve2',
+            }
     gpu_dir = (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
-        'modules' / 'gpu'
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modules' /
+        'gpu'
     )
     assert sorted(p.name for p in gpu_dir.iterdir()) == ['gaming', 'ia']
     ia_text = '\n'.join(
@@ -260,9 +271,10 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     assert '# CONFIG_DRM_AMD_DC is not set' in ia_text
     # VM = kconfig ONLY: the THP never fragment is real kconfig, and the VM
     # delta never references the GPU tree.
-    never = (REPO / 'workflows' / 'bootc-debs-builder' /
-             'kernel-src' / 'kconfig' / 'thp' / 'never.cfg').read_text(
-        encoding='utf-8')
+    never = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'kconfig' /
+        'thp' / 'never.cfg'
+    ).read_text(encoding='utf-8')
     assert '# CONFIG_TRANSPARENT_HUGEPAGE is not set' in never
     profile_build = profile_entry['build']
     assert 'kernel-src/kconfig/thp/never.cfg' in profile_build

@@ -39,9 +39,8 @@ def _module() -> types.ModuleType:
     """
     module = types.ModuleType('gpu_config')
     exec(
-        compile((INSTALLER  / 'utils' /
-                 'gpu_config.py').read_text(), 'gpu_config.py', 'exec'),
-        module.__dict__
+        compile((INSTALLER / 'utils' / 'gpu_config.py').read_text(),
+                'gpu_config.py', 'exec'), module.__dict__
     )
     return module
 
@@ -249,8 +248,7 @@ def test_step_is_registered_in_the_installer() -> None:
     assert "'gpu_security.py'" in installer
     assert "'gpu_config.py'" in installer
     assert 'apply_gpu(recipe, merged.get("gpu"))' in installer
-    assert (INSTALLER  / 'gtk' /
-            'default-gpu-security.blp').is_file()
+    assert (INSTALLER / 'gtk' / 'default-gpu-security.blp').is_file()
 
 
 def test_installer_fields_match_the_fisherman_recipe() -> None:

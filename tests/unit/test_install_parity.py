@@ -54,8 +54,7 @@ def _system_config() -> types.ModuleType:
     module = types.ModuleType("system_config")
     exec(
         compile(
-            (INSTALLER  / "utils" /
-             "system_config.py").read_text(),
+            (INSTALLER / "utils" / "system_config.py").read_text(),
             "system_config.py",
             "exec",
         ),
@@ -73,8 +72,7 @@ def _locale_config() -> types.ModuleType:
     module = types.ModuleType("locale_config")
     exec(
         compile(
-            (INSTALLER  / "utils" /
-             "locale_config.py").read_text(),
+            (INSTALLER / "utils" / "locale_config.py").read_text(),
             "locale_config.py",
             "exec",
         ),
@@ -123,9 +121,7 @@ def test_sudo_rides_the_recipe_groups() -> None:
     m = _system_config()
     assert "sudo" not in m.user_groups([], False)
     assert "sudo" in m.user_groups([], True)
-    processor = (
-        INSTALLER  / "utils" / "processor.py.patch"
-    ).read_text()
+    processor = (INSTALLER / "utils" / "processor.py.patch").read_text()
     assert '"groups": user_groups' in processor
 
 
@@ -168,8 +164,7 @@ def test_locale_written_to_the_deployment() -> None:
     assert not m.valid_locale("not a locale")
     fisherman = _overlay_text(FISHERMAN)
     assert "post.WriteLocale(activeTargetMount" in fisherman
-    installer = (INSTALLER  / "utils" /
-                 "builder.py.patch").read_text()
+    installer = (INSTALLER / "utils" / "builder.py.patch").read_text()
     assert "BootcDefaultSystem" in installer
 
 

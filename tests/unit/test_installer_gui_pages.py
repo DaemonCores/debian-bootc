@@ -10,9 +10,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-INSTALLER = (
-    ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc-installer-src'
-)
+INSTALLER = (ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc-installer-src')
 RECIPE = (
     ROOT / 'src' / 'buildisopreinstall' / 'etc' / 'bootc-installer' /
     'recipe.json'
