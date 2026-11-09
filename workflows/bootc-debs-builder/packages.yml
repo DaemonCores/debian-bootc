@@ -920,7 +920,7 @@ packages:
 
         # Seed Module.symvers from the kernel deb (the modules-only build has
         # no vmlinux.o; the vmlinux-only filter and the modpost flag live in
-        # the device entry build, this block replicates it verbatim).
+        # the device entry build, this block replicates it verbatim.
         test -f "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" \
           || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
         cp "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" Module.symvers
@@ -933,7 +933,7 @@ packages:
         awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
         if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
            && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
-          printf '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\n' \
+          printf '\nifeq ($(KBUILD_EXTMOD),)\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\nendif\n' \
             >> scripts/Makefile.modpost
         fi
         [ -f modules.builtin ] || touch modules.builtin
