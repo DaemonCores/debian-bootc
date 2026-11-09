@@ -432,8 +432,17 @@ packages:
       # Provides above satisfies for each (arch, page size).
       ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
       KERNEL_PKG="daemoncores-kernel-${ORIG_PKG#linux-image-}"
-      sed -i -e "s/^Package: .*/Package: ${KERNEL_PKG}/" \
-        -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
+      # Drop Provides/Conflicts/Replaces INCLUDING multiline continuations
+      # (continuations start with a space and survive a plain /d sed — that
+      # dup-Provides crashed dpkg-deb on daemoncores-kernel-{ia,vm}, run
+      # 42622490165).
+      awk '
+        /^(Provides|Conflicts|Replaces):/ { skip = 1; next }
+        skip && /^ / { next }
+        { skip = 0; print }
+      ' "${REPACK_DIR}/DEBIAN/control" > "${REPACK_DIR}/DEBIAN/control.new" \
+        && mv "${REPACK_DIR}/DEBIAN/control.new" "${REPACK_DIR}/DEBIAN/control"
+      sed -i "s/^Package: .*/Package: ${KERNEL_PKG}/" \
         "${REPACK_DIR}/DEBIAN/control"
       printf 'Provides: %s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
         "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
@@ -741,8 +750,17 @@ packages:
       # vermagic is identical across the estate; the PACKAGING distinguishes.
       OTHER_PROFILE=vm; [ "${KERNEL_PROFILE}" = vm ] && OTHER_PROFILE=ia
       KERNEL_PKG="daemoncores-kernel-${KERNEL_PROFILE}-${KVER}"
-      sed -i -e "s/^Package: .*/Package: ${KERNEL_PKG}/" \
-        -e '/^\(Provides\|Conflicts\|Replaces\):/d' \
+      # Drop Provides/Conflicts/Replaces INCLUDING multiline continuations
+      # (continuations start with a space and survive a plain /d sed — that
+      # dup-Provides crashed dpkg-deb on daemoncores-kernel-{ia,vm}, run
+      # 42622490165).
+      awk '
+        /^(Provides|Conflicts|Replaces):/ { skip = 1; next }
+        skip && /^ / { next }
+        { skip = 0; print }
+      ' "${REPACK_DIR}/DEBIAN/control" > "${REPACK_DIR}/DEBIAN/control.new" \
+        && mv "${REPACK_DIR}/DEBIAN/control.new" "${REPACK_DIR}/DEBIAN/control"
+      sed -i "s/^Package: .*/Package: ${KERNEL_PKG}/" \
         "${REPACK_DIR}/DEBIAN/control"
       # Provide BOTH the minimal-image switch name AND the virtual
       # linux-image-<KVER> (the plain release name the module pairs depend
@@ -1017,7 +1035,7 @@ packages:
     sources:
       - nvidia
     env:
-      HELPERS_VER: 10
+      HELPERS_VER: 11
       # The Pages pool path of the published kernel lane debs (the URL =
       # base + the pinned per-variant file name).
       PVE_HEADERS_BASE: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/"
@@ -1076,30 +1094,24 @@ packages:
       # the image installs, from NVIDIA's own APT repository (libcuda1 is
       # versioned like the whole NVIDIA stack there, e.g. 615.71.10-1 -> tag
       # 615.71.10); Debian's user-space is too old for the image kernel.
-      # The release must pair on BOTH sides: the repo user-space candidate
-      # AND an existing open-gpu-kernel-modules tag. NVIDIA has shipped
-      # user-space releases whose module source was not tagged (620.70.06,
-      # 2026-11-04: candidate without any 620 tag — the clone died on a
-      # missing branch and killed the lane). Walk every repo release
-      # (newest first) and pick the first one whose tag exists; the tag
-      # check keeps module and user-space the SAME release the derived
-      # image then pins (gpu-set-stage.py), so the pairing gate can never
-      # straddle two releases.
-      "${SAVE_PWD}/src/nvidiapreinstall/usr/sbin/nvidia-apt-repo"
-      apt-get update -qq
-      NVIDIA_REPO="https://github.com/NVIDIA/open-gpu-kernel-modules.git"
-      NVIDIAOPEN_VER=""
-      while IFS=' |' read -r _ v _; do
-        [ -n "${v}" ] || continue
-        v="${v%-*}"
-        if [ -z "${NVIDIAOPEN_VER}" ] \
-          && git ls-remote --exit-code --tags "${NVIDIA_REPO}" \
-               "refs/tags/${v}" > /dev/null 2>&1; then
-          NVIDIAOPEN_VER="${v}"
-        fi
-      done < <(apt-cache madison libcuda1)
-      test -n "${NVIDIAOPEN_VER}" \
-        || { echo "ERROR: no NVIDIA user-space release has a matching open-gpu-kernel-modules tag" >&2; exit 1; }
+      # Rolling pin (owner order 2026-11-09, the kernel-stream pattern — auto
+      # detect + fallback): DaemonCores-CI scripts/deb_helpers.sh
+      # nvidia_driver_detect takes NVIDIA_APT_REPO as the repo argument
+      # (default debian13, an EXTRA_ENV key — non-secret, content-hashed, a
+      # change rebuilds the lane), parses NVIDIA's OWN Packages index
+      # directly (signed repo base unchanged; the cuda-keyring addition for
+      # the IMAGE user-space stays gpu-set-stage.py + the shipped
+      # usr/sbin/nvidia-apt-repo, no apt update in this build any more),
+      # walks the candidates NEWEST-FIRST and takes the FIRST one whose
+      # open-gpu-kernel-modules tag exists (releases shipped without a
+      # module tag are skipped, never hand-forced) and exports
+      # NVIDIA_DRIVER_VERSION. A preset NVIDIA_DRIVER_VERSION is honored
+      # verbatim (a pin wins over detection). The pairing gate between the
+      # repo user-space and the module tag stays: the derived image pins the
+      # SAME release (gpu-set-stage.py), so the pairing can never straddle
+      # two releases.
+      nvidia_driver_detect
+      NVIDIAOPEN_VER="${NVIDIA_DRIVER_VERSION}"
       rm -rf /build/nvidia-open
       git clone --quiet --depth=1 --branch "${NVIDIAOPEN_VER}" \
         https://github.com/NVIDIA/open-gpu-kernel-modules.git /build/nvidia-open
@@ -1166,6 +1178,22 @@ packages:
 
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
+      # The deb carries its own runtime-knob payload (owner order 05/11: the
+      # host-side dc-gpu-lxc tune is folded INTO the driver deb, no separate
+      # package): usr/sbin/dc-nvidia-tune, the one-shot unit it starts and
+      # the postinst that enables the unit. Idempotent knobs; the MPS branch
+      # self-gates on the IA loader-policy conf (dc-gpu-ia-nvidia.conf),
+      # gaming gets the plain tune — the modprobe dc-gpu-* confs stay the
+      # policy.
+      mkdir -p "${DESTDIR}/usr/sbin" \
+        "${DESTDIR}/usr/lib/systemd/system"
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/usr/sbin/dc-nvidia-tune" \
+        "${DESTDIR}/usr/sbin/dc-nvidia-tune"
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/usr/lib/systemd/system/dc-nvidia-tune.service" \
+        "${DESTDIR}/usr/lib/systemd/system/dc-nvidia-tune.service"
+      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/postinst" \
+        "${DESTDIR}/DEBIAN/postinst"
+      chmod 755 "${DESTDIR}/usr/sbin/dc-nvidia-tune" "${DESTDIR}/DEBIAN/postinst"
       # Package version = NVIDIA release (what the derived-image lane compares to
       # libcuda1) + the kernel deb version it was built against; Depends pins
       # the kernel deb version exactly.
@@ -1179,7 +1207,7 @@ packages:
         "${DESTDIR}/DEBIAN/control"
 
       ( cd "${DESTDIR}" && \
-        find lib -type f | xargs md5sum | sed 's|lib/|/lib/|' \
+        find usr lib -type f -not -path 'DEBIAN/*' | xargs md5sum | sed -e 's|usr/|/usr/|' -e 's|lib/|/lib/|' \
         > DEBIAN/md5sums )
 
       dpkg-deb --build "${DESTDIR}" \
