@@ -1273,6 +1273,8 @@ packages:
         echo "ar = 'ar'"
         echo "strip = 'strip'"
         echo "pkg-config = 'pkg-config'"
+        echo "rust = 'rustc'"
+        echo "cargo = 'cargo'"
         echo "[host_machine]"
         echo "system = 'linux'"
         echo "cpu_family = 'x86_64'"
