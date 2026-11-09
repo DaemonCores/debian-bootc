@@ -1335,7 +1335,7 @@ packages:
         exit 1
       fi
       apt-get install -y --no-install-recommends \
-        build-essential meson ninja-build pkgconf curl xz-utils dpkg-dev binutils
+        build-essential meson ninja-build pkgconf curl xz-utils dpkg-dev binutils llvm-dev libudev-dev
 
       rm -rf /build/mesa /build/mesa-src
       mkdir -p /build/mesa-src
