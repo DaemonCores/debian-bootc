@@ -41,7 +41,7 @@ def _module() -> types.ModuleType:
     """
     module = types.ModuleType('system_config')
     exec(
-        compile((INSTALLER / 'bootc_installer' / 'utils' /
+        compile((INSTALLER  / 'utils' /
                  'system_config.py').read_text(), 'system_config.py', 'exec'),
         module.__dict__
     )

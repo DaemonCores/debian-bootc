@@ -7,7 +7,7 @@ from typing import Any
 
 BUILDER = Path(__file__
                ).resolve().parents[2] / 'workflows' / 'bootc-debs-builder'
-INSTALLER = BUILDER / 'bootc-installer-src' / 'bootc_installer'
+INSTALLER = BUILDER / 'bootc-installer-src'
 FISHERMAN = BUILDER / 'fisherman-src' / 'fisherman'
 
 SUPPORTED = """\
