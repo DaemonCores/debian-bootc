@@ -1332,10 +1332,18 @@ packages:
 
       rm -rf /build/mesa /build/mesa-src
       mkdir -p /build/mesa-src
-      curl -fsSL "https://archive.mesa3d.org/mesa-${MESA_VER}.tar.xz" \
-        | tar -xJ -C /build/mesa-src --strip-components=1
-      test -f /build/mesa-src/meson.build \
-        || { echo "ERROR: mesa ${MESA_VER} source tree is empty" >&2; exit 1; }
+      # archive.mesa3d.org resets bursts (8 level downloads at once) — retry,
+      # and only the decompressed content test below decides the outcome.
+      for attempt in 1 2 3 4 5; do
+        curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 \
+          "https://archive.mesa3d.org/mesa-${MESA_VER}.tar.xz" \
+          | tar -xJ -C /build/mesa-src --strip-components=1 \
+          && test -f /build/mesa-src/meson.build \
+          && break
+        [ "${attempt}" -lt 5 ] || exit 1
+        rm -rf /build/mesa-src && mkdir -p /build/mesa-src
+        sleep $((attempt * 15))
+      done
 
       # Every driver the architecture supports: left on `auto`, never listed.
       # The profile options are set above, the optimisation level comes from
