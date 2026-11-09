@@ -1362,7 +1362,10 @@ packages:
         -Dglx=disabled -Degl=disabled -Dgbm=disabled -Dglvnd=disabled \
         -Dplatforms= -Dbuild-tests=false -Dstrip=true \
         && ninja -C "${TOOLDIR}"
-      export PATH="$(find "${TOOLDIR}" -type f \( -name mesa_clc -o -name vtn_bindgen2 \) -printf '%h\n' | sort -u | tr '\n' ':')${PATH}"
+      export PATH="$(find "${TOOLDIR}" -type f \( -name mesa_clc -o -name vtn_bindgen \) -printf '%h\n' | sort -u | tr '\n' ':')${PATH}"
+      # mesa renames this tool: 25.x ships 'vtn_bindgen'
+      # (src/compiler/spirv/meson.build:86), master renamed it 'vtn_bindgen2'
+      # — the find above covers whichever the version builds.
 
       # Every driver the architecture supports: left on `auto`, never listed.
       # The profile options are set above, the optimisation level comes from
