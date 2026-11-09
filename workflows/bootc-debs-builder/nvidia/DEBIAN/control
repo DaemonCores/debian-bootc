@@ -4,7 +4,7 @@ Architecture: {{ ARCH }}
 Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
 Section: kernel
 Priority: optional
-Depends: daemoncores-kernel-{{ KVER }} (= {{ VER }})
+Depends: linux-image-{{ KVER }} (= {{ VER }})
 Description: NVIDIA open kernel modules (GPU compute profile)
  The NVIDIA open kernel modules (nvidia.ko, nvidia-uvm, nvidia-drm,
  nvidia-modeset, nvidia-peermem) built in CI against the project kernel

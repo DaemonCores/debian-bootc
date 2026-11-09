@@ -191,7 +191,9 @@ def test_derive_builds_the_nvidia_containerfile(tmp_path: Path) -> None:
     assert 'FROM reg/base:latest_amd64' in saved
     assert 'developer.download.nvidia.com' in saved
     assert 'cuda-keyring' in saved
-    for pkg in ('libcuda1', 'gpu-gaming-nvidia'):
+    for pkg in (
+        'libcuda1', 'gpu-gaming-nvidia', 'kflav', 'linux-modules-${kflav}'
+    ):
         assert pkg in saved, pkg
     assert 'requires-eula="nvidia"' in saved
     assert run(tmp_path, 'derived').stdout.strip() == \
@@ -336,6 +338,12 @@ def a2o_path(tmp_path: Path) -> str:
             'for arg in "$@"; do',
             '    case "$arg" in */refs/heads*) mkdir -p "$arg" ;; esac',
             'done',
+            # ls of /usr/lib/modules: the base deployment of the fixture
+            # carries one kernel of a flavour-suffixed release.
+            'for arg in "$@"; do',
+            '    case "$arg" in */usr/lib/modules) '
+            'echo "d00755 0 0 0 /usr/lib/modules/7.2.15-x64v2-xanmod1" ;; esac',
+            'done',
             'exit 0',
         ]) + '\n',
         encoding='utf-8'
@@ -382,7 +390,7 @@ def a2o_debs(tmp_path: Path) -> Path:
         'nvidia-opencl-icd',
         'nvidia-vulkan-icd',
         'firmware-nvidia-gsp',
-        'gpu-gaming-nvidia',
+        'gpu-gaming-nvidia-x64v2',
     ):
         (root / pkg / 'DEBIAN').mkdir(parents=True)
         (root / pkg / 'DEBIAN' / 'control').write_text(
@@ -490,7 +498,7 @@ def test_derive_apt2ostree_composes_the_nvidia_deployment(
     assert result.stdout.strip() == expected
     work = cache.parent / 'derive-a2o' / 'gpu-gaming-nvidia'
     lockfile = (work / 'nvidia.lock').read_text(encoding='utf-8')
-    assert 'Package: gpu-gaming-nvidia' in lockfile
+    assert 'Package: gpu-gaming-nvidia-x64v2' in lockfile
     assert 'Version: 580.95.05-1' in lockfile
     assert 'SHA256: ' in lockfile
     driver = (work / 'configure.py').read_text(encoding='utf-8')

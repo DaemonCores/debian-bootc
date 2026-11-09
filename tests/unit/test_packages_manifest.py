@@ -43,8 +43,8 @@ def test_grub_entries_follow_the_fedora_mainline() -> None:
 
 
 def test_custom_kernel_does_not_masquerade_as_debian() -> None:
-    """The project kernel has its own name and Provides only the minimal one."""
-    lines = _packages()['linux-image']['build'].splitlines()
+    """The profile kernels own their name; Provides stay the minimal one."""
+    lines = _packages()['linux-image-profile']['build'].splitlines()
     build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
     assert 'Package: ${KERNEL_PKG}/' in build
     assert 'KERNEL_PKG="daemoncores-kernel-' in build
@@ -159,35 +159,45 @@ def _variants(name: str) -> dict[str, Any]:
 
 
 def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
-    """The kernel entry keeps the arm64 page-size split alongside the flavours.
+    """The page size is per ARCHITECTURE, inside the arch entries (owner 05/11).
 
-    The 7 flavours (x64v1..v4 amd64, armv8.0/v8.2-lse/v9-sve2 arm64) come
-    from the owner arbitration of 2026-11-03 13:05.
+    No separate 16k kernel entry and no generic baseline: the two profiles
+    (ia, vm) x the 7 flavours (x64v1..v4 amd64, armv8.0 / armv8.2-lse /
+    armv9-sve2 arm64) are the whole kernel estate. armv8.2-lse and
+    armv9-sve2 default to 16 KB in-entry (Cortex-A76+ class, TLB-pressure
+    gains); armv8.0 (Cortex-A53 class, no 16 KB granule) stays 4 KB
+    automatically; x86 is trivially 4 KB everywhere.
     """
-    entry = _packages()['linux-image']
-    variants = _variants('linux-image')
-    assert '' in variants  # the plain (x64v1 / 4 KB arm64) kernel
-    assert '-16k' in variants
+    entry = _packages()['linux-image-profile']
+    variants = _variants('linux-image-profile')
     assert set(variants) == {
-        '',
-        '-x64v2',
-        '-x64v3',
-        '-x64v4',
-        '-armv8.0',
-        '-armv8.2-lse',
-        '-armv9-sve2',
-        '-16k',
+        f'{profile}-{flav}'
+        for profile in ('ia', 'vm')
+        for flav in (
+            'x64v1', 'x64v2', 'x64v3', 'x64v4', 'armv8.0', 'armv8.2-lse',
+            'armv9-sve2'
+        )
     }
-    assert entry['env']['KERNEL_PAGES'] == '4k'
-    assert variants['-16k']['env']['KERNEL_PAGES'] == '16k'
-    assert variants['-16k']['when'] == {'arch': 'arm64'}
-    assert variants['']['env']['KERNEL_ARCH_LEVEL'] == 'x64v1'
-    for flavour in ('-x64v2', '-x64v3', '-x64v4'):
-        assert variants[flavour]['when'] == {'arch': 'amd64'}
-        assert variants[flavour]['env']['KERNEL_ARCH_LEVEL'] == flavour[1:]
-    for flavour in ('-armv8.0', '-armv8.2-lse', '-armv9-sve2'):
-        assert variants[flavour]['when'] == {'arch': 'arm64'}
-        assert variants[flavour]['env']['KERNEL_ARCH_LEVEL'] == flavour[1:]
+    # x64v4 = MANQUANT AJOUTÉ: present in BOTH profiles.
+    for profile in ('ia', 'vm'):
+        assert variants[f'{profile}-x64v4']['env']['KERNEL_ARCH_LEVEL'
+                                                   ] == 'x64v4'
+        assert variants[f'{profile}-x64v4']['when'] == {'arch': 'amd64'}
+    # ENTRY-LEVEL default = 16 KB EVERYWHERE (owner 05/11 18:4x, amd64
+    # included); the ONLY 4k redeclaration = the armv8.0 arch-incompatible
+    # signal (no 16 KB granule); the x64 variants never redeclare a page
+    # size (their fallback is architectural, x86 mainline has none).
+    assert entry['env']['KERNEL_PAGES'] == '16k'
+    for profile in ('ia', 'vm'):
+        for flav in ('armv8.2-lse', 'armv9-sve2'):
+            assert 'KERNEL_PAGES' not in variants[f'{profile}-{flav}']['env'], (
+                f'{profile}-{flav}'
+            )
+            assert variants[f'{profile}-{flav}']['when'] == {'arch': 'arm64'}
+        assert variants[f'{profile}-armv8.0']['env']['KERNEL_PAGES'] == '4k'
+        assert variants[f'{profile}-armv8.0']['when'] == {'arch': 'arm64'}
+        for flav in ('x64v1', 'x64v2', 'x64v3', 'x64v4'):
+            assert 'KERNEL_PAGES' not in variants[f'{profile}-{flav}']['env']
     assert 'when' not in entry
     root = (
         MANIFEST.parents[2].parent / 'DaemonCores-CI' / 'build-deb' /
@@ -201,14 +211,29 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
 
 
 def test_each_arm_module_follows_its_kernel() -> None:
-    """Older devices build against the 4 KB kernel, recent ones the 16 KB."""
+    """Each device's kernel is picked by ARCHITECTURE class, never per device.
+
+    A53/A72-class devices (Pi 3/4, RK3399, H616, i.MX8M, MT8183, RK356x) ride
+    armv8.0 (4 KB automatically); A76-class devices (Pi 5, RK3588) ride
+    armv8.2-lse (16 KB by default). No rpiN/rkM token appears in a kernel entry
+    — the page size and the flavour are arch data, the device names live only in
+    the module overlays.
+    """
     devices = _variants('linux-modules-arm-device')
-    for old in ('rpi3', 'rpi4', 'rk3399', 'h616', 'imx8m', 'mt8183'):
-        assert devices[old]['deps'] == ['linux-image'], old
-        assert 'env' not in devices[old], old
-    for recent in ('rpi5', 'rk3588', 'rk3566'):
-        assert devices[recent]['deps'] == ['linux-image-16k'], recent
-        assert devices[recent]['env'] == {'KERNEL_SUFFIX': '-16k'}, recent
+    for old in ('rpi3', 'rpi4', 'rk3399', 'h616', 'imx8m', 'mt8183', 'rk3566'):
+        assert devices[old]['deps'] == ['linux-image-ia-armv8.0'], old
+        assert devices[old]['env'] == {'KERNEL_SUFFIX': '-ia-armv8.0'}, old
+    for recent in ('rpi5', 'rk3588'):
+        assert devices[recent]['deps'] == ['linux-image-ia-armv8.2-lse'], recent
+        assert devices[recent]['env'] == {
+            'KERNEL_SUFFIX': '-ia-armv8.2-lse'
+        }, recent
+    # The kernel entries never name a device.
+    kernel_entry = json.dumps(_packages()['linux-image-profile'])
+    for device in (
+        'rpi3', 'rpi4', 'rpi5', 'rk3588', 'rk3566', 'h616', 'imx8m', 'mt8183'
+    ):
+        assert device not in kernel_entry, device
 
 
 def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
@@ -238,24 +263,30 @@ def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
 
 
 def test_there_is_no_unsigned_twin_anymore() -> None:
-    """L1: one kernel per (arch, page size); enforcement is not a variant."""
-    variants = _variants('linux-image')
-    assert '-nosign' not in variants
-    assert '-16k-nosign' not in variants
+    """L1: one kernel per (profile, flavour); enforcement is not a variant."""
+    variants = _variants('linux-image-profile')
+    assert not any('-nosign' in k for k in variants)
     # The enforcement is decided at install (module.sig_enforce=1 karg), so the
     # kernel itself is built without MODULE_SIG_FORCE.
-    assert _packages()['linux-image']['env']['KERNEL_SIGNING_ENFORCE'] == 'no'
-    assert 'unsigned-kernel' not in (
-        variants[''].get('when') or variants['-16k'].get('when') or {}
+    assert (
+        _packages()['linux-image-profile']['env']['KERNEL_SIGNING_ENFORCE'] ==
+        'no'
+    )
+    assert all(
+        'unsigned-kernel' not in (v.get('when') or {})
+        for v in variants.values()
     )
 
 
 def test_kernel_build_provides_the_signed_names() -> None:
-    """The kernel Provides the names the images and modules install by."""
-    build = _packages()['linux-image']['build']
+    """The profile kernel Provides the names images and modules install by."""
+    build = _packages()['linux-image-profile']['build']
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
     assert 'OTHER_PKG' not in build
-    assert 'daemoncores-kernel-${ORIG_PKG#linux-image-}' in build
+    assert 'daemoncores-kernel-${KERNEL_PROFILE}-${KVER}' in build
+    # The virtual release name is provided versioned: the module pairs
+    # Depends on linux-image-<KVER> (= kernel version) on either profile.
+    assert 'linux-image-%s (= %s)' in build
 
 
 def test_the_installer_carries_the_enforcement_switch() -> None:
@@ -273,16 +304,17 @@ def test_the_boot_manifest_has_no_nosign_category_suffix() -> None:
     text = tests.read_text()
     assert 'kargs: ["module.sig_enforce=1"]' in text
     assert '-nosign' not in text
-    assert 'unsigned-kernel' not in str(
-        _variants('linux-image')['-16k'].get('when', {})
+    assert all(
+        'unsigned-kernel' not in str(v.get('when') or {})
+        for v in _variants('linux-image-profile').values()
     )
 
 
 def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
-    """The kernel Provides the names the images and modules install by."""
-    build = _packages()['linux-image']['build']
+    """The profile kernel Provides the names the modules install by."""
+    build = _packages()['linux-image-profile']['build']
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
-    assert 'daemoncores-kernel-${ORIG_PKG#linux-image-}' in build
+    assert 'daemoncores-kernel-${KERNEL_PROFILE}-${KVER}' in build
     assert 'OTHER_PKG' not in build
 
 
@@ -332,7 +364,7 @@ def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
     amd64 = {p['name']: p for p in _expand('amd64')}
     arm64 = {p['name'] for p in _expand('arm64')}
     for profile in ('gaming', 'ia'):
-        for level in ('x64v1', 'x64v2', 'x64v3'):
+        for level in ('x64v1', 'x64v2', 'x64v3', 'x64v4'):
             entry = amd64[f'gpu-userspace-{profile}-{level}']
             assert entry['env']['GPU_PROFILE'] == profile
             assert entry['env']['GPU_LEVEL'] == level
@@ -361,29 +393,33 @@ def test_gpu_module_sets_expand_to_the_four_variants() -> None:
     """GPU FINAL (owner 2026-11-03): the four module sets exist on amd64.
 
     gpu-ia and gpu-gaming are modules-only builds over the standard kernel
-    (deps: linux-image); the -nvidia variants are the loader-policy debs on
-    top of their sibling open set and the linux-modules-nvidia base. No set
-    on arm64 (the arm GPUs ride the base kernel fold).
+    (deps: linux-image); the -nvidia variants are the loader-policy debs on top
+    of their sibling open set and the linux-modules-nvidia base. No set on arm64
+    (the arm GPUs ride the base kernel fold).
     """
     expanded = {p['name'] for p in _expand('amd64')}
-    for name in ('gpu-ia', 'gpu-gaming', 'gpu-ia-nvidia', 'gpu-gaming-nvidia'):
-        assert name in expanded, name
+    flavours = ('x64v1', 'x64v2', 'x64v3', 'x64v4')
+    for sett in ('ia', 'gaming'):
+        for flavour in flavours:
+            # Y compris x64v4: the full set matrix of the profile kernels.
+            assert f'gpu-{sett}-{flavour}' in expanded, (sett, flavour)
+            assert f'gpu-{sett}-nvidia-{flavour}' in expanded, (sett, flavour)
     amd64 = _packages()
     set_entry = amd64['linux-modules-gpu']
     assert set_entry['variant-env'] == 'GPU_VARIANT'
     assert set_entry['sources'][1] == 'kernel-src/modules/gpu'
     variants = amd64['linux-modules-gpu']['variants']
-    assert variants['ia']['deps'] == ['linux-image']
-    assert variants['gaming']['deps'] == ['linux-image']
-    assert variants['ia-nvidia']['deps'] == [
-        'linux-image',
-        'gpu-ia',
-        'linux-modules-nvidia',
-    ]
-    assert variants['gaming-nvidia']['deps'] == [
-        'linux-image',
-        'gpu-gaming',
-        'linux-modules-nvidia',
+    for sett in ('ia', 'gaming'):
+        for flavour in flavours:
+            assert variants[f'{sett}-{flavour}']['deps'] == [
+                f'linux-image-ia-{flavour}'
+            ], (sett, flavour)
+            assert variants[f'{sett}-{flavour}']['env']['GPU_SET'] == sett
+            assert variants[f'{sett}-{flavour}']['env']['GPU_FLAV'] == flavour
+    assert variants['ia-nvidia-x64v4']['deps'] == [
+        'linux-image-ia-x64v4',
+        'gpu-ia-x64v4',
+        'linux-modules-nvidia-x64v4',
     ]
     for name in ('gpu-ia', 'gpu-gaming', 'gpu-ia-nvidia', 'gpu-gaming-nvidia'):
         assert name not in {p['name'] for p in _expand_arm64()}
@@ -453,10 +489,9 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
 def test_gpu_module_sets_ship_their_loader_policy() -> None:
     """Every set carries its /etc/modprobe.d policy file.
 
-    The in-tree sets blacklist nothing of each other (exactly one is
-    installed); the compute profiles keep nouveau away from the open NVIDIA
-    modules, gaming pins dc=1 and the gaming-NVIDIA policy enables the
-    nvidia_drm modeset.
+    The in-tree sets blacklist nothing of each other (exactly one is installed);
+    the compute profiles keep nouveau away from the open NVIDIA modules, gaming
+    pins dc=1 and the gaming-NVIDIA policy enables the nvidia_drm modeset.
     """
     conf_dir = (
         REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modprobe'
@@ -495,9 +530,8 @@ def test_gpu_module_sets_own_the_kernel_paths_once() -> None:
     ):
         assert field in control, field
     build = _packages()['linux-modules-gpu']['build']
-    assert 'CONFLICTS="gpu-gaming, gpu-gaming-nvidia"' in build
-    assert 'CONFLICTS="gpu-ia, gpu-ia-nvidia"' in build
-    assert 'REPLACES="daemoncores-kernel-${KVER} (= ${BUILT_VER})"' in build
+    assert 'REPLACES="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"' in build
+    assert 'gpu-${OTHER}-${GPU_FLAVS}' in build
     # The profile build is proved in the build: DC pin greps the final config.
     assert 'CONFIG_DRM_AMD_DC is not set$' in build
     assert 'CONFIG_DRM_AMD_DC=y$' in build

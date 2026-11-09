@@ -118,6 +118,21 @@ CONF_OF = {
 }
 
 
+def flavour_of_kver(kver: str) -> str:
+    """Split the flavour segment out of a kernel release string.
+
+    Args:
+        kver: A release string like ``7.2.15-x64v3-xanmod1``.
+
+    Returns:
+        The flavour segment (``x64v3`` here); ``''`` when the release
+        carries no flavour segment.
+    """
+    base = kver.rsplit("-xanmod1", 1)[0]
+    tail = base.split("-", 1)
+    return tail[1] if len(tail) > 1 else ""
+
+
 def fail(message: str) -> NoReturn:
     """Print an error on stderr and exit with status 1.
 
@@ -370,8 +385,14 @@ RUN base="{NVIDIA_REPO_BASE}" \\
     && dpkg -i "$work/cuda-keyring.deb" \\
     && rm -rf "$work"
 RUN apt-get update \\
+    && kpkg=$(dpkg-query -W -f='\\${{Package}}' 'daemoncores-kernel-*' \\
+         | head -n 1) \\
+    && kflav=$(printf '%s' "$kpkg" \\
+         | sed -E 's/^daemoncores-kernel-[a-z]+-[0-9][^-]*-/' \\
+         | sed 's/-xanmod1$//') \\
+    && [ -n "$kflav" ] \\
     && module_release=$(dpkg-query -W -f='\\${{Version}}' \\
-         linux-modules-nvidia | sed 's/-.*//; s/+.*//') \\
+         "linux-modules-${{kflav}}" | sed 's/-.*//; s/+.*//') \\
     && pinned="" \\
     && for p in {pkgs}; do \\
          v=$(apt-cache madison "$p" \\
@@ -381,7 +402,8 @@ RUN apt-get update \\
            echo "no NVIDIA user-space $p=$module_release" >&2; exit 1; }}; \
          pinned="$pinned $p=$v"; \\
        done \\
-    && apt-get install -y --no-install-recommends $pinned {set_name} \\
+    && setdeb="{set_name}-${{kflav}}" \\
+    && apt-get install -y --no-install-recommends $pinned "$setdeb" \\
     && userspace_release=$(dpkg-query -W -f='\\${{Version}}' \\
          libcuda1 | sed 's/-.*//') \\
     && {{ [ "$module_release" = "$userspace_release" ] \\
@@ -482,7 +504,43 @@ def _parse_ostree_base(base: str) -> tuple[Path, str]:
     return Path(repo), ref
 
 
-def collected_debs(set_name: str) -> list[Path]:
+def _base_flavour(repo: Path, ref: str) -> str:
+    """Read the kernel flavour of an ostree base deployment.
+
+    Args:
+        repo: The base repository path.
+        ref: The deployment ref to inspect.
+
+    Returns:
+        The flavour segment of the ONE kernel the base carries (the
+        linux-modules-* pairs of the estate are per flavour).
+
+    Raises the stage ``fail`` exit when the listing is unreadable or not
+    exactly one kernel dir — the derive must never guess a flavour.
+    """
+    done = subprocess.run(
+        ["ostree", f"--repo={repo}", "ls", ref, "/usr/lib/modules"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        fail(f"base deployment {ref} not listed: {done.stderr[-400:]}")
+    kvers = sorted({
+        node.rsplit("/", 1)[1]
+        for line in done.stdout.splitlines()
+        for node in line.split()
+        if node.startswith("/usr/lib/modules/") and node.rsplit("/", 1)[1]
+    })
+    if len(kvers) == 0 or len(kvers) > 1:
+        fail(f"base deployment {ref} carries {len(kvers)} kernels: {kvers}")
+    flavour = flavour_of_kver(kvers[0])
+    if not flavour:
+        fail(f"kernel {kvers[0]} carries no flavour segment")
+    return flavour
+
+
+def collected_debs(set_name: str, flavour: str | None = None) -> list[Path]:
     """Return the NVIDIA debs the derivation layers on the base tree.
 
     The set deb and any NVIDIA user-space packages already cached this
@@ -493,16 +551,24 @@ def collected_debs(set_name: str) -> list[Path]:
 
     Args:
         set_name: One of ``SETS`` with the ``-nvidia`` suffix.
+        flavour: The flavour segment of the base kernel; the set deb itself
+            is named <set>-<flavour> since the full matrix exists.
 
     Returns:
         The deb files, one per package.
     """
+    suffixed = f"{set_name}-{flavour}" if flavour else set_name
     cache = apt_cache_dir()
     debs: dict[str, Path] = {}
     for deb in sorted(cache.glob("*.deb")):
-        debs.setdefault(deb.name.split("_")[0], deb)
+        name = deb.name.split("_")[0]
+        # A flavour-suffixed package shadows its unsuffixed cached twin (the
+        # estate names carry the flavour; the cache may hold both).
+        debs.setdefault(name, deb)
+        if name == suffixed:
+            debs[suffixed] = deb
     missing: list[str] = []
-    for pkg in (*NVIDIA_PKGS, set_name):
+    for pkg in (*NVIDIA_PKGS, suffixed):
         if pkg in debs:
             continue
         done = subprocess.run(
@@ -523,7 +589,7 @@ def collected_debs(set_name: str) -> list[Path]:
             "apt2ostree derive needs the NVIDIA user-space, "
             f"no deb for: {', '.join(missing)}"
         )
-    return [debs[p] for p in (*NVIDIA_PKGS, set_name)]
+    return [debs[p] for p in (*NVIDIA_PKGS, suffixed)]
 
 
 def _apt2ostree_driver(
@@ -611,7 +677,8 @@ def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
         where, ref = _parse_ostree_base(base or State("derived-base").read())
     except ValueError as error:
         fail(str(error))
-    debs_list = collected_debs(set_name)
+    flavour = _base_flavour(where, ref)
+    debs_list = collected_debs(set_name, flavour)
     workdir = apt_cache_dir().parent / "derive-a2o" / set_name
     workdir.mkdir(parents=True, exist_ok=True)
     mirror = workdir / "_build" / "apt" / "mirror"

@@ -26,439 +26,25 @@
 # deb_helpers.sh changes (other repository, invisible to the content hash).
 packages:
   # ===========================================================================
-  # Kernel packages — ONE kernel build per page size + ONE modules entry per
-  # ARM device. The kernel (vmlinuz + common modules) is compiled in the
-  # `linux-image` entry from the base config (the arch options are folded in
-  # it, see kernel/config) and, on arm64, the page-size overlay. Each
-  # `linux-modules-<device>` entry depends on its kernel and rebuilds ONLY the
-  # per-device modules from the device overlay. This saves N-1 full kernel
-  # rebuilds AND lets the builder skip a device entirely when that device's
-  # overlay is unchanged.
-  #
-  # Wave layout (computed by the setup job from the `deps:` fields):
-  #   wave 0: linux-image, linux-image-16k   (no deps, full bindeb-pkg once)
-  #   wave 1: linux-modules-rpi3, -rpi4      (deps: [linux-image]; modules-only)
-  #           linux-modules-rpi5, -rk3588    (deps: [linux-image-16k])
-  #
-  # The device modules packages are OPTIONAL — the kernel works without them.
-  # They carry device-specific SoC / Ethernet PHY / MMC / USB / RTC drivers and
-  # are installed alongside the kernel; they Depend on the kernel package.
+  # Kernel packages — the PROFILE kernel estate ONLY (owner order 05/11:
+  # the GÉNÉRIQUE baseline kernels are DELETED — the linux-image entry with
+  # its 8 generic variants (x64v1 plain, -x64v2..v4, the 3 arm flavours and
+  # -16k) is gone; kernels = ONLY linux-image-profile below).
+  # PAGE SIZE = PER ARCHITECTURE, never per device (owner order 05/11 18:3x):
+  # the default page size lives INSIDE the arch entries — armv8.2-lse and
+  # armv9-sve2 are 16 KB (ARM64_16K_PAGES=y, Cortex-A76+ class: TLB-pressure
+  # gains on multi-GB LLM), armv8.0 stays 4 KB AUTOMATICALLY (its Cortex-A53
+  # class does not support the 16 KB granule — TGran16 absent). x86_64
+  # falls back automatically too: the mainline x86 tree carries no 16 KB
+  # base page at all (PAGE_SHIFT 12 is fixed; the pages/* overlays are the
+  # arm64 ARM64_*_PAGES Kconfig choice), so its builds merge no page overlay
+  # — the fallback is DETECTED, never hand-picked. Device names (rpi3/rpi5/rk3588/...) NEVER
+  # appear in a kernel entry; they live only in the device MODULE overlays
+  # (kernel-src/modules/embeded/*.cfg, the linux-modules-arm-device debs).
+  # The kernel (vmlinuz + common modules) and the per-flavour headers are
+  # compiled here; no separate page-size entry exists anywhere.
   # ===========================================================================
-
-  # linux-image: the ONE full kernel build. Merges the BASE config
-  # (kernel/config — filesystems, virtio, serial, disables, the common
-  # networking/cgroup/namespace set, AND the folded '# arm64 built-in' /
-  # '# amd64 built-in' arch sections) into the Debian defconfig.
-  # No architecture overlay is merged: the former kernel/modules/arm and
-  # kernel/modules/x86_64 are folded into the base config and deleted.
-  #
-  # Two kernels on arm64 (docs/Handoff-Decisions.md, "Two arm64 kernels"): the page size
-  # is a compile-time choice, so the 4 KB kernel (older devices: Raspberry Pi 3
-  # and 4) and the 16 KB kernel (recent hardware: Raspberry Pi 5, RK3588) are two
-  # builds of this same script. The variant key is a name suffix: "": the
-  # plain `linux-image` (4 KB on arm64; the x64v1 flavour on amd64). Since the
-  # 7-flavour arbitration (owner 2026-11-03 13:05) the matrix is: x64v1..v4
-  # on amd64 (variant keys -x64v2/x64v3, -x64v4; KERNEL_ARCH_LEVEL selects
-  # the flavour fragment of the shared engine export and the flavour
-  # KCFLAGS), armv8.0 / armv8.2-lse / armv9-sve2 on arm64 (4 KB), and the
-  # 4 KB/16 KB page-size split of the plain arm64 baseline ("-16k" produces
-  # `linux-image-16k`, arm64 only). KERNEL_SUFFIX carries the name suffix,
-  # KERNEL_PAGES selects the page-size overlay.
-  - name: linux-image
-    ccache: true
-    variant-name-prefix: linux-image
-    variant-env: KERNEL_SUFFIX
-    variants:
-      "":
-        env:
-          KERNEL_ARCH_LEVEL: x64v1
-      "-x64v2":
-        when:
-          arch: amd64
-        deb-glob: "linux-image-common-x64v2_* linux-headers-x64v2_*"
-        env:
-          KERNEL_ARCH_LEVEL: x64v2
-      "-x64v3":
-        when:
-          arch: amd64
-        deb-glob: "linux-image-common-x64v3_* linux-headers-x64v3_*"
-        env:
-          KERNEL_ARCH_LEVEL: x64v3
-      "-x64v4":
-        when:
-          arch: amd64
-        deb-glob: "linux-image-common-x64v4_* linux-headers-x64v4_*"
-        env:
-          KERNEL_ARCH_LEVEL: x64v4
-      "-armv8.0":
-        when:
-          arch: arm64
-        deb-glob: "linux-image-common-armv8.0_* linux-headers-armv8.0_*"
-        env:
-          KERNEL_ARCH_LEVEL: armv8.0
-      "-armv8.2-lse":
-        when:
-          arch: arm64
-        deb-glob: "linux-image-common-armv8.2-lse_* linux-headers-armv8.2-lse_*"
-        env:
-          KERNEL_ARCH_LEVEL: armv8.2-lse
-      "-armv9-sve2":
-        when:
-          arch: arm64
-        deb-glob: "linux-image-common-armv9-sve2_* linux-headers-armv9-sve2_*"
-        env:
-          KERNEL_ARCH_LEVEL: armv9-sve2
-      "-16k":
-        when:
-          arch: arm64
-        deb-glob: "linux-image-common-16k_* linux-headers-16k_*"
-        env:
-          KERNEL_PAGES: "16k"
-    env:
-      # Kernel build primitives come from DaemonCores-CI scripts/
-      # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
-      # bump when those helpers change (other repository, invisible to the
-      # content hash of the lib files).
-      HELPERS_VER: 7
-      KERNEL_PAGES: "4k"
-      # ONE kernel per (arch, page size), shared by the enforcing and the lax
-      # install: MODULE_SIG_FORCE stays off in the kernel image. Enforcement
-      # is an install-time choice (`module.sig_enforce=1` kernel argument,
-      # written by the bootc-installer, default on) — never a second kernel
-      # package. Secure Boot and the EFI signatures apply to every build.
-      KERNEL_SIGNING_ENFORCE: "no"
-      # TEMPORARY KERNEL PIN replaces the `track:` resolution (2026-11-04,
-      # runs 41762298671): the engine probe (`require-patches: engine`) only
-      # checks a patch URL's PRESENCE, not its applicability, so the stable
-      # probe let 7.3.1 through while the CachyOS bore sibling
-      # (7.3/sched/0001-bore-cachy.patch) targets Cachy's own 7.3 tree — the
-      # build failed with `ERROR: patch bore does not apply to 7.3.1`, and a
-      # local dry-run on the vanilla 7.3 tree fails the bore hunks even with
-      # the whole XanMod+clearlinux set applied first. The patch data and the
-      # probe are engine data (DaemonCores-CI): both out of this lane. UNTIL
-      # CachyOS rebases bore for the vanilla 7.3 stable (or the engine probe
-      # verifies the dry-run), the kernel lane stays on the newest release
-      # whose whole shared set applies — the 7.2 series the published kernel
-      # was built from. Restore when unpinning:
-      #   track:
-      #     KERNEL_VER:
-      #       kernel-org: stable
-      #       require-patches: engine
-      #       digests:
-      #         KERNEL_SHA256: "linux-{version}.tar.xz"
-      KERNEL_VER: "7.2.15"
-      # tarball digest of linux-7.2.15.tar.xz, kernel.org sha256sums.asc.
-      KERNEL_SHA256: "d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
-    deb-glob: "linux-image-common_* linux-headers_*"
-    secret-env:
-      SB_SIGNING_KEY: SB_SIGNING_KEY
-      SB_SIGNING_CERT: SB_SIGNING_CERT
-    # Patch data (owner arbitration 2026-11-03 13:05): the production
-    # packages.yaml carry NO native `patches:` list — the canonical set
-    # (shared XanMod+clearlinux, bore series-gated, the debian-lane module
-    # carrier rocknix-btrtl) lives ONLY in the build engine
-    # (DaemonCores-CI build-deb/kernel-shared/patches-shared.yml), applied
-    # by the build block via CI_KERNEL_SHARED. A patch that cannot be
-    # downloaded or does not apply fails the kernel build, so the last-good
-    # published deb is kept.
-    sources:
-      # The base config (arch options folded in) and the source download
-      # feed this package's content hash. A per-device overlay change must NOT
-      # trigger a full kernel rebuild — it only rebuilds that device's modules
-      # entry. Debian-lane anchors only: the base config/pages and the
-      # shared set are engine data (CI_KERNEL_SHARED, hashed by the engine's
-      # shared term); the device module fragments of this lane live HERE
-      # (kernel/modules, hashed per modules entry — KERNEL FINAL v2).
-    # TEMPORARY KERNEL PIN (see the env comment above): the `track:` block
-    # was REMOVED so the resolution cannot override the pinned KERNEL_VER —
-    # the restore block is quoted in the env comment. No other kernel entry
-    # keeps a resolution while the pin is on.
-    build: |
-      set -euo pipefail
-
-      SAVE_PWD=$(pwd)
-      DEB_ARCH=$(dpkg --print-architecture)
-      case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
-      BASE_CONFIG="${CI_KERNEL_SHARED}/config"
-      test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: engine kernel-shared/config (base) missing" >&2; exit 1; }
-
-      # Install kernel build deps (build-essential + the kernel's own
-      # build-deps). libncurses-dev/bc are required by the kconfig merge.
-      apt-get update
-      apt-get install -y --no-install-recommends \
-        build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-        rsync libudev-dev elfutils dpkg-dev \
-        debhelper kmod libdw-dev curl xz-utils python3
-
-      # Download the kernel.org tarball resolved by `track:` and verify its
-      # sha256. The kernel is never a distribution source package.
-      # (kernel helpers of DaemonCores-CI scripts/kernel_helpers.sh, sourced
-      # implicitly by deb_helpers.sh in the same bash.)
-      kernel_fetch_source "${KERNEL_VER}" "${KERNEL_SHA256}"
-
-      # Apply the SHARED patch manifest (owner arbitration 2026-11-03 13:05:
-      # NO native `patches:` list is kept in a production packages.yaml —
-      # the patch data lives ONLY in the build engine, exported here as
-      # CI_KERNEL_SHARED). The manifest carries the shared XanMod+clearlinux
-      # set (stage common), the arm64 module-carrier entry (rocknix btrtl,
-      # stage arm64) and bore (series-gated); the arch/stage filter of the
-      # helper applies exactly this architecture's entries.
-      kernel_apply_patches \
-        "${CI_KERNEL_SHARED}/patches-shared.yml" \
-        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
-
-      # GPU kernel-tree patch sets (perf, per driver) of the SAME shared
-      # export: patches-gpu/{amd,intel}.yml ride the SAME dry-run
-      # all-or-nothing semantics and the same series resolution as the
-      # shared set. An EMPTY set is a no-op (the helper returns 0); entries
-      # only enter the build once the owner picks the patchset. A manifest
-      # already committed to the engine (CI commit pair) must be present:
-      # the guard keeps an older CI checkout from silently skipping it.
-      for GPU_DRIVER in amd intel; do
-        GPU_PATCH_YML="${CI_KERNEL_SHARED}/patches-gpu/${GPU_DRIVER}.yml"
-        [[ -f "${GPU_PATCH_YML}" ]] \
-          || { echo "ERROR: engine patches-gpu/${GPU_DRIVER}.yml missing" >&2; exit 1; }
-        kernel_apply_patches "${GPU_PATCH_YML}" \
-          "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
-      done
-
-      # THE PVE ADDITIVE SERIES (owner 05/11 13:0x): the same
-      # build-deb/kernel-shared export carries patches-pve.yml (the PVE
-      # rebase-proven part of their series — the 51 clean passants; the 85
-      # exclusions are documented in the manifest itself, series-anchored).
-      # Same dry-run all-or-nothing fuzz-0 semantics, applied after the sets
-      # above, BEFORE the config merge.
-      PVE_PATCHES_YML="${CI_KERNEL_SHARED}/patches-pve.yml"
-      [[ -f "${PVE_PATCHES_YML}" ]] \
-        || { echo "ERROR: engine patches-pve.yml missing (the PVE additive series)" >&2; exit 1; }
-      kernel_apply_patches "${PVE_PATCHES_YML}" \
-        "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
-
-      cd "${SRCDIR}"
-      make mrproper
-
-      # Start from the upstream defconfig of this arch. This entry IS the
-      # kernel build, so there is nothing to inherit from; the base config
-      # below layers the project choices on top.
-      make defconfig
-
-      CONFIG_FILES=()
-      # The transverse kconfig-shared fragments go FIRST on amd64, so the base
-      # config (appended last) wins with its '# amd64 built-in' section: the
-      # arch drivers are built-in (=y) in the kernel image, overriding the
-      # transverse module defaults by the kconfig last-wins rule.
-      if [ "${DEB_ARCH}" = "amd64" ]; then
-        # Shared kconfig fragments (owner arbitration 2026-11-03 12:55: the set
-        # lives in the build engine — DaemonCores-CI build-deb/kernel-shared/
-        # kconfig-shared, exported here as CI_KERNEL_SHARED; VE consumes the
-        # same export): the XanMod-flavoured x86 base and the GPU sets merged
-        # transversely (ONE optimised kernel, every vendor, no per-vendor
-        # matrix; KERNEL_GPU=none disables, mirrors the VE entry). amd64 only —
-        # The fragments are x86 config; the x64vN flavour fragment of THIS
-        # variant is merged too (KERNEL_ARCH_LEVEL): debian carries the SAME
-        # 7-flavour matrix as the PVE lane (owner 2026-11-03 13:05).
-        SHARED_KCFG="${CI_KERNEL_SHARED}/kconfig-shared"
-        CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
-        case "${KERNEL_GPU:-all}" in
-          all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
-          none) ;;
-          *) for PVE_GPU in ${KERNEL_GPU}; do CONFIG_FILES+=("${SHARED_KCFG}/gpu/${PVE_GPU}.cfg"); done ;;
-        esac
-        # The kernel FLAVOUR fragment (LOCALVERSION -x64vN-xanmod1) of this
-        # variant (KERNEL_ARCH_LEVEL) — baseline flavours carry it too; the
-        # guarded -s merge keeps the lane usable when the engine carries no
-        # fragment for the level.
-        [[ -s "${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
-          CONFIG_FILES+=("${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg")
-        # owner 05/11 16:2x: the kconfig-pve/pve.cfg fragment is GONE — the
-        # PVE deltas are already merged in kernel-src/config.cfg (unified
-        # kernel), re-adding them here would bulldoze that state.
-      fi
-
-      # The BASE config (filesystems, virtio, serial, disables, AND the folded
-      # '# arm64 built-in' / '# amd64 built-in' arch sections — one canonical
-      # kernel/config, no per-arch overlay anymore). Merged last on amd64 so
-      # the arch built-ins win; first on arm64 so the page-size overlay below
-      # stays the final word.
-      CONFIG_FILES+=("${BASE_CONFIG}")
-
-      # arm64 only: the page-size overlay of this kernel (4 KB or 16 KB,
-      # kernel/pages/${KERNEL_PAGES}). It is merged last so it wins, and the
-      # modules built later inherit it from the .config shipped in the deb.
-      if [ "${DEB_ARCH}" = "arm64" ]; then
-        # The arm flavour fragment (LOCALVERSION -armv8.0-default1,
-        # -armv8.2-lse1, -armv9-sve21) of THIS variant. Only the coded arm
-        # flavours get one: their kernelrelease would otherwise collide with
-        # the plain baseline — same Package daemoncores-kernel-7.2.15 with
-        # different bytes — and reprepro refuses the second include in the
-        # APT pool (seen live: run 41794169405, publish jobs exit 254, repack
-        # builds 5 arm64 kernels all named daemoncores-kernel-7.2.15). The
-        # plain baseline ("" and -16k) keeps NO flavour LOCALVERSION: the
-        # device module packages Depend on the plain
-        # daemoncores-kernel-<KVER>, and the page size alone (pages/16k
-        # LOCALVERSION) separates the 4 KB and 16 KB kernels.
-        case "${KERNEL_ARCH_LEVEL:-}" in
-          armv8.0|armv8.2-lse|armv9-sve2)
-            test -f "${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg" \
-              || { echo "ERROR: arm flavour fragment ${KERNEL_ARCH_LEVEL}.cfg missing from the engine export" >&2; exit 1; }
-            CONFIG_FILES+=("${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg")
-            ;;
-        esac
-        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
-        test -f "${PAGES_OVERLAY}" \
-          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
-        CONFIG_FILES+=("${PAGES_OVERLAY}")
-      fi
-
-      # Merge the base config (filesystems, virtio, serial, disables — the
-      # base for every device). The standard kernel helper merges in place:
-      # each fragment appended, then olddefconfig resolves the rest.
-      kernel_merge_config "${SRCDIR}" "${CONFIG_FILES[@]}"
-      # Sign the in-tree modules with the CI key, trust it in the kernel keyring
-      # and enforce signatures + MOK keyrings when active; the device module packages use the same.
-      kernel_signing_setup
-      make olddefconfig
-      # Active signing is enforced: fail when olddefconfig dropped a forced option.
-      kernel_signing_verify
-
-      # olddefconfig silently ignores a symbol this kernel does not know, so
-      # fail on an unknown symbol; an option dropped by an unmet dependency is
-      # only reported, because the base config also names options that exist on
-      # one architecture only.
-      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . "${CONFIG_FILES[@]}"
-      python3 "${CI_SCRIPTS}/check_kconfig.py" --tree . --config .config \
-        "${CONFIG_FILES[@]}" \
-        || echo "::warning::kernel config options not present in the final .config"
-
-      # Ship the finalized .config and Module.symvers inside the common image
-      # deb (see the repack below). They must live in the deb, not beside it in
-      # /debs: a cache hit restores only the .deb from the published APT repo,
-      # so every dependent module job would otherwise build with the wrong
-      # .config and no symbol table, and modpost fails on the built-in kernel
-      # symbols (__fentry__…) with tens of thousands of undefined-symbol errors.
-      cp .config /tmp/linux-kernel.config
-
-      # Build the kernel + modules as a Debian binary package. bindeb-pkg
-      # produces linux-image-*.deb and linux-modules-*.deb in /tmp (one
-      # above the source dir).
-      # ARCH is set above from DEB_ARCH (x86 for amd64) so the kernel
-      # Makefile reads it from the environment; no make argument needed.
-      # KDEB_PKGVERSION pins the deb version to <kernel>-1 so that the module
-      # entries recover the kernel.org version from it (BUILT_VER%%-*).
-      KDEB_PKGVERSION="${KERNEL_VER}-1" \
-      KCFLAGS="$(kernel_flavour_kcflags "${KERNEL_ARCH_LEVEL:-}")" \
-      make -j"$(nproc)" bindeb-pkg
-
-      # Find the produced image deb (exclude debug debs).
-      COMMON_IMAGE_DEB=$(find /tmp -maxdepth 1 -name 'linux-image-*.deb' \
-        ! -name 'linux-image-*-dbg*' | head -1)
-      test -n "${COMMON_IMAGE_DEB}" \
-        || { echo "ERROR: linux-image-common deb not built" >&2; exit 1; }
-
-      BUILT_VER=$(dpkg-deb -f "${COMMON_IMAGE_DEB}" Version)
-
-      cp "${COMMON_IMAGE_DEB}" "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output linux-image-common deb empty" >&2; exit 1; }
-
-      # Find and copy the linux-headers deb (built alongside the image deb
-      # by bindeb-pkg) to /debs/ so downstream layers can install headers.
-      HEADERS_DEB=$(find /tmp -maxdepth 1 -name 'linux-headers-*.deb' \
-        ! -name '*-dbg*' | head -1)
-      if test -n "${HEADERS_DEB}"; then
-        HEADERS_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
-        # The headers of the kernel image deb are copied as built (one kernel
-        # build per arch and page size, no name split).
-        cp "${HEADERS_DEB}" "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb"
-        test -s "/debs/linux-headers${KERNEL_SUFFIX:-}_${HEADERS_VER}_${DEB_ARCH}.deb" \
-          || { echo "ERROR: output linux-headers deb empty" >&2; exit 1; }
-      fi
-
-      # Repack the custom kernel under its own package name, following the
-      # ostree package model: a distinct name that Conflicts with and Replaces
-      # the Debian package it overlaps, instead of masquerading as it. bindeb-pkg
-      # names the deb linux-image-<KVER>, the same name as Debian's kernel when
-      # the versions match, so the repack renames it daemoncores-kernel-<KVER>.
-      # It Provides the virtual name linux-image-minimal-<arch> (linux-image-
-      # minimal-16k-<arch> for the 16 KB kernel), which the images install
-      # through linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}.
-      # It must NOT Provide linux-image-<arch> or linux-image-stock-<arch>: those
-      # are Debian's names, and both images select this kernel by the variant
-      # name instead. Only the CURRENT arch is Provided/Conflicted: a deb built
-      # on arm64 must not Conflict with linux-image-amd64, otherwise apt refuses
-      # to install it on an arm64 runner that also has the amd64 deb available.
-      # ONE kernel per (arch, page size): no -nosign twin — module-signature
-      # enforcement is the install-time `module.sig_enforce=1` karg, so the
-      # device modules Depend on daemoncores-kernel-<KVER> and always install.
-      REPACK_DIR=/tmp/linux-image-common-repack
-      rm -rf "${REPACK_DIR}"
-      dpkg-deb -R "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" "${REPACK_DIR}"
-
-      # Secure Boot: the shim verifies the kernel GRUB loads, so vmlinuz carries
-      # the image signing signature. The key is the one
-      # that signs GRUB, whose certificate the installer already enrolls in MOK.
-      KERNEL_IMAGES=("${REPACK_DIR}"/boot/vmlinuz-*)
-      test -f "${KERNEL_IMAGES[0]}" \
-        || { echo "ERROR: no /boot/vmlinuz-* in the kernel deb" >&2; exit 1; }
-      for img in "${KERNEL_IMAGES[@]}"; do
-        kernel_sign_efi "${img}"
-      done
-
-      # Ship the build inputs the module packages need INSIDE the deb. A cache
-      # hit restores only the .deb from the published APT repo, so a file
-      # written beside it in /debs never reaches a dependent module job on a
-      # reused linux-image; the module builds then have no kernel config and no
-      # symbol table and modpost fails with tens of thousands of
-      # unresolved-symbol errors. Both are required, so a missing one is a bug
-      # in this build, not a case to tolerate.
-      # PER-FLAVOUR build tree (owner 04/11, unpack collision): the path is
-      # part of the deb's file list, so two flavours (x64v1+x64v3
-      # installed side by side on a PVE host) unpacking into the same
-      # /usr/lib/linux-kernel-build directory refuse with "trying to
-      # overwrite". Each flavour ships its own suffix (KERNEL_SUFFIX, the
-      # same key the module entries read) — the plain flavour keeps the
-      # unsuffixed path so the published debs stay compatible.
-      test -f /tmp/linux-kernel.config \
-        || { echo "ERROR: kernel build produced no .config" >&2; exit 1; }
-      test -f Module.symvers \
-        || { echo "ERROR: kernel build produced no Module.symvers" >&2; exit 1; }
-      KERNEL_BUILD_DIR="usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}"
-      mkdir -p "${REPACK_DIR}/${KERNEL_BUILD_DIR}"
-      cp /tmp/linux-kernel.config "${REPACK_DIR}/${KERNEL_BUILD_DIR}/config"
-      cp Module.symvers "${REPACK_DIR}/${KERNEL_BUILD_DIR}/Module.symvers"
-
-      # The device modules Depend on daemoncores-kernel-<KVER>, which the
-      # Provides above satisfies for each (arch, page size).
-      ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
-      KERNEL_PKG="daemoncores-kernel-${ORIG_PKG#linux-image-}"
-      # Drop Provides/Conflicts/Replaces INCLUDING multiline continuations
-      # (continuations start with a space and survive a plain /d sed — that
-      # dup-Provides crashed dpkg-deb on daemoncores-kernel-{ia,vm}, run
-      # 42622490165).
-      awk '
-        /^(Provides|Conflicts|Replaces):/ { skip = 1; next }
-        skip && /^ / { next }
-        { skip = 0; print }
-      ' "${REPACK_DIR}/DEBIAN/control" > "${REPACK_DIR}/DEBIAN/control.new" \
-        && mv "${REPACK_DIR}/DEBIAN/control.new" "${REPACK_DIR}/DEBIAN/control"
-      sed -i "s/^Package: .*/Package: ${KERNEL_PKG}/" \
-        "${REPACK_DIR}/DEBIAN/control"
-      printf 'Provides: %s\nConflicts: %s, linux-image-%s\nReplaces: %s\n' \
-        "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
-        "${ORIG_PKG}" "${DEB_ARCH}" "${ORIG_PKG}" \
-        >> "${REPACK_DIR}/DEBIAN/control"
-      dpkg-deb -b "${REPACK_DIR}" \
-        "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: repacked linux-image-common deb empty" >&2; exit 1; }
-
-      # Free the ~10 GB kernel source tree now that all debs are copied to
-      # /debs. Without this the runner's /tmp fills up and starves parallel
-      # jobs (e.g. grub-efi-amd64-signed) of disk space.
-      rm -rf "${SRCDIR}" /tmp/linux-*
-
-  # linux-image-profile — the TWO kernel PROFILES of the unified kernel
+  # linux-image-profile — the TWO kernel PROFILES of the unified
   # estate (owner FINAL architecture, 2026-11-05; VM placement CORRECTED
   # owner 05/11 15:1x): 7 flavours × 2 profiles = 14 deb lanes, ALL on this
   # debian side. The flavours are the lane's own matrix (x64v1..v4 amd64,
@@ -487,10 +73,17 @@ packages:
   # sibling profile — one kernel of one release string per host.
   # gaming is NOT a profile of this lane: the gaming concept stays a
   # MODULE-level set only (the gpu-gaming debs) — never a gaming-kernel.
-  # Headers: NOT republished by this class — the per-flavour linux-headers
-  # deb continues to publish from the linux-image build above, and the
-  # profile delta touches amdgpu only (the zfs/nvidia module ABI of the
-  # three builds is identical). The kernel build vercount follows the lane
+  # Headers + build tree (owner 05/11: the baseline lane is DELETED): the
+  # per-flavour linux-headers deb is republished by THIS class, one per
+  # (profile, flavour) — the release string is shared across the profiles of
+  # a flavour, so the headers Package name carries the profile prefix
+  # (linux-headers-<profile>-<KVER>) to stay distinct in the APT pool; the
+  # Module.symvers + .config build tree already ships inside the kernel deb
+  # (per-profile, no collision). The profile delta touches amdgpu/THP only
+  # (the zfs/nvidia module ABI of the two builds is identical):
+  # linux-modules-* Depends on the virtual linux-image-<KVER> (= version),
+  # which EVERY profile build Provides — one module pair installs under
+  # either profile of a flavour. The kernel build vercount follows the lane
   # pin: KERNEL_BUILD_VER untouched (owner order: no cache rebump).
   - name: linux-image-profile
     ccache: true
@@ -498,10 +91,19 @@ packages:
     variant-env: PROFILE_FLAVOUR
     env:
       HELPERS_VER: 7
-      KERNEL_PAGES: "4k"
+      # ENTRY-LEVEL PAGE SIZE DEFAULT = 16 KB EVERYWHERE (owner order
+      # 05/11 18:4x) — including amd64; the 4 KB is ONLY the AUTOMATIC
+      # fallback of an arch that cannot carry the 16 KB granule (armv8.0,
+      # Cortex-A53 class), declared by that arch's variants below, never
+      # hand-picked. x86_64 mainline exposes no 16 KB base page at all
+      # (PAGE_SHIFT 12 fixed; the pages/* overlays are the arm64
+      # ARM64_*_PAGES Kconfig choice), so the amd64 build merges no page
+      # overlay and falls back automatically — documented, not chosen.
+      KERNEL_PAGES: "16k"
       KERNEL_SIGNING_ENFORCE: "no"
       # TEMPORARY KERNEL PIN: same rationale and same restore block as the
-      # linux-image env above — no track resolution while the pin is on.
+      # deleted baseline lane carried — no track resolution while the pin is
+      # on (the kernel data + probe = engine, DaemonCores-CI).
       KERNEL_VER: "7.2.15"
       KERNEL_SHA256: "d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
     deb-glob: "linux-image-common-*"
@@ -518,62 +120,62 @@ packages:
       # ---- IA profile: the AI compute kernel (DC off, THP always) --------
       "ia-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v1_*"
+        deb-glob: "linux-image-common-ia-x64v1_* linux-headers-ia-*x64v1*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-ia-x64v1"}
       "ia-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v2_*"
+        deb-glob: "linux-image-common-ia-x64v2_* linux-headers-ia-*x64v2*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-ia-x64v2"}
       "ia-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v3_*"
+        deb-glob: "linux-image-common-ia-x64v3_* linux-headers-ia-*x64v3*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-ia-x64v3"}
       "ia-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v4_*"
+        deb-glob: "linux-image-common-ia-x64v4_* linux-headers-ia-*x64v4*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-ia-x64v4"}
       "ia-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.0_*"
-        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-ia-armv8.0"}
+        deb-glob: "linux-image-common-ia-armv8.0_* linux-headers-ia-*armv8.0*"
+        env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-ia-armv8.0", KERNEL_PAGES: "4k"}
       "ia-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.2-lse_*"
+        deb-glob: "linux-image-common-ia-armv8.2-lse_* linux-headers-ia-*armv8.2-lse*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-ia-armv8.2-lse"}
       "ia-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv9-sve2_*"
+        deb-glob: "linux-image-common-ia-armv9-sve2_* linux-headers-ia-*armv9-sve2*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-ia-armv9-sve2"}
       # ---- VM profile: the PVE-host kernel (NO gpu overlay — VM ≠ GPU,
       # owner 05/11 15:1x; the profile delta = the THP NEVER fragment +
       # the hypervisor opts folded in the base config) --------------------
       "vm-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v1_*"
+        deb-glob: "linux-image-common-vm-x64v1_* linux-headers-vm-*x64v1*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-vm-x64v1"}
       "vm-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v2_*"
+        deb-glob: "linux-image-common-vm-x64v2_* linux-headers-vm-*x64v2*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-vm-x64v2"}
       "vm-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v3_*"
+        deb-glob: "linux-image-common-vm-x64v3_* linux-headers-vm-*x64v3*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-vm-x64v3"}
       "vm-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v4_*"
+        deb-glob: "linux-image-common-vm-x64v4_* linux-headers-vm-*x64v4*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-vm-x64v4"}
       "vm-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.0_*"
-        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-vm-armv8.0"}
+        deb-glob: "linux-image-common-vm-armv8.0_* linux-headers-vm-*armv8.0*"
+        env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-vm-armv8.0", KERNEL_PAGES: "4k"}
       "vm-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.2-lse_*"
+        deb-glob: "linux-image-common-vm-armv8.2-lse_* linux-headers-vm-*armv8.2-lse*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-vm-armv8.2-lse"}
       "vm-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv9-sve2_*"
+        deb-glob: "linux-image-common-vm-armv9-sve2_* linux-headers-vm-*armv9-sve2*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-vm-armv9-sve2"}
     build: |
       set -euo pipefail
@@ -701,6 +303,19 @@ packages:
         grep -q '^# CONFIG_TRANSPARENT_HUGEPAGE is not set$' "${SRCDIR}/.config" \
           || { echo "ERROR: vm profile merge lost the THP-never pin" >&2; exit 1; }
       fi
+      # PAGE-SIZE PROOF (owner 05/11 18:4x): the final .config carries the
+      # page size the ARCH decided — the 16 KB entry default, or the 4 KB
+      # arch-incompatible fallback armv8.0 signals; the x86 build merges no
+      # page overlay at all (its automatic fallback, the arm64-only symbols
+      # staying out of the merge).
+      if [ "${DEB_ARCH}" = arm64 ]; then
+        case "${KERNEL_PAGES}" in
+          16k) grep -q '^CONFIG_ARM64_16K_PAGES=y$' "${SRCDIR}/.config" \
+                || { echo "ERROR: ${KERNEL_PROFILE}-${KERNEL_ARCH_LEVEL} lost the 16k page size" >&2; exit 1; } ;;
+          4k)  grep -q '^CONFIG_ARM64_4K_PAGES=y$' "${SRCDIR}/.config" \
+                || { echo "ERROR: ${KERNEL_PROFILE}-armv8.0 lost the 4k fallback" >&2; exit 1; } ;;
+        esac
+      fi
       cp .config /tmp/linux-kernel.config
 
       KDEB_PKGVERSION="${KERNEL_VER}-1" \
@@ -768,9 +383,10 @@ packages:
       # the plain kernel deb and the sibling profile.
       # ONE line per control field (dpkg-deb rejects a repeated field — the
       # printf emitted two Provides:, run 42632521818) — values comma-joined.
-      printf 'Provides: %s, linux-image-%s\nConflicts: %s, daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: daemoncores-kernel-%s-%s\n' \
+      printf 'Provides: %s, linux-image-%s (= %s)\nConflicts: %s, daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: daemoncores-kernel-%s-%s\n' \
         "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
         "${KVER}" \
+        "${BUILT_VER}" \
         "${ORIG_PKG}" \
         "${KERNEL_PROFILE}" "${KVER}" "${OTHER_PROFILE}" "${KVER}" \
         "${KERNEL_PROFILE}" "${KVER}" \
@@ -779,6 +395,32 @@ packages:
         "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
       test -s "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb" \
         || { echo "ERROR: repacked profile linux-image-common deb empty" >&2; exit 1; }
+
+      # HEADERS REPUBLISH (owner 05/11: the baseline linux-image lane is
+      # deleted, this class is the ONLY headers publisher). bindeb-pkg built
+      # the headers alongside the image; repack them under the
+      # profile-prefixed name linux-headers-<profile>-<KVER> — the release
+      # string is shared across the profiles of a flavour, so the plain
+      # linux-headers-<KVER> name would collide in the pool with the sibling
+      # profile of the same release at different bytes (the
+      # run-41794169405 class of failure). The zfs-module-pve lane resolves
+      # them from the published index by the `-<flavour>-xanmod1` suffix.
+      HEADERS_DEB=$(find /tmp -maxdepth 1 -name 'linux-headers-*.deb' \
+        ! -name '*-dbg*' | head -1)
+      if test -n "${HEADERS_DEB}"; then
+        HDR_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
+        HDR_RPKG=$(dpkg-deb -f "${HEADERS_DEB}" Package | sed 's/^linux-headers-//')
+        HDR_RPKG="linux-headers-${KERNEL_PROFILE}-${HDR_RPKG}"
+        HREPACK=/tmp/linux-headers-repack
+        rm -rf "${HREPACK}"
+        dpkg-deb -R "${HEADERS_DEB}" "${HREPACK}"
+        sed -i "s/^Package: .*/Package: ${HDR_RPKG}/" "${HREPACK}/DEBIAN/control"
+        HDR_FN="linux-headers-${KERNEL_PROFILE}-${HDR_RPKG#linux-headers-}_${HDR_VER}_${DEB_ARCH}.deb"
+        dpkg-deb -b "${HREPACK}" "/debs/${HDR_FN}"
+        test -s "/debs/${HDR_FN}" \
+          || { echo "ERROR: repacked profile headers deb empty" >&2; exit 1; }
+        rm -rf "${HREPACK}"
+      fi
 
       rm -rf "${SRCDIR}" /tmp/linux-*
 
@@ -799,52 +441,69 @@ packages:
     ccache: true
     when:
       arch: arm64
-    # The kernel a device runs follows its hardware generation (docs/Handoff-Decisions.md,
-    # "Two arm64 kernels"): the older devices need the 4 KB kernel, the recent ones
-    # run the 16 KB kernel. KERNEL_SUFFIX names the kernel this device's modules
-    # are built against.
+    # The kernel a device builds against is picked BY ARCHITECTURE CLASS
+    # (owner order 05/11 18:3x — page size per ARCH, never per device):
+    # the Cortex-A53/A72-class devices (Pi 3/4, RK3399, H616, i.MX8M,
+    # MT8183, and RK356x whose A55 carries no 16 KB granule) ride the
+    # armv8.0 flavour (4 KB automatically), the Cortex-A76-class devices
+    # (Pi 5, RK3588) ride armv8.2-lse (16 KB by arch default). KERNEL_SUFFIX
+    # names the exact profile kernel deb the modules are built against
+    # (seed = the IA profile; the runtime Depends is the virtual
+    # linux-image-<KVER> which either profile Provides — MODVERSIONS=n,
+    # one module ABI per release string).
     variants:
       rpi3:
         deps:
-          - linux-image
+          - linux-image-ia-armv8.0
+        env:
+          KERNEL_SUFFIX: "-ia-armv8.0"
       rpi4:
         deps:
-          - linux-image
+          - linux-image-ia-armv8.0
+        env:
+          KERNEL_SUFFIX: "-ia-armv8.0"
       rpi5:
         deps:
-          - linux-image-16k
+          - linux-image-ia-armv8.2-lse
         env:
-          KERNEL_SUFFIX: "-16k"
+          KERNEL_SUFFIX: "-ia-armv8.2-lse"
       rk3588:
         deps:
-          - linux-image-16k
+          - linux-image-ia-armv8.2-lse
         env:
-          KERNEL_SUFFIX: "-16k"
-      # RK356x family (RK3566/RK3568): same recent-hardware kernel page size
-      # as the RK3588 — one rockchip 16 KB kernel build serves both.
+          KERNEL_SUFFIX: "-ia-armv8.2-lse"
+      # RK356x family (RK3566/RK3568): Cortex-A55 = armv8.0 class, 4 KB by
+      # architecture — the old-devices wave (page size = per arch).
       rk3566:
         deps:
-          - linux-image-16k
+          - linux-image-ia-armv8.0
         env:
-          KERNEL_SUFFIX: "-16k"
-      # RK3399: pre-RK3588 generation, 4 KB kernel (old devices wave).
+          KERNEL_SUFFIX: "-ia-armv8.0"
+      # RK3399: pre-RK3588 generation, armv8.0 class (4 KB).
       rk3399:
         deps:
-          - linux-image
-      # Allwinner sun50i family (H616/H613/H6/A64): upstream sunxi arm64 is
-      # 4 KB proven; 16 KB stays unarbitrated until it boots on an H616.
+          - linux-image-ia-armv8.0
+        env:
+          KERNEL_SUFFIX: "-ia-armv8.0"
+      # Allwinner sun50i family (H616/H613/H6/A64): A53-class, armv8.0.
       h616:
         deps:
-          - linux-image
-      # NXP i.MX8M family (8MQ/8MM/8MP): 4 KB kernel, the old-devices wave.
+          - linux-image-ia-armv8.0
+        env:
+          KERNEL_SUFFIX: "-ia-armv8.0"
+      # NXP i.MX8M family (8MQ/8MM/8MP): A53-class, armv8.0.
       imx8m:
         deps:
-          - linux-image
-      # MediaTek MT8167-MT8183 family (kukui/jacuzzi Chromebooks): 4 KB
-      # kernel until a MediaTek 16 KB story is proven.
+          - linux-image-ia-armv8.0
+        env:
+          KERNEL_SUFFIX: "-ia-armv8.0"
+      # MediaTek MT8167-MT8183 family (kukui/jacuzzi Chromebooks): A53-class,
+      # armv8.0.
       mt8183:
         deps:
-          - linux-image
+          - linux-image-ia-armv8.0
+        env:
+          KERNEL_SUFFIX: "-ia-armv8.0"
     variant-name-prefix: "linux-modules-"
     variant-env: DEVICE
     env:
@@ -896,6 +555,11 @@ packages:
       # The seeded .config is the kernel's own (base + arm overlay + pages), so
       # only the device overlay is merged on top.
       kernel_prepare
+      # kernel_prepare derives KVER from the Package field of the seed deb;
+      # the profile kernel deb is daemoncores-kernel-<profile>-<KVER>, so
+      # strip the profile prefix: KVER stays the plain release string of the
+      # modprobe tree (7.2.15-<flavour>-xanmod1) and of the virtual Depends.
+      case "${KVER}" in ia-*|vm-*) KVER="${KVER#*-}" ;; esac
       # The standard kernel helper merges the device overlay in place
       # (append + olddefconfig) — same final .config as merge_config.sh -m.
       kernel_merge_config "${SRCDIR}" "${OVERLAY}"
@@ -1008,53 +672,64 @@ packages:
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
   # linux-modules-nvidia — the NVIDIA open kernel modules as a pair deb,
-  # VARIANTS per (kernel-tree, flavour) (owner 04/11: the single entry used
-  # to pair the x64v1 kernel only — one Depends, while the lane publishes a
-  # 7-flavour matrix; expand now emits one pair per flavour, each pinned to
-  # ITS daemoncores-kernel deb). The same deps/waves module pattern as the
-  # device entries: built in CI against the kernel of the SAME build
-  # (linux-image dep), .config + Module.symvers seeded from the published
-  # kernel deb. NOT DKMS: nothing compiles on the target. Installed by the
-  # derived lane at install (the NVIDIA image, built FROM the standard one
-  # so the kernel is the same); the standard image does not carry it. The
+  # VARIANTS per (kernel-tree, flavour) (owner 04/11 + 05/11: one pair per
+  # flavour x64v1..v4 — Y COMPRIS x64v4 — while the profile lane publishes
+  # the same matrix). Built in CI against the IA-profile kernel of the SAME
+  # build (dep linux-image-ia-<flavour>); the .config + Module.symvers are
+  # seeded from that kernel deb (the profile delta touches amdgpu only, and
+  # MODVERSIONS=n keeps one module ABI per release string) while the RUNTIME
+  # Depends is the virtual linux-image-<KVER> (= kernel version), which BOTH
+  # profiles of a flavour Provide — the pair installs on the VM/PVE host
+  # exactly as on the IA host (the "nvidia-pve" pairing lives there: same debs,
+  # no second pair lane). NOT DKMS: nothing compiles on the target. Installed
+  # by the derived lane at install; the standard image does not carry it. The
   # module is the MIT open-gpu-kernel-modules; its version is the one of the
   # Debian NVIDIA user-space (a module and its user-space must be the same
-  # release), read from the apt index at build time. amd64 only — arm64 has
-  # no shipped NVIDIA compute target. The kernel-pve tree pair lives in the
-  # proxmox-ve-bootc lane (built beside its kernel-pve build, exactly the
-  # same release string the deb installs).
+  # release), read from the apt index at build time. amd64 only.
   - name: linux-modules-nvidia
     when:
       arch: amd64
-    variant-name-prefix: "linux-modules-nvidia"
-    variant-env: KERNEL_SUFFIX
-    deb-glob: "linux-modules-nvidia{variant}_*"
-    variant-deps:
-      - linux-image{variant}
+    variant-name-prefix: "linux-modules-nvidia-"
+    variant-env: NV_FLAVOUR
+    deb-glob: "linux-modules-nvidia-{variant}_*"
     sources:
       - nvidia
     env:
       HELPERS_VER: 11
-      # The Pages pool path of the published kernel lane debs (the URL =
-      # base + the pinned per-variant file name).
-      PVE_HEADERS_BASE: "https://daemoncores.github.io/proxmox-ve-bootc/pool/main/l/linux-upstream/"
+      # The SEED_SUFFIX (-ia-<flavour>) selects the seed kernel deb glob of
+      # kernel_prepare; the pair name itself carries the flavour only.
+      # TEMPORARY KERNEL PIN (see the profile kernel env): same pin.
+      KERNEL_VER: "7.2.15"
     variants:
-      "":
+      "x64v1":
+        deps:
+          - linux-image-ia-x64v1
         env:
           KERNEL_ARCH_LEVEL: x64v1
-      "-x64v2":
+          SEED_SUFFIX: "-ia-x64v1"
+      "x64v2":
+        deps:
+          - linux-image-ia-x64v2
         env:
           KERNEL_ARCH_LEVEL: x64v2
-      "-x64v3":
+          SEED_SUFFIX: "-ia-x64v2"
+      "x64v3":
+        deps:
+          - linux-image-ia-x64v3
         env:
           KERNEL_ARCH_LEVEL: x64v3
-      "-x64v4":
+          SEED_SUFFIX: "-ia-x64v3"
+      "x64v4":
+        deps:
+          - linux-image-ia-x64v4
         env:
           KERNEL_ARCH_LEVEL: x64v4
+          SEED_SUFFIX: "-ia-x64v4"
     build: |
       set -euo pipefail
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
+      KERNEL_SUFFIX="${SEED_SUFFIX:-}"
 
       # The engine shared set (see linux-modules-arm-device): the same
       # PATCHES_JSON export the device entries resolve, consumed by
@@ -1065,9 +740,14 @@ packages:
       PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
       export PATCHES_JSON
 
-      # Bootstrap shared by the kernel module entries: locate the kernel deb,
-      # download the kernel source, seed .config (kernel_prepare).
+      # Bootstrap shared by the kernel module entries: locate the seed profile
+      # kernel deb, download the kernel source, seed .config (kernel_prepare).
       kernel_prepare
+      # kernel_prepare derives KVER from the Package field of the seed deb
+      # (daemoncores-kernel-<profile>-<KVER>) — strip the profile prefix: the
+      # pair installs and Depends on the PLAIN release string both profiles
+      # share (the virtual linux-image-<KVER>).
+      case "${KVER}" in ia-*|vm-*) KVER="${KVER#*-}" ;; esac
       kernel_signing_setup
       # An out-of-tree build reads include/config/auto.conf and the generated
       # headers of the kernel tree; the seeded .config alone does not provide
@@ -1147,7 +827,7 @@ packages:
       # name and its Package field carry the same suffix — the pairs of
       # different flavours coexist in the APT pool (different names, the
       # same NVIDIA release).
-      NV_SUFFIX="${KERNEL_SUFFIX:-}"
+      NV_SUFFIX="-${NV_FLAVOUR}"
       NV_PKG="linux-modules-nvidia${NV_SUFFIX}"
       DESTDIR="/output/linux-modules-nvidia${NV_SUFFIX}"
       rm -rf "${DESTDIR}"
@@ -1215,35 +895,115 @@ packages:
         || { echo "ERROR: output ${NV_PKG} deb empty" >&2; exit 1; }
 
   - name: linux-modules-gpu
+    # FULL FLAVOUR MATRIX (owner order 05/11: V4 = missing, Y COMPRIS
+    # x64v4): one in-tree set per (usage set ia|gaming) x flavour
+    # x64v1..v4, and one loader-policy deb per the same pairs for NVIDIA
+    # hosts. The module sets build against the IA-profile kernel of their
+    # flavour (dep linux-image-ia-<flav>; DC on/off by the set overlay):
+    # the set deb Replaces the exact files the seed profile kernel owns
+    # (daemoncores-kernel-ia-<KVER>), the way the DC pin per set is proofed;
+    # a VM-profile host carries no gpu set (VM != GPU, jamais eu).
     variants:
-      ia:
+      ia-x64v1:
         when: {arch: amd64}
         deps:
-          - linux-image
-        env: {GPU_SET: ia}
-      gaming:
+          - linux-image-ia-x64v1
+        env: {GPU_SET: ia, GPU_FLAV: x64v1, SEED_SUFFIX: "-ia-x64v1"}
+      ia-x64v2:
         when: {arch: amd64}
         deps:
-          - linux-image
-        env: {GPU_SET: gaming}
+          - linux-image-ia-x64v2
+        env: {GPU_SET: ia, GPU_FLAV: x64v2, SEED_SUFFIX: "-ia-x64v2"}
+      ia-x64v3:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v3
+        env: {GPU_SET: ia, GPU_FLAV: x64v3, SEED_SUFFIX: "-ia-x64v3"}
+      ia-x64v4:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v4
+        env: {GPU_SET: ia, GPU_FLAV: x64v4, SEED_SUFFIX: "-ia-x64v4"}
+      gaming-x64v1:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v1
+        env: {GPU_SET: gaming, GPU_FLAV: x64v1, SEED_SUFFIX: "-ia-x64v1"}
+      gaming-x64v2:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v2
+        env: {GPU_SET: gaming, GPU_FLAV: x64v2, SEED_SUFFIX: "-ia-x64v2"}
+      gaming-x64v3:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v3
+        env: {GPU_SET: gaming, GPU_FLAV: x64v3, SEED_SUFFIX: "-ia-x64v3"}
+      gaming-x64v4:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v4
+        env: {GPU_SET: gaming, GPU_FLAV: x64v4, SEED_SUFFIX: "-ia-x64v4"}
       # NVIDIA variants: the loader policy only. They depend on their
-      # sibling open set (same in-tree build), on the linux-modules-nvidia
-      # base deb (the open NVIDIA modules) AND on linux-image (the kernel
-      # the whole stack is pinned to).
-      ia-nvidia:
+      # sibling open set of the same flavour and profile binding, on the
+      # linux-modules-nvidia pair of the SAME flavour AND on the same
+      # profile kernel the stack is pinned to.
+      ia-nvidia-x64v1:
         when: {arch: amd64}
         deps:
-          - linux-image
-          - gpu-ia
-          - linux-modules-nvidia
-        env: {GPU_SET: ia, GPU_NVIDIA: "yes"}
-      gaming-nvidia:
+          - linux-image-ia-x64v1
+          - gpu-ia-x64v1
+          - linux-modules-nvidia-x64v1
+        env: {GPU_SET: ia, GPU_FLAV: x64v1, GPU_NVIDIA: "yes"}
+      ia-nvidia-x64v2:
         when: {arch: amd64}
         deps:
-          - linux-image
-          - gpu-gaming
-          - linux-modules-nvidia
-        env: {GPU_SET: gaming, GPU_NVIDIA: "yes"}
+          - linux-image-ia-x64v2
+          - gpu-ia-x64v2
+          - linux-modules-nvidia-x64v2
+        env: {GPU_SET: ia, GPU_FLAV: x64v2, GPU_NVIDIA: "yes"}
+      ia-nvidia-x64v3:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v3
+          - gpu-ia-x64v3
+          - linux-modules-nvidia-x64v3
+        env: {GPU_SET: ia, GPU_FLAV: x64v3, GPU_NVIDIA: "yes"}
+      ia-nvidia-x64v4:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v4
+          - gpu-ia-x64v4
+          - linux-modules-nvidia-x64v4
+        env: {GPU_SET: ia, GPU_FLAV: x64v4, GPU_NVIDIA: "yes"}
+      gaming-nvidia-x64v1:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v1
+          - gpu-gaming-x64v1
+          - linux-modules-nvidia-x64v1
+        env: {GPU_SET: gaming, GPU_FLAV: x64v1, GPU_NVIDIA: "yes"}
+      gaming-nvidia-x64v2:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v2
+          - gpu-gaming-x64v2
+          - linux-modules-nvidia-x64v2
+        env: {GPU_SET: gaming, GPU_FLAV: x64v2, GPU_NVIDIA: "yes"}
+      gaming-nvidia-x64v3:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v3
+          - gpu-gaming-x64v3
+          - linux-modules-nvidia-x64v3
+        env: {GPU_SET: gaming, GPU_FLAV: x64v3, GPU_NVIDIA: "yes"}
+      gaming-nvidia-x64v4:
+        when: {arch: amd64}
+        deps:
+          - linux-image-ia-x64v4
+          - gpu-gaming-x64v4
+          - linux-modules-nvidia-x64v4
+        env: {GPU_SET: gaming, GPU_FLAV: x64v4, GPU_NVIDIA: "yes"}
     variant-name-prefix: "gpu-"
     variant-env: GPU_VARIANT
     # TEMPORARY KERNEL PIN (see the linux-image env): same logic as the
@@ -1259,14 +1019,23 @@ packages:
       - kernel-src/modules/gpu
     build: |
       set -euo pipefail
-      # GPU_SET is injected by the CI from the variant env (ia|gaming);
-      # GPU_NVIDIA marks the loader-policy-only variants.
+      # The variant key carries its own dimensions: GPU_SET = the usage set
+      # (ia|gaming), GPU_FLAV = the flavour (x64v1..v4), GPU_NVIDIA = yes for
+      # the loader-policy-only variants (key <set>-nvidia-<flav>).
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
       WORKTREE="${GITHUB_WORKSPACE:-$(pwd)}"
       WORKFLOW="${WORKTREE}/workflows/bootc-debs-builder"
       CONF_DIR="${WORKFLOW}/kernel-src/modprobe"
-      GPU_NVIDIA="${GPU_NVIDIA:-no}"
+      GPU_VARIANT_KEY="${GPU_VARIANT}"
+      GPU_SET="${GPU_VARIANT_KEY%%-*}"
+      case "${GPU_VARIANT_KEY}" in
+        *-nvidia-*) GPU_NVIDIA=yes; GPU_FLAV="${GPU_VARIANT_KEY#*nvidia-}" ;;
+        *) GPU_NVIDIA=no; GPU_FLAV="${GPU_VARIANT_KEY#*-}" ;;
+      esac
+      # KERNEL_SUFFIX names the seed profile kernel for kernel_prepare
+      # (linux-image-common${SEED_SUFFIX}_${ver}_${arch}.deb).
+      KERNEL_SUFFIX="${SEED_SUFFIX}"
 
       if [ "${GPU_NVIDIA}" = yes ]; then
         # -----------------------------------------------------------------
@@ -1277,17 +1046,19 @@ packages:
         # the Depends pins stay exact and a bump of any of the three
         # rebuilds the set.
         # -----------------------------------------------------------------
-        SIB_VER=$(dpkg-query -W -f='${Version}' "gpu-${GPU_SET}") \
-          || { echo "ERROR: dependency gpu-${GPU_SET} not installed" >&2; exit 1; }
-        NV_VER=$(dpkg-query -W -f='${Version}' linux-modules-nvidia) \
-          || { echo "ERROR: dependency linux-modules-nvidia not installed" >&2; exit 1; }
+        SIB_PKG="gpu-${GPU_SET}-${GPU_FLAV}"
+        SIB_VER=$(dpkg-query -W -f='${Version}' "${SIB_PKG}") \
+          || { echo "ERROR: dependency ${SIB_PKG} not installed" >&2; exit 1; }
+        NV_PKG="linux-modules-nvidia-${GPU_FLAV}"
+        NV_VER=$(dpkg-query -W -f='${Version}' "${NV_PKG}") \
+          || { echo "ERROR: dependency ${NV_PKG} not installed" >&2; exit 1; }
         SET_VER="${SIB_VER}"
-        DEPS="gpu-${GPU_SET} (= ${SIB_VER}), linux-modules-nvidia (= ${NV_VER})"
+        DEPS="${SIB_PKG} (= ${SIB_VER}), ${NV_PKG} (= ${NV_VER})"
         REPLACES=""
         CONFLICTS=""
         CONF="dc-gpu-${GPU_SET}-nvidia.conf"
 
-        DESTDIR="/output/gpu-${GPU_SET}-nvidia"
+        DESTDIR="/output/gpu-${GPU_SET}-nvidia-${GPU_FLAV}"
         rm -rf "${DESTDIR}"
         mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/etc/modprobe.d" && cp "${CONF_DIR}/${CONF}" "${DESTDIR}/etc/modprobe.d/"
       else
@@ -1310,6 +1081,10 @@ packages:
         PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
         export PATCHES_JSON
         kernel_prepare
+        # kernel_prepare derives KVER from the Package field of the seed deb
+        # (daemoncores-kernel-<profile>-<KVER>) — strip the profile prefix:
+        # the modules install under the plain release string.
+        case "${KVER}" in ia-*|vm-*) KVER="${KVER#*-}" ;; esac
         for GPU_SET_CFG in "${OVERLAY}"/*.cfg; do
           kernel_merge_config "${SRCDIR}" "${GPU_SET_CFG}"
         done
@@ -1332,7 +1107,7 @@ packages:
         [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
         make -j"$(nproc)" modules
 
-        DESTDIR="/output/gpu-${GPU_SET}"
+        DESTDIR="/output/gpu-${GPU_SET}-${GPU_FLAV}"
         rm -rf "${DESTDIR}"
         mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
         [ -f modules.builtin ] || touch modules.builtin
@@ -1379,10 +1154,20 @@ packages:
         # two in-tree sets build amdgpu differently (DC on/off) — exactly one
         # may be installed.
         SET_VER="${BUILT_VER}+r1"
-        DEPS="daemoncores-kernel-${KVER} (= ${BUILT_VER})"
-        REPLACES="daemoncores-kernel-${KVER} (= ${BUILT_VER})"
-        CONFLICTS="gpu-gaming, gpu-gaming-nvidia"
-        [ "${GPU_SET}" = gaming ] && CONFLICTS="gpu-ia, gpu-ia-nvidia"
+        # The set deb REPLACES the files the seed profile kernel owns
+        # (the concrete daemoncores-kernel-<profile>-<KVER> deb — dpkg
+        # checks the OWNING package name, a virtual name protects nothing);
+        # the Depends pins the same exact kernel version.
+        DEPS="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
+        REPLACES="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
+        # Exactly one in-tree set may be installed: enumerate the OTHER
+        # set's every flavour variant (dpkg has no Conflicts globs).
+        OTHER=gaming; [ "${GPU_SET}" = gaming ] && OTHER=ia
+        CONFLICTS=""
+        for GPU_FLAVS in x64v1 x64v2 x64v3 x64v4; do
+          CONFLICTS="${CONFLICTS:+${CONFLICTS}, }gpu-${OTHER}-${GPU_FLAVS}"
+          CONFLICTS="${CONFLICTS}, gpu-${OTHER}-nvidia-${GPU_FLAVS}"
+        done
       fi
 
       # The profile overlay decides the shipped build; assert it really did
@@ -1405,9 +1190,9 @@ packages:
       fi
 
       # Control from the shared template: deps, replaces and conflicts differ
-      # per variant (computed above), the rest is verbatim.
-      NAME="gpu-${GPU_SET}"
-      [ "${GPU_NVIDIA}" = yes ] && NAME="gpu-${GPU_SET}-nvidia"
+      # per variant (computed above), the rest is verbatim. The NAME is the
+      # expanded variant name itself (gpu-<set>[-nvidia]-<flav>).
+      NAME="${GPU_VARIANT_KEY}"
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-gpu/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
@@ -1476,6 +1261,9 @@ packages:
       gaming-x64v3:
         when: {arch: amd64}
         env: {GPU_PROFILE: gaming, GPU_LEVEL: x64v3}
+      gaming-x64v4:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: gaming, GPU_LEVEL: x64v4}
       gaming-generic:
         when: {arch: arm64}
         env: {GPU_PROFILE: gaming, GPU_LEVEL: generic}
@@ -1488,6 +1276,9 @@ packages:
       ia-x64v3:
         when: {arch: amd64}
         env: {GPU_PROFILE: ia, GPU_LEVEL: x64v3}
+      ia-x64v4:
+        when: {arch: amd64}
+        env: {GPU_PROFILE: ia, GPU_LEVEL: x64v4}
       ia-generic:
         when: {arch: arm64}
         env: {GPU_PROFILE: ia, GPU_LEVEL: generic}

@@ -86,12 +86,12 @@ def test_kernel_signing_users() -> None:
         if 'kernel_signing_setup' in str(entry.get('build', ''))
     }
     assert users == {
-        'linux-image', 'linux-image-profile', 'linux-modules-arm-device',
+        'linux-image-profile', 'linux-modules-arm-device',
         'linux-modules-nvidia', 'linux-modules-gpu'
     }
 
 
 def test_kernel_image_verifies_signing() -> None:
     """The kernel entry checks the signing options after olddefconfig."""
-    kernel = next(e for e in _packages() if e['name'] == 'linux-image')
+    kernel = next(e for e in _packages() if e['name'] == 'linux-image-profile')
     assert 'kernel_signing_verify' in kernel['build']
