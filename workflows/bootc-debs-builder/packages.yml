@@ -1268,7 +1268,7 @@ packages:
         echo "cpu = 'x86_64'"
         echo "endian = 'little'"
         if [ -n "${MARCH}" ]; then
-          echo "[built-in options]"
+          echo "[properties]"; echo "needs_exe_wrapper = true"; echo "[built-in options]"
           echo "c_args = '${MARCH}'"
           echo "cpp_args = '${MARCH}'"
         fi
