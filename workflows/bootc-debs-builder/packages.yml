@@ -1268,7 +1268,7 @@ packages:
         echo "cpu = 'x86_64'"
         echo "endian = 'little'"
         if [ -n "${MARCH}" ]; then
-          echo "[properties]"; echo "needs_exe_wrapper = true"; echo "[built-in options]"
+          echo "[built-in options]"
           echo "c_args = '${MARCH}'"
           echo "cpp_args = '${MARCH}'"
         fi
@@ -1339,6 +1339,23 @@ packages:
         sleep $((attempt * 15))
       done
 
+      # BUILD-TIME tools must not carry the vN march: upstream mesa builds
+      # mesa_clc/vtn_bindgen2 native:true ONLY when host binaries cannot run
+      # (a same-machine cross build makes can_run_host_binaries true and the
+      # tools ride the HOST [built-in options] -march=x86-64-v4 -> 'Illegal
+      # instruction' on runners without the level, 42681037593/42708692713;
+      # forcing can_run false instead breaks meson — 'Tried to mix a host
+      # machine library with a build machine target', 42710412769). Stage-1
+      # provides march-free mesa_clc + vtn_bindgen2, stage-2 consumes them
+      # via -Dmesa-clc=system and the SHIPPED libraries keep the march.
+      TOOLDIR=/tmp/dc-mesa-clc-tools; rm -rf "${TOOLDIR}"; mkdir -p "${TOOLDIR}"
+      meson setup "${TOOLDIR}" /build/mesa-src --buildtype=release \
+        -Dmesa-clc=enabled -Dinstall-mesa-clc=true \
+        -Dgallium-drivers= -Dvulkan-drivers= -Dgallium-rusticl=false \
+        -Dbuild-tests=false -Dstrip=true >/dev/null \
+        && ninja -C "${TOOLDIR}"
+      export PATH="$(find "${TOOLDIR}" -type f \( -name mesa_clc -o -name vtn_bindgen2 \) -printf '%h\n' | sort -u | tr '\n' ':')${PATH}"
+
       # Every driver the architecture supports: left on `auto`, never listed.
       # The profile options are set above, the optimisation level comes from
       # meson's buildtype; -march only from the CPU level variable.
@@ -1347,7 +1364,7 @@ packages:
         --cross-file="${BUILD_MACHINE}" \
         --prefix="${PREFIX}" --libdir=lib --datadir="${SHARE}" \
         --sysconfdir="${SHARE}/etc" --buildtype=release \
-        -Dgallium-drivers=auto -Dvulkan-drivers=auto \
+        -Dgallium-drivers=auto -Dvulkan-drivers=auto -Dmesa-clc=system \
         -Dglvnd=enabled -Dbuild-tests=false -Dstrip=true \
         ${MESON_PROFILE_OPTS}
       meson compile -C /build/mesa
