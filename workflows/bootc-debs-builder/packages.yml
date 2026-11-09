@@ -686,9 +686,10 @@ packages:
   # separate linux-modules-nvidia pair is absorbed/dead; the NVIDIA userspace
   # is NEVER one of our debs (it comes from NVIDIA's own signed repository at
   # the derived-image step, owner 19:3x) and there is NO ARM NVIDIA (no -arm
-  # loader variant, amd64-only fusion — owner 19:3x(b)). ARM64: the in-tree
-  # sets exist as well (the amdgpu class — i915/xe are x86-only drivers, and
-  # the DC symbols have no arm64 kconfig meaning). The loader-policy deb
+  # loader variant, amd64-only fusion — owner 19:3x(b)). OWNER 09/11: NO
+  # ARM64 GPU SET AT ALL — no dGPU exists on ARM, the arm64 lane never
+  # builds a gpu deb (the device rpi/rk/mt8183 modules stay); the
+  # loader-policy deb
   # (-nvidia variants, amd64 only) carries ONLY the per-profile NVIDIA
   # modprobe conf on top of its sibling merged set: every version pins
   # through that one sibling. The sets build against the IA-profile kernel
@@ -718,21 +719,10 @@ packages:
         deps:
           - linux-image-ia-x64v4
         env: {GPU_SET: ia, GPU_FLAV: x64v4, SEED_SUFFIX: "-ia-x64v4"}
-      ia-armv8.0:
-        when: {arch: arm64}
-        deps:
-          - linux-image-ia-armv8.0
-        env: {GPU_SET: ia, GPU_FLAV: armv8.0, SEED_SUFFIX: "-ia-armv8.0"}
-      ia-armv8.2-lse:
-        when: {arch: arm64}
-        deps:
-          - linux-image-ia-armv8.2-lse
-        env: {GPU_SET: ia, GPU_FLAV: armv8.2-lse, SEED_SUFFIX: "-ia-armv8.2-lse"}
-      ia-armv9-sve2:
-        when: {arch: arm64}
-        deps:
-          - linux-image-ia-armv9-sve2
-        env: {GPU_SET: ia, GPU_FLAV: armv9-sve2, SEED_SUFFIX: "-ia-armv9-sve2"}
+      # NVIDIA variants: the loader policy only, AMD64 ONLY (owner 19:3x(b) +
+      # 09/11: the ARM64 GPU SETS ARE GONE — no dGPU exists on ARM, the
+      # arm64 lane builds NO gpu deb at all (the rpi/rk/mt8183 device
+      # modules stay); the loader variants amd64 only — no ARM NVIDIA).
       gaming-x64v1:
         when: {arch: amd64}
         deps:
@@ -753,21 +743,6 @@ packages:
         deps:
           - linux-image-ia-x64v4
         env: {GPU_SET: gaming, GPU_FLAV: x64v4, SEED_SUFFIX: "-ia-x64v4"}
-      gaming-armv8.0:
-        when: {arch: arm64}
-        deps:
-          - linux-image-ia-armv8.0
-        env: {GPU_SET: gaming, GPU_FLAV: armv8.0, SEED_SUFFIX: "-ia-armv8.0"}
-      gaming-armv8.2-lse:
-        when: {arch: arm64}
-        deps:
-          - linux-image-ia-armv8.2-lse
-        env: {GPU_SET: gaming, GPU_FLAV: armv8.2-lse, SEED_SUFFIX: "-ia-armv8.2-lse"}
-      gaming-armv9-sve2:
-        when: {arch: arm64}
-        deps:
-          - linux-image-ia-armv9-sve2
-        env: {GPU_SET: gaming, GPU_FLAV: armv9-sve2, SEED_SUFFIX: "-ia-armv9-sve2"}
       # NVIDIA variants: the loader policy only, AMD64 ONLY (owner 19:3x(b):
       # no ARM NVIDIA — the arm64 flavours never had one). They depend on
       # their sibling FUSED merged set of the same flavour and profile
@@ -847,8 +822,8 @@ packages:
     build: |
       set -euo pipefail
       # The variant key carries its own dimensions: GPU_SET = the usage set
-      # (ia|gaming), GPU_FLAV = the flavour (x64v1..v4, armv8.0|armv8.2-lse|
-      # armv9-sve2), GPU_NVIDIA = yes for the loader-policy-only variants
+      # (ia|gaming), GPU_FLAV = the flavour (x64v1..v4 — the GPU matrix is
+      # AMD64-only: no arm64 gpu deb, owner 09/11), GPU_NVIDIA = yes for the
       # (key <set>-nvidia-<flav>, amd64 only).
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
@@ -1092,7 +1067,7 @@ packages:
         # the fused sets and their loader policies.
         OTHER=gaming; [ "${GPU_SET}" = gaming ] && OTHER=ia
         CONFLICTS=""
-        for GPU_FLAVS in x64v1 x64v2 x64v3 x64v4 armv8.0 armv8.2-lse armv9-sve2; do
+        for GPU_FLAVS in x64v1 x64v2 x64v3 x64v4; do
           CONFLICTS="${CONFLICTS:+${CONFLICTS}, }gpu-${OTHER}-${GPU_FLAVS}"
           CONFLICTS="${CONFLICTS}, gpu-${OTHER}-nvidia-${GPU_FLAVS}"
         done

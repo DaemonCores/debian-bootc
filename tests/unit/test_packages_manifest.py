@@ -401,22 +401,22 @@ def test_gpu_module_sets_expand_to_the_full_flavour_matrix() -> None:
 
     gpu-ia and gpu-gaming are fused modules-only builds over the profile
     kernel (amdgpu per the DC pin, i915/xe — and the NVIDIA OPEN modules on
-    amd64, inside the same deb; arm64 carries the in-tree sets with no
-    NVIDIA at all). The -nvidia variants are the loader-policy debs on top
-    of their sibling fused set, amd64 ONLY (no ARM NVIDIA, ever).
+    amd64, inside the same deb). The -nvidia variants are the loader-policy
+    debs on top of their sibling fused set. AMD64-ONLY matrix (owner 09/11):
+    no dGPU exists on ARM — the arm64 expansion carries NO gpu deb at all
+    (the rpi/rk/mt8183 device modules stay).
     """
     expanded = {p['name'] for p in _expand('amd64')}
     arm64 = {p['name'] for p in _expand_arm64()}
     flavours = ('x64v1', 'x64v2', 'x64v3', 'x64v4')
-    arm_flavours = ('armv8.0', 'armv8.2-lse', 'armv9-sve2')
     for sett in ('ia', 'gaming'):
-        for flavour in flavours + arm_flavours:
-            # Y compris x64v4: the full flavour matrix, both arches.
-            expected = expanded if flavour in flavours else arm64
-            assert f'gpu-{sett}-{flavour}' in expected, (sett, flavour)
+        for flavour in flavours:
+            assert f'gpu-{sett}-{flavour}' in expanded, (sett, flavour)
         for flavour in flavours:
             assert f'gpu-{sett}-nvidia-{flavour}' in expanded, (sett, flavour)
-            assert f'gpu-{sett}-nvidia-{flavour}' not in arm64
+    # ARM64 GPU ABSENCE (owner 09/11): not one gpu package survives the arm64
+    # expansion — set, loader, NVIDIA loader all absent.
+    assert not {n for n in arm64 if n.startswith('gpu-')}
     amd64 = _packages()
     set_entry = amd64['linux-modules-gpu']
     assert set_entry['variant-env'] == 'GPU_VARIANT'
@@ -425,7 +425,7 @@ def test_gpu_module_sets_expand_to_the_full_flavour_matrix() -> None:
     assert set_entry['deb-glob'] == 'gpu-{variant}_*'
     variants = amd64['linux-modules-gpu']['variants']
     for sett in ('ia', 'gaming'):
-        for flavour in flavours + arm_flavours:
+        for flavour in flavours:
             assert variants[f'{sett}-{flavour}']['deps'] == [
                 f'linux-image-ia-{flavour}'
             ], (sett, flavour)
