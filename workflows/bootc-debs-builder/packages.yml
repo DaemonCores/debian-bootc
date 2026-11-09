@@ -1254,9 +1254,41 @@ packages:
             -Dgallium-vdpau=disabled -Dvulkan-layers=device-select" ;;
         *) echo "ERROR: unknown GPU profile ${GPU_PROFILE}" >&2; exit 1 ;;
       esac
-      # CPU level -> -march (empty for x64v1 and generic); the level builds
-      # ship only their libraries, in the glibc-hwcaps directory ld.so searches.
+      # CPU level -> -march (x64v1 = baseline); the level builds ship only
+      # their libraries, in the glibc-hwcaps directory ld.so searches.
       MARCH=$(kernel_flavour_kcflags "${GPU_LEVEL}")
+      # The -march of the level applies to the SHIPPED libraries only: the
+      # build-time executables (mesa_clc, ...) run ON THE RUNNER. A cross
+      # file whose build == host machine makes those two worlds split
+      # (native:true tools compile from the BUILD side, which carries no
+      # march; in a cross build the command-line -Dc_args is NOT passed, the
+      # march rides the machine file's host [built-in options]). Without it
+      # the vN-compiled mesa_clc dies SIGILL on a runner that does not carry
+      # the level (run 42681037593, x64v4).
+      BUILD_MACHINE=/tmp/dc-gpu-build-machine.ini
+      {
+        echo "[binaries]"
+        echo "c = 'cc'"
+        echo "cpp = 'c++'"
+        echo "ar = 'ar'"
+        echo "strip = 'strip'"
+        echo "pkg-config = 'pkg-config'"
+        echo "[host_machine]"
+        echo "system = 'linux'"
+        echo "cpu_family = 'x86_64'"
+        echo "cpu = 'x86_64'"
+        echo "endian = 'little'"
+        echo "[build_machine]"
+        echo "system = 'linux'"
+        echo "cpu_family = 'x86_64'"
+        echo "cpu = 'x86_64'"
+        echo "endian = 'little'"
+        if [ -n "${MARCH}" ]; then
+          echo "[built-in options]"
+          echo "c_args = '${MARCH}'"
+          echo "cpp_args = '${MARCH}'"
+        fi
+      } > "${BUILD_MACHINE}"
       HWCAPS=
       case "${GPU_LEVEL}" in
         x64v1) ;;
@@ -1308,11 +1340,11 @@ packages:
       # meson's buildtype; -march only from the CPU level variable.
       # shellcheck disable=SC2086
       meson setup /build/mesa /build/mesa-src \
+        --cross-file="${BUILD_MACHINE}" \
         --prefix="${PREFIX}" --libdir=lib --datadir="${SHARE}" \
         --sysconfdir="${SHARE}/etc" --buildtype=release \
         -Dgallium-drivers=auto -Dvulkan-drivers=auto \
         -Dglvnd=enabled -Dbuild-tests=false -Dstrip=true \
-        ${MARCH:+-Dc_args="${MARCH}" -Dcpp_args="${MARCH}"} \
         ${MESON_PROFILE_OPTS}
       meson compile -C /build/mesa
       rm -rf "${STAGE}" "${TREE}"
