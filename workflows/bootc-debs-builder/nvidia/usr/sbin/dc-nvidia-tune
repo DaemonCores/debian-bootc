@@ -1,0 +1,79 @@
+#!/bin/bash
+# dc-nvidia-tune — the runtime knobs of the NVIDIA driver live IN the driver
+# deb (owner order 05/11: the host-side dc-gpu-lxc tune is folded into the
+# linux-modules-nvidia payload itself, no separate package). This file is the
+# embedded source the deb ships; the VE-side dc-gpu-lxc tool
+# (DaemonCores-VE dc-gpu-lxc/usr/sbin/dc-gpu-nvidia-tune) references this copy
+# as the source of truth for the kernel/ASPM/MPS knob set.
+#
+# Applies, idempotently and only to the GPUs that support each knob, the
+# settings the GPU profiles expect when guests run CUDA on this host:
+#   persistence mode on  : nvidia-smi -pm 1
+#   power limit: factory max (nvidia-smi -pl, per GPU — a GPU that reports
+#                no max stays untouched)
+#   PCIe ASPM policy: performance (cross-brand knob, idempotent sysfs write,
+#                skipped silently when the node is absent)
+#   MPS control daemon   : nvidia-cuda-mps-control -d — IA PROFILE ONLY,
+#                self-gated on the loader-policy conf the gpu-ia-nvidia set
+#                ships at /etc/modprobe.d/dc-gpu-ia-nvidia.conf; the gaming
+#                profile keeps its context-per-client display path and gets
+#                the plain tune. dc-gpu-* confs remain the policy: this
+#                script never overrides them.
+#
+# Never compiles, never installs anything: a knob applier, started by
+# dc-nvidia-tune.service (one-shot, enabled by the deb postinst). Root required.
+
+set -euo pipefail
+
+[[ $(id -u) -eq 0 ]] || { echo "dc-nvidia-tune: root required" >&2; exit 1; }
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+  # Debian postinst runs before any GPU may be visible; the unit carries the
+  # ConditionPathExists guard too. Skip quietly — never fail the install.
+  echo "dc-nvidia-tune: nvidia-smi missing (driver not active?) — knobs skipped" >&2
+  exit 0
+fi
+
+# Persistence mode first (the power-limit and MPS calls keep their settings
+# across driver reloads only with it on).
+if nvidia-smi -pm 1 >/dev/null 2>&1; then
+  echo "dc-nvidia-tune: persistence mode on"
+fi
+
+# Power limit: factory maximum, per GPU (the driver's power.max_limit; a GPU
+# reporting N/A — often a secondary adapter — keeps its default).
+nvidia-smi --query-gpu=index,power.max_limit \
+  --format=csv,noheader,nounits 2>/dev/null \
+  | while IFS= read -r line; do
+      gpu="${line%%,*}"
+      maxw="$(echo "${line#*,}" | cut -d. -f1)"
+      [[ "${maxw}" =~ ^[0-9]+$ ]] || continue
+      if nvidia-smi -i "${gpu}" -pl "${maxw}" >/dev/null 2>&1; then
+        echo "dc-nvidia-tune: GPU${gpu} power limit ${maxw}W (factory max)"
+      fi
+    done
+
+# PCIe ASPM policy (cross-brand knob — gains measured on Radeon dense decode
+# ~+10% and applies to every GPU): force "performance" so PCIe links never
+# drop to L1 between dispatches. Idempotent write; skips silently when the
+# sysfs node is absent.
+if [[ -w /sys/module/pcie_aspm/parameters/policy ]]; then
+  CUR="$(cat /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true)"
+  [[ "${CUR}" == "[performance]" ]] || echo performance \
+    > /sys/module/pcie_aspm/parameters/policy
+  echo "dc-nvidia-tune: pcie_aspm.policy=performance (${CUR:-unknown})"
+fi
+
+# The MPS control daemon: IA profile only (loader-policy conf = the policy
+# source), exactly one. A second start exits nonzero — the socket directory
+# /tmp/nvidia-mps already carried it.
+if [[ -f /etc/modprobe.d/dc-gpu-ia-nvidia.conf ]]; then
+  mkdir -p /tmp/nvidia-mps
+  if ! pgrep -x nvidia-cuda-mps-server >/dev/null 2>&1 \
+     && ! pgrep -x nvidia-cuda-mps-control >/dev/null 2>&1; then
+    if nvidia-cuda-mps-control -d >/dev/null 2>&1; then
+      echo "dc-nvidia-tune: MPS control daemon started (ia profile)"
+    else
+      echo "WARN: dc-nvidia-tune: MPS daemon did not start (no GPU? knob skipped)" >&2
+    fi
+  fi
+fi

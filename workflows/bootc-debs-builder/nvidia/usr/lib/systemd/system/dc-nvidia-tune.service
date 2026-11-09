@@ -1,0 +1,15 @@
+[Unit]
+Description=dc-nvidia-tune — NVIDIA driver runtime knobs (persistence, power limit, ASPM, MPS)
+Documentation=https://github.com/DaemonCores/debian-bootc
+# The deb-payload knob applier; only meaningful when an NVIDIA user-space
+# lives on this host.
+ConditionPathExists=/usr/bin/nvidia-smi
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/dc-nvidia-tune
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

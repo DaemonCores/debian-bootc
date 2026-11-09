@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    deb-systemd-helper enable dc-nvidia-tune.service
+    deb-systemd-invoke start dc-nvidia-tune.service 2>/dev/null || true
+    ;;
+esac

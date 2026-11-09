@@ -1,0 +1,21 @@
+Package: linux-modules-nvidia
+Version: {{ VER }}
+Architecture: {{ ARCH }}
+Maintainer: Gabriel Guillou <guillou.gabriel@gmail.com>
+Section: kernel
+Priority: optional
+Depends: daemoncores-kernel-{{ KVER }} (= {{ VER }})
+Description: NVIDIA open kernel modules (GPU compute profile)
+ The NVIDIA open kernel modules (nvidia.ko, nvidia-uvm, nvidia-drm,
+ nvidia-modeset, nvidia-peermem) built in CI against the project kernel
+ (daemoncores-kernel) — the deps/waves module pattern of the
+ linux-modules entries, NOT DKMS: nothing compiles on the target. The
+ deb-glob of this entry is installed by the image after the kernel layer.
+ The deb carries its own runtime-knob payload (owner order 05/11 — the
+ host-side dc-gpu-lxc tune is folded INTO the driver deb, no separate
+ package): usr/sbin/dc-nvidia-tune (idempotent persistence mode, per-GPU
+ factory-max power limit, PCIe ASPM performance policy, MPS control daemon
+ for the IA profile only) and the one-shot systemd unit
+ dc-nvidia-tune.service its postinst enables. The loader-policy modprobe
+ dc-gpu-* confs stay the policy: the tune script consumes them, it never
+ overrides the profile split.
