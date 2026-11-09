@@ -766,15 +766,14 @@ packages:
       # linux-image-<KVER> (the plain release name the module pairs depend
       # on). Conflicts keep exactly ONE build of a release string per host:
       # the plain kernel deb and the sibling profile.
-      PKPROF_FMT='Provides: %s\nProvides: linux-image-%s\nConflicts: %s\nConflicts: %s,'
-      PKPROF_FMT="${PKPROF_FMT} daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: %s,"
-      PKPROF_FMT="${PKPROF_FMT} daemoncores-kernel-%s-%s\n"
-      printf "${PKPROF_FMT}" \
+      # ONE line per control field (dpkg-deb rejects a repeated field — the
+      # printf emitted two Provides:, run 42632521818) — values comma-joined.
+      printf 'Provides: %s, linux-image-%s\nConflicts: %s, daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: daemoncores-kernel-%s-%s\n' \
         "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
         "${KVER}" \
         "${ORIG_PKG}" \
-        "daemoncores-kernel-${KVER}" "${KERNEL_PROFILE}" "${KVER}" "${OTHER_PROFILE}" "${KVER}" \
-        "daemoncores-kernel-${KVER}" "${KERNEL_PROFILE}" "${KVER}" \
+        "${KERNEL_PROFILE}" "${KVER}" "${OTHER_PROFILE}" "${KVER}" \
+        "${KERNEL_PROFILE}" "${KVER}" \
         >> "${REPACK_DIR}/DEBIAN/control"
       dpkg-deb -b "${REPACK_DIR}" \
         "/debs/linux-image-common${KERNEL_SUFFIX:-}_${BUILT_VER}_${DEB_ARCH}.deb"
