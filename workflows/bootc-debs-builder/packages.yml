@@ -1285,6 +1285,13 @@ packages:
         echo "cpu_family = 'x86_64'"
         echo "cpu = 'x86_64'"
         echo "endian = 'little'"
+        # Mesa probes llvm-config as a find_program — in a cross build
+        # find_program resolves from THIS file, and Debian ships the binary
+        # versioned (llvm-config-19, no unversioned alias): resolve it.
+        LLVM_CFG=$(command -v llvm-config-19 || command -v llvm-config || true)
+        if [ -n "${LLVM_CFG}" ]; then
+          echo "llvm-config = '${LLVM_CFG}'"
+        fi
         if [ -n "${MARCH}" ]; then
           echo "[built-in options]"
           echo "c_args = '${MARCH}'"
