@@ -353,9 +353,10 @@ def _nvidia_containerfile(set_name: str, base: str) -> str:
     The package list is the payload of the decision (owner 03/11): the base
     payload, the SIGNED NVIDIA repository (NVIDIA's documented cuda-keyring
     method; the proprietary binaries are pulled from NVIDIA's repo at build
-    time, never hosted by us) and the gpu-*-nvidia module set deb from the
-    DaemonCores APT repo (which pulls its sibling open set and the
-    linux-modules-nvidia base). The same-release and single-kernel guards
+    time, never hosted by us and never one of our debs, owner 05/11 19:3x)
+    and the gpu-*-nvidia module set deb from the
+    DaemonCores APT repo (which pulls its sibling FUSED open set, carrying
+    the open kernel modules). The same-release and single-kernel guards
     are enforced verbatim in the generated containerfile.
 
     Args:
@@ -366,6 +367,12 @@ def _nvidia_containerfile(set_name: str, base: str) -> str:
         The containerfile text.
     """
     pkgs = " ".join(NVIDIA_PKGS)
+    # The FUSED (owner 05/11 19:2x) sibling set carries the NVIDIA OPEN
+    # kernel modules INSIDE the gpu-<open-set>-<flavour> deb: the version
+    # string of that deb ends in +r1nv<nvidia-release>, the module release
+    # is read back out of it — there is no separate linux-modules-nvidia
+    # base deb any more.
+    open_set = set_name[:-len("-nvidia")]
     return f"""\
 FROM {base}
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
@@ -390,9 +397,10 @@ RUN apt-get update \\
     && kflav=$(printf '%s' "$kpkg" \\
          | sed -E 's/^daemoncores-kernel-[a-z]+-[0-9][^-]*-/' \\
          | sed 's/-xanmod1$//') \\
-    && [ -n "$kflav" ] \\
-    && module_release=$(dpkg-query -W -f='\\${{Version}}' \\
-         "linux-modules-${{kflav}}" | sed 's/-.*//; s/+.*//') \\
+    && [ -n "$kflav" ] \
+    && oset="{open_set}-${{kflav}}" \
+    && module_release=$(dpkg-query -W -f='\\${{Version}}' \
+         "$oset" | sed 's/.*+r1nv//') \\
     && pinned="" \\
     && for p in {pkgs}; do \\
          v=$(apt-cache madison "$p" \\

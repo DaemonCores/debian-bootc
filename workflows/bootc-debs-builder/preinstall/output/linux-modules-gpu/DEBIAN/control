@@ -7,15 +7,16 @@ Priority: optional
 Depends: {{ DEPS }}
 Replaces: {{ REPLACES }}
 Conflicts: {{ CONFLICTS }}
-Description: GPU module set {{ SET }} profile (kernel modules, loader policy)
- GPU FINAL (owner 2026-11-03): the four GPU module sets rebuild the profile
- build of the vendor drivers as modules-only entries on top of the standard
- kernel (daemoncores-kernel). The set the machine runs is chosen AT INSTALL
- (bootc-installer GPU profile selector, P-513a pattern) — the image carries
- no set; the bootc-installer pulls this deb from the APT repo and the loader
- policy lands in /etc/modprobe.d/dc-gpu-{{ SET }}.conf. The in-tree sets
- (gpu-ia, gpu-gaming) conflict with each other: exactly one can be
- installed. The -nvidia variants carry only the loader policy: their in-tree
- modules come from the sibling open set and the NVIDIA open kernel modules
- from the linux-modules-nvidia base deb — one modules-only build per
- profile, one NVIDIA base, four sets.
+Description: GPU module set {{ SET }} profile (fused brands, loader policy)
+ GPU FINAL (owner 2026-11-05): ONE fused GPU module deb per usage set and
+ flavour, carrying EVERY brand the architecture can run: amdgpu (the DC pin
+ of the set), i915/xe and — on amd64 — the NVIDIA OPEN kernel modules built
+ inside this same deb (the former linux-modules-nvidia pair is absorbed);
+ no NVIDIA at all on arm64. The NVIDIA userspace is never one of ours: it
+ comes from NVIDIA's own signed repository at the derive step. The set the
+ machine runs is chosen AT INSTALL (bootc-installer GPU profile selector,
+ P-513a pattern) — the image carries no set; the bootc-installer pulls this
+ deb from the APT repo and the loader policy lands in
+ /etc/modprobe.d/dc-gpu-{{ SET }}.conf. The sets conflict with each other:
+ exactly one can be installed. The -nvidia variants carry only the loader
+ policy: everything it pins goes through its sibling fused set.

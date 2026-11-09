@@ -111,15 +111,17 @@ def test_nvidia_stack_is_not_a_hosted_image() -> None:
     # The separate NVIDIA image is retired (owner 03/11): the derived lane at
     # install replaces it. Nobody may recreate the hosted-image Containerfile.
     assert not (root / 'Containerfile.nvidia').exists()
-    # The derived build carries the stack instead: the user-space list of
-    # gpu-set-stage.py plus the module plan deb, behind the EULA label.
+    # The derived build carries the stack instead: the userspace list of
+    # gpu-set-stage.py plus the FUSED set deb pinning (the NVIDIA release
+    # rides the sibling set version's +r1nv suffix), behind the EULA label.
     stage = (
         root / 'src/buildisopreinstall/usr/libexec/debian-bootc/'
         'gpu-set-stage.py'
     ).read_text()
     assert 'nvidia-driver-libs' in stage
     assert 'libcuda1' in stage
-    assert 'linux-modules-nvidia' in stage
+    assert '+r1nv' in stage
+    assert 'oset' in stage
     assert 'LABEL org.daemoncores.requires-eula="nvidia"' in stage
 
 
@@ -389,40 +391,48 @@ def test_gpu_userspace_lists_no_vendor_and_no_fixed_march() -> None:
     assert '-march' not in code
 
 
-def test_gpu_module_sets_expand_to_the_four_variants() -> None:
-    """GPU FINAL (owner 2026-11-03): the four module sets exist on amd64.
+def test_gpu_module_sets_expand_to_the_full_flavour_matrix() -> None:
+    """FUSION (owner 05/11 19:2x + 19:3x): one merged set per (set, flavour).
 
-    gpu-ia and gpu-gaming are modules-only builds over the standard kernel
-    (deps: linux-image); the -nvidia variants are the loader-policy debs on top
-    of their sibling open set and the linux-modules-nvidia base. No set on arm64
-    (the arm GPUs ride the base kernel fold).
+    gpu-ia and gpu-gaming are fused modules-only builds over the profile
+    kernel (amdgpu per the DC pin, i915/xe — and the NVIDIA OPEN modules on
+    amd64, inside the same deb; arm64 carries the in-tree sets with no
+    NVIDIA at all). The -nvidia variants are the loader-policy debs on top
+    of their sibling fused set, amd64 ONLY (no ARM NVIDIA, ever).
     """
     expanded = {p['name'] for p in _expand('amd64')}
+    arm64 = {p['name'] for p in _expand_arm64()}
     flavours = ('x64v1', 'x64v2', 'x64v3', 'x64v4')
+    arm_flavours = ('armv8.0', 'armv8.2-lse', 'armv9-sve2')
     for sett in ('ia', 'gaming'):
+        for flavour in flavours + arm_flavours:
+            # Y compris x64v4: the full flavour matrix, both arches.
+            expected = expanded if flavour in flavours else arm64
+            assert f'gpu-{sett}-{flavour}' in expected, (sett, flavour)
         for flavour in flavours:
-            # Y compris x64v4: the full set matrix of the profile kernels.
-            assert f'gpu-{sett}-{flavour}' in expanded, (sett, flavour)
             assert f'gpu-{sett}-nvidia-{flavour}' in expanded, (sett, flavour)
+            assert f'gpu-{sett}-nvidia-{flavour}' not in arm64
     amd64 = _packages()
     set_entry = amd64['linux-modules-gpu']
     assert set_entry['variant-env'] == 'GPU_VARIANT'
     assert set_entry['sources'][1] == 'kernel-src/modules/gpu'
+    assert set_entry['sources'][2] == 'nvidia'
+    assert set_entry['deb-glob'] == 'gpu-{variant}_*'
     variants = amd64['linux-modules-gpu']['variants']
     for sett in ('ia', 'gaming'):
-        for flavour in flavours:
+        for flavour in flavours + arm_flavours:
             assert variants[f'{sett}-{flavour}']['deps'] == [
                 f'linux-image-ia-{flavour}'
             ], (sett, flavour)
             assert variants[f'{sett}-{flavour}']['env']['GPU_SET'] == sett
             assert variants[f'{sett}-{flavour}']['env']['GPU_FLAV'] == flavour
-    assert variants['ia-nvidia-x64v4']['deps'] == [
-        'linux-image-ia-x64v4',
-        'gpu-ia-x64v4',
-        'linux-modules-nvidia-x64v4',
-    ]
+    for flavour in flavours:
+        assert variants[f'ia-nvidia-{flavour}']['deps'] == [
+            f'linux-image-ia-{flavour}',
+            f'gpu-ia-{flavour}',
+        ]
     for name in ('gpu-ia', 'gpu-gaming', 'gpu-ia-nvidia', 'gpu-gaming-nvidia'):
-        assert name not in {p['name'] for p in _expand_arm64()}
+        assert name not in arm64
 
 
 def _expand_arm64() -> list[dict[str, Any]]:

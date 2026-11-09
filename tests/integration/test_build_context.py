@@ -73,9 +73,7 @@ def test_kernel_prepare_users() -> None:
     }
     # GPU FINAL (owner 2026-11-03): the in-tree GPU module sets bootstrap the
     # same way, within the linux-modules-gpu template entry.
-    assert users == {
-        'linux-modules-arm-device', 'linux-modules-nvidia', 'linux-modules-gpu'
-    }
+    assert users == {'linux-modules-arm-device', 'linux-modules-gpu'}
 
 
 def test_kernel_signing_users() -> None:
@@ -86,8 +84,7 @@ def test_kernel_signing_users() -> None:
         if 'kernel_signing_setup' in str(entry.get('build', ''))
     }
     assert users == {
-        'linux-image-profile', 'linux-modules-arm-device',
-        'linux-modules-nvidia', 'linux-modules-gpu'
+        'linux-image-profile', 'linux-modules-arm-device', 'linux-modules-gpu'
     }
 
 

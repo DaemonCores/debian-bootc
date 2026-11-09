@@ -191,9 +191,7 @@ def test_derive_builds_the_nvidia_containerfile(tmp_path: Path) -> None:
     assert 'FROM reg/base:latest_amd64' in saved
     assert 'developer.download.nvidia.com' in saved
     assert 'cuda-keyring' in saved
-    for pkg in (
-        'libcuda1', 'gpu-gaming-nvidia', 'kflav', 'linux-modules-${kflav}'
-    ):
+    for pkg in ('libcuda1', 'gpu-gaming-nvidia', 'kflav', '"$oset"', '+r1nv'):
         assert pkg in saved, pkg
     assert 'requires-eula="nvidia"' in saved
     assert run(tmp_path, 'derived').stdout.strip() == \

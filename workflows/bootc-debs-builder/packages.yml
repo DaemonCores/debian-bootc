@@ -671,238 +671,25 @@ packages:
       test -s "/debs/linux-modules-${DEVICE}_${BUILT_VER}+r1_${DEB_ARCH}.deb" \
         || { echo "ERROR: output linux-modules-${DEVICE} deb empty" >&2; exit 1; }
 
-  # linux-modules-nvidia — the NVIDIA open kernel modules as a pair deb,
-  # VARIANTS per (kernel-tree, flavour) (owner 04/11 + 05/11: one pair per
-  # flavour x64v1..v4 — Y COMPRIS x64v4 — while the profile lane publishes
-  # the same matrix). Built in CI against the IA-profile kernel of the SAME
-  # build (dep linux-image-ia-<flavour>); the .config + Module.symvers are
-  # seeded from that kernel deb (the profile delta touches amdgpu only, and
-  # MODVERSIONS=n keeps one module ABI per release string) while the RUNTIME
-  # Depends is the virtual linux-image-<KVER> (= kernel version), which BOTH
-  # profiles of a flavour Provide — the pair installs on the VM/PVE host
-  # exactly as on the IA host (the "nvidia-pve" pairing lives there: same debs,
-  # no second pair lane). NOT DKMS: nothing compiles on the target. Installed
-  # by the derived lane at install; the standard image does not carry it. The
-  # module is the MIT open-gpu-kernel-modules; its version is the one of the
-  # Debian NVIDIA user-space (a module and its user-space must be the same
-  # release), read from the apt index at build time. amd64 only.
-  - name: linux-modules-nvidia
-    when:
-      arch: amd64
-    variant-name-prefix: "linux-modules-nvidia-"
-    variant-env: NV_FLAVOUR
-    deb-glob: "linux-modules-nvidia-{variant}_*"
-    sources:
-      - nvidia
-    env:
-      HELPERS_VER: 11
-      # The SEED_SUFFIX (-ia-<flavour>) selects the seed kernel deb glob of
-      # kernel_prepare; the pair name itself carries the flavour only.
-      # TEMPORARY KERNEL PIN (see the profile kernel env): same pin.
-      KERNEL_VER: "7.2.15"
-    variants:
-      "x64v1":
-        deps:
-          - linux-image-ia-x64v1
-        env:
-          KERNEL_ARCH_LEVEL: x64v1
-          SEED_SUFFIX: "-ia-x64v1"
-      "x64v2":
-        deps:
-          - linux-image-ia-x64v2
-        env:
-          KERNEL_ARCH_LEVEL: x64v2
-          SEED_SUFFIX: "-ia-x64v2"
-      "x64v3":
-        deps:
-          - linux-image-ia-x64v3
-        env:
-          KERNEL_ARCH_LEVEL: x64v3
-          SEED_SUFFIX: "-ia-x64v3"
-      "x64v4":
-        deps:
-          - linux-image-ia-x64v4
-        env:
-          KERNEL_ARCH_LEVEL: x64v4
-          SEED_SUFFIX: "-ia-x64v4"
-    build: |
-      set -euo pipefail
-      SAVE_PWD=$(pwd)
-      DEB_ARCH=$(dpkg --print-architecture)
-      KERNEL_SUFFIX="${SEED_SUFFIX:-}"
 
-      # The engine shared set (see linux-modules-arm-device): the same
-      # PATCHES_JSON export the device entries resolve, consumed by
-      # kernel_prepare's class loop (kernel patches, then the module class —
-      # none on amd64).
-      test -f "${CI_KERNEL_SHARED}/patches-shared.yml" \
-        || { echo "ERROR: engine kernel-shared/patches-shared.yml missing" >&2; exit 1; }
-      PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
-      export PATCHES_JSON
-
-      # Bootstrap shared by the kernel module entries: locate the seed profile
-      # kernel deb, download the kernel source, seed .config (kernel_prepare).
-      kernel_prepare
-      # kernel_prepare derives KVER from the Package field of the seed deb
-      # (daemoncores-kernel-<profile>-<KVER>) — strip the profile prefix: the
-      # pair installs and Depends on the PLAIN release string both profiles
-      # share (the virtual linux-image-<KVER>).
-      case "${KVER}" in ia-*|vm-*) KVER="${KVER#*-}" ;; esac
-      kernel_signing_setup
-      # An out-of-tree build reads include/config/auto.conf and the generated
-      # headers of the kernel tree; the seeded .config alone does not provide
-      # them. olddefconfig resolves the config, modules_prepare generates the
-      # rest (the Kbuild contract for external modules).
-      make olddefconfig
-      make -j"$(nproc)" modules_prepare
-
-      # Module.symvers of the SAME kernel, at
-      # /usr/lib/linux-kernel-build/Module.symvers in the kernel deb, FULL:
-      # nvidia-drm and nvidia-modeset import symbols exported by kernel
-      # MODULES (drm, drm_kms_helper, ...), which only the inter-module lines
-      # list. The device entries filter those out because they rebuild the
-      # exporting modules themselves ("exported twice"); the external NVIDIA
-      # modules rebuild none of them. The NVIDIA conftest
-      # (module_symvers_sanity_check) also requires vmlinux exports in this
-      # file, in the kernel output tree.
-      test -f "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" \
-        || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
-      cp "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" "${SRCDIR}/Module.symvers"
-
-      # Upstream NVIDIA open kernel modules at the release of the user-space
-      # the image installs, from NVIDIA's own APT repository (libcuda1 is
-      # versioned like the whole NVIDIA stack there, e.g. 615.71.10-1 -> tag
-      # 615.71.10); Debian's user-space is too old for the image kernel.
-      # Rolling pin (owner order 2026-11-09, the kernel-stream pattern — auto
-      # detect + fallback): DaemonCores-CI scripts/deb_helpers.sh
-      # nvidia_driver_detect takes NVIDIA_APT_REPO as the repo argument
-      # (default debian13, an EXTRA_ENV key — non-secret, content-hashed, a
-      # change rebuilds the lane), parses NVIDIA's OWN Packages index
-      # directly (signed repo base unchanged; the cuda-keyring addition for
-      # the IMAGE user-space stays gpu-set-stage.py + the shipped
-      # usr/sbin/nvidia-apt-repo, no apt update in this build any more),
-      # walks the candidates NEWEST-FIRST and takes the FIRST one whose
-      # open-gpu-kernel-modules tag exists (releases shipped without a
-      # module tag are skipped, never hand-forced) and exports
-      # NVIDIA_DRIVER_VERSION. A preset NVIDIA_DRIVER_VERSION is honored
-      # verbatim (a pin wins over detection). The pairing gate between the
-      # repo user-space and the module tag stays: the derived image pins the
-      # SAME release (gpu-set-stage.py), so the pairing can never straddle
-      # two releases.
-      nvidia_driver_detect
-      NVIDIAOPEN_VER="${NVIDIA_DRIVER_VERSION}"
-      rm -rf /build/nvidia-open
-      git clone --quiet --depth=1 --branch "${NVIDIAOPEN_VER}" \
-        https://github.com/NVIDIA/open-gpu-kernel-modules.git /build/nvidia-open
-      git -C /build/nvidia-open rev-parse HEAD > /build/nvidia-open.commit
-      test -d /build/nvidia-open/kernel-open \
-        || { echo "ERROR: nvidia-open has no kernel-open tree" >&2; exit 1; }
-
-      # GPU module-tree patches (perf, per driver) of the SAME shared
-      # export: patches-gpu/nvidia.yml is applied to THIS NVIDIA tree
-      # BEFORE the module compile — dry-run ALL (fuzz 0, all-or-nothing)
-      # like the kernel set; an EMPTY set is a no-op. {series} resolves as
-      # the KERNEL series (KVER = 7.2.15-x64v2-xanmod1 -> 7.2), the series
-      # the CachyOS-style sets are published per.
-      GPU_NVIDIA_YML="${CI_KERNEL_SHARED}/patches-gpu/nvidia.yml"
-      [[ -f "${GPU_NVIDIA_YML}" ]] \
-        || { echo "ERROR: engine patches-gpu/nvidia.yml missing" >&2; exit 1; }
-      PATCHES_SERIES="${KVER%%-*}"
-      export PATCHES_SERIES
-      kernel_apply_patches "${GPU_NVIDIA_YML}" \
-        "amd64" "${NVIDIAOPEN_VER}" "/build/nvidia-open"
-      unset PATCHES_SERIES
-
-      # Out-of-tree module build against the CI kbuild tree: SYSSRC/SYSOUT
-      # point at the SAME patched source the image kernel was built from.
-      # Built from the repository ROOT: its Makefile first builds the
-      # OS-agnostic nv-kernel.o / nv-modeset-kernel.o from src/ and links them
-      # as kernel-open/*/*.o_binary, which the kbuild in kernel-open/ needs.
-      make -C /build/nvidia-open \
-        SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
-
-      # Install the modules into the packaging tree under the kernel's
-      # /lib/modules/<KVER> so modprobe on the target resolves them. KVER
-      # carries the flavour LOCALVERSION (7.2.15-x64v2-xanmod1), the deb
-      # name and its Package field carry the same suffix — the pairs of
-      # different flavours coexist in the APT pool (different names, the
-      # same NVIDIA release).
-      NV_SUFFIX="-${NV_FLAVOUR}"
-      NV_PKG="linux-modules-nvidia${NV_SUFFIX}"
-      DESTDIR="/output/linux-modules-nvidia${NV_SUFFIX}"
-      rm -rf "${DESTDIR}"
-      mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
-      [ -f modules.builtin ] || touch modules.builtin
-      [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
-      make -C /build/nvidia-open \
-        SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" \
-        INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1 modules_install
-
-      # Keep ONLY the nvidia modules: the modules_install of an out-of-tree
-      # build installs just them, but the metadata it regenerates overlaps
-      # with the kernel deb (same ownership collision as the device entries).
-      dpkg-deb --fsys-tarfile "${COMMON_DEB}" | tar t | sed 's|^\./||' \
-        | while IFS= read -r f; do
-            target="${DESTDIR}/${f}"
-            if [ -f "${target}" ] || [ -L "${target}" ]; then
-              rm -f "${target}"
-            fi
-          done
-      rm -f "${DESTDIR}/lib/modules/${KVER}/build" \
-        "${DESTDIR}/lib/modules/${KVER}/source"
-
-      # Content check: the five NVIDIA modules are in the deb.
-      test -n "$(find "${DESTDIR}/lib/modules/${KVER}" -name 'nvidia*.ko' 2>/dev/null)" \
-        || { echo "ERROR: modules_install produced no nvidia*.ko" >&2; exit 1; }
-
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/control" \
-        "${DESTDIR}/DEBIAN/control"
-      # The deb carries its own runtime-knob payload (owner order 05/11: the
-      # host-side dc-gpu-lxc tune is folded INTO the driver deb, no separate
-      # package): usr/sbin/dc-nvidia-tune, the one-shot unit it starts and
-      # the postinst that enables the unit. Idempotent knobs; the MPS branch
-      # self-gates on the IA loader-policy conf (dc-gpu-ia-nvidia.conf),
-      # gaming gets the plain tune — the modprobe dc-gpu-* confs stay the
-      # policy.
-      mkdir -p "${DESTDIR}/usr/sbin" \
-        "${DESTDIR}/usr/lib/systemd/system"
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/usr/sbin/dc-nvidia-tune" \
-        "${DESTDIR}/usr/sbin/dc-nvidia-tune"
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/usr/lib/systemd/system/dc-nvidia-tune.service" \
-        "${DESTDIR}/usr/lib/systemd/system/dc-nvidia-tune.service"
-      cp "${SAVE_PWD}/workflows/bootc-debs-builder/nvidia/DEBIAN/postinst" \
-        "${DESTDIR}/DEBIAN/postinst"
-      chmod 755 "${DESTDIR}/usr/sbin/dc-nvidia-tune" "${DESTDIR}/DEBIAN/postinst"
-      # Package version = NVIDIA release (what the derived-image lane compares to
-      # libcuda1) + the kernel deb version it was built against; Depends pins
-      # the kernel deb version exactly.
-      MOD_VER="${NVIDIAOPEN_VER}+${BUILT_VER}"
-      sed -i \
-        -e "s|^Package: linux-modules-nvidia$|Package: ${NV_PKG}|" \
-        -e "s|Version: {{ VER }}|Version: ${MOD_VER}|g" \
-        -e "s|{{ VER }}|${BUILT_VER}|g" \
-        -e "s|{{ KVER }}|${KVER}|g" \
-        -e "s|{{ ARCH }}|${DEB_ARCH}|g" \
-        "${DESTDIR}/DEBIAN/control"
-
-      ( cd "${DESTDIR}" && \
-        find usr lib -type f -not -path 'DEBIAN/*' | xargs md5sum | sed -e 's|usr/|/usr/|' -e 's|lib/|/lib/|' \
-        > DEBIAN/md5sums )
-
-      dpkg-deb --build "${DESTDIR}" \
-        "/debs/${NV_PKG}_${MOD_VER}_${DEB_ARCH}.deb"
-      test -s "/debs/${NV_PKG}_${MOD_VER}_${DEB_ARCH}.deb" \
-        || { echo "ERROR: output ${NV_PKG} deb empty" >&2; exit 1; }
-
+  # linux-modules-gpu — THE FUSED GPU MODULE SET (owner order 05/11 19:2x +
+  # corrections 19:3x): ONE deb per (usage set ia|gaming, flavour) carrying
+  # EVERY brand the arch can run. AMD64: amdgpu (the profile DC pin) +
+  # i915/xe + the NVIDIA OPEN kernel modules built INSIDE the set deb — the
+  # separate linux-modules-nvidia pair is absorbed/dead; the NVIDIA userspace
+  # is NEVER one of our debs (it comes from NVIDIA's own signed repository at
+  # the derived-image step, owner 19:3x) and there is NO ARM NVIDIA (no -arm
+  # loader variant, amd64-only fusion — owner 19:3x(b)). ARM64: the in-tree
+  # sets exist as well (the amdgpu class — i915/xe are x86-only drivers, and
+  # the DC symbols have no arm64 kconfig meaning). The loader-policy deb
+  # (-nvidia variants, amd64 only) carries ONLY the per-profile NVIDIA
+  # modprobe conf on top of its sibling merged set: every version pins
+  # through that one sibling. The sets build against the IA-profile kernel
+  # of their flavour (dep linux-image-ia-<flav>; DC on/off by the set
+  # overlay): the set deb Replaces the exact files the seed profile kernel
+  # owns (daemoncores-kernel-ia-<KVER>), the way the DC pin per set is
+  # proofed; a VM-profile host carries no gpu set (VM != GPU, jamais eu).
   - name: linux-modules-gpu
-    # FULL FLAVOUR MATRIX (owner order 05/11: V4 = missing, Y COMPRIS
-    # x64v4): one in-tree set per (usage set ia|gaming) x flavour
-    # x64v1..v4, and one loader-policy deb per the same pairs for NVIDIA
-    # hosts. The module sets build against the IA-profile kernel of their
-    # flavour (dep linux-image-ia-<flav>; DC on/off by the set overlay):
-    # the set deb Replaces the exact files the seed profile kernel owns
-    # (daemoncores-kernel-ia-<KVER>), the way the DC pin per set is proofed;
-    # a VM-profile host carries no gpu set (VM != GPU, jamais eu).
     variants:
       ia-x64v1:
         when: {arch: amd64}
@@ -924,6 +711,21 @@ packages:
         deps:
           - linux-image-ia-x64v4
         env: {GPU_SET: ia, GPU_FLAV: x64v4, SEED_SUFFIX: "-ia-x64v4"}
+      ia-armv8.0:
+        when: {arch: arm64}
+        deps:
+          - linux-image-ia-armv8.0
+        env: {GPU_SET: ia, GPU_FLAV: armv8.0, SEED_SUFFIX: "-ia-armv8.0"}
+      ia-armv8.2-lse:
+        when: {arch: arm64}
+        deps:
+          - linux-image-ia-armv8.2-lse
+        env: {GPU_SET: ia, GPU_FLAV: armv8.2-lse, SEED_SUFFIX: "-ia-armv8.2-lse"}
+      ia-armv9-sve2:
+        when: {arch: arm64}
+        deps:
+          - linux-image-ia-armv9-sve2
+        env: {GPU_SET: ia, GPU_FLAV: armv9-sve2, SEED_SUFFIX: "-ia-armv9-sve2"}
       gaming-x64v1:
         when: {arch: amd64}
         deps:
@@ -944,68 +746,82 @@ packages:
         deps:
           - linux-image-ia-x64v4
         env: {GPU_SET: gaming, GPU_FLAV: x64v4, SEED_SUFFIX: "-ia-x64v4"}
-      # NVIDIA variants: the loader policy only. They depend on their
-      # sibling open set of the same flavour and profile binding, on the
-      # linux-modules-nvidia pair of the SAME flavour AND on the same
-      # profile kernel the stack is pinned to.
+      gaming-armv8.0:
+        when: {arch: arm64}
+        deps:
+          - linux-image-ia-armv8.0
+        env: {GPU_SET: gaming, GPU_FLAV: armv8.0, SEED_SUFFIX: "-ia-armv8.0"}
+      gaming-armv8.2-lse:
+        when: {arch: arm64}
+        deps:
+          - linux-image-ia-armv8.2-lse
+        env: {GPU_SET: gaming, GPU_FLAV: armv8.2-lse, SEED_SUFFIX: "-ia-armv8.2-lse"}
+      gaming-armv9-sve2:
+        when: {arch: arm64}
+        deps:
+          - linux-image-ia-armv9-sve2
+        env: {GPU_SET: gaming, GPU_FLAV: armv9-sve2, SEED_SUFFIX: "-ia-armv9-sve2"}
+      # NVIDIA variants: the loader policy only, AMD64 ONLY (owner 19:3x(b):
+      # no ARM NVIDIA — the arm64 flavours never had one). They depend on
+      # their sibling FUSED merged set of the same flavour and profile
+      # binding, and on the same profile kernel the stack is pinned to: the
+      # open NVIDIA modules ride INSIDE the sibling deb.
       ia-nvidia-x64v1:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v1
           - gpu-ia-x64v1
-          - linux-modules-nvidia-x64v1
         env: {GPU_SET: ia, GPU_FLAV: x64v1, GPU_NVIDIA: "yes"}
       ia-nvidia-x64v2:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v2
           - gpu-ia-x64v2
-          - linux-modules-nvidia-x64v2
         env: {GPU_SET: ia, GPU_FLAV: x64v2, GPU_NVIDIA: "yes"}
       ia-nvidia-x64v3:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v3
           - gpu-ia-x64v3
-          - linux-modules-nvidia-x64v3
         env: {GPU_SET: ia, GPU_FLAV: x64v3, GPU_NVIDIA: "yes"}
       ia-nvidia-x64v4:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v4
           - gpu-ia-x64v4
-          - linux-modules-nvidia-x64v4
         env: {GPU_SET: ia, GPU_FLAV: x64v4, GPU_NVIDIA: "yes"}
       gaming-nvidia-x64v1:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v1
           - gpu-gaming-x64v1
-          - linux-modules-nvidia-x64v1
         env: {GPU_SET: gaming, GPU_FLAV: x64v1, GPU_NVIDIA: "yes"}
       gaming-nvidia-x64v2:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v2
           - gpu-gaming-x64v2
-          - linux-modules-nvidia-x64v2
         env: {GPU_SET: gaming, GPU_FLAV: x64v2, GPU_NVIDIA: "yes"}
       gaming-nvidia-x64v3:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v3
           - gpu-gaming-x64v3
-          - linux-modules-nvidia-x64v3
         env: {GPU_SET: gaming, GPU_FLAV: x64v3, GPU_NVIDIA: "yes"}
       gaming-nvidia-x64v4:
         when: {arch: amd64}
         deps:
           - linux-image-ia-x64v4
           - gpu-gaming-x64v4
-          - linux-modules-nvidia-x64v4
         env: {GPU_SET: gaming, GPU_FLAV: x64v4, GPU_NVIDIA: "yes"}
     variant-name-prefix: "gpu-"
     variant-env: GPU_VARIANT
+    # The output debs are named after the EXPANDED variant key (gpu-<set>
+    # [-nvidia]-<flav>), never the entry name: the per-variant glob is what
+    # makes the ia/gaming amd+intel+nvidia debs visible to the pipeline
+    # publish (owner 05/11: the builds ia/gaming of every brand must show
+    # up in the CI artifact list).
+    deb-glob: "gpu-{variant}_*"
     # TEMPORARY KERNEL PIN (see the linux-image env): same logic as the
     # device module entries — the set debs stay in step with the pinned
     # kernel lane, their Depends keeping the exact kernel version.
@@ -1017,11 +833,16 @@ packages:
       # The per-set kconfig overlays and the loader-policy confs of this
       # repo: a profile change rebuilds only the touched set.
       - kernel-src/modules/gpu
+      # The NVIDIA runtime-knob payload (dc-nvidia-tune + its one-shot unit +
+      # postinst) rode the absorbed linux-modules-nvidia pair; the FUSED set
+      # deb carries it on the amd64 variants now.
+      - nvidia
     build: |
       set -euo pipefail
       # The variant key carries its own dimensions: GPU_SET = the usage set
-      # (ia|gaming), GPU_FLAV = the flavour (x64v1..v4), GPU_NVIDIA = yes for
-      # the loader-policy-only variants (key <set>-nvidia-<flav>).
+      # (ia|gaming), GPU_FLAV = the flavour (x64v1..v4, armv8.0|armv8.2-lse|
+      # armv9-sve2), GPU_NVIDIA = yes for the loader-policy-only variants
+      # (key <set>-nvidia-<flav>, amd64 only).
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
       WORKTREE="${GITHUB_WORKSPACE:-$(pwd)}"
@@ -1035,25 +856,22 @@ packages:
       esac
       # KERNEL_SUFFIX names the seed profile kernel for kernel_prepare
       # (linux-image-common${SEED_SUFFIX}_${ver}_${arch}.deb).
-      KERNEL_SUFFIX="${SEED_SUFFIX}"
+      KERNEL_SUFFIX="${SEED_SUFFIX:-}"
 
       if [ "${GPU_NVIDIA}" = yes ]; then
         # -----------------------------------------------------------------
-        # Loader-policy deb: no kernel build. Everything it needs is in the
-        # deb it depends on: the sibling open set (same in-tree build) and
-        # the linux-modules-nvidia base (the open NVIDIA modules). The
-        # versions are read from the dependency debs the CI installed, so
-        # the Depends pins stay exact and a bump of any of the three
-        # rebuilds the set.
+        # Loader-policy deb: no kernel build (amd64 only — no ARM NVIDIA).
+        # Everything it needs rides the sibling FUSED merged set of the same
+        # flavour (the open NVIDIA modules are inside it). The version is
+        # read from the installed sibling deb, so the Depends pin stays
+        # exact and a bump of the set (kernel or NVIDIA release inside it)
+        # rebuilds the policy.
         # -----------------------------------------------------------------
         SIB_PKG="gpu-${GPU_SET}-${GPU_FLAV}"
         SIB_VER=$(dpkg-query -W -f='${Version}' "${SIB_PKG}") \
           || { echo "ERROR: dependency ${SIB_PKG} not installed" >&2; exit 1; }
-        NV_PKG="linux-modules-nvidia-${GPU_FLAV}"
-        NV_VER=$(dpkg-query -W -f='${Version}' "${NV_PKG}") \
-          || { echo "ERROR: dependency ${NV_PKG} not installed" >&2; exit 1; }
         SET_VER="${SIB_VER}"
-        DEPS="${SIB_PKG} (= ${SIB_VER}), ${NV_PKG} (= ${NV_VER})"
+        DEPS="${SIB_PKG} (= ${SIB_VER})"
         REPLACES=""
         CONFLICTS=""
         CONF="dc-gpu-${GPU_SET}-nvidia.conf"
@@ -1063,9 +881,11 @@ packages:
         mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/etc/modprobe.d" && cp "${CONF_DIR}/${CONF}" "${DESTDIR}/etc/modprobe.d/"
       else
         # -----------------------------------------------------------------
-        # In-tree set: modules-only build over the standard kernel deb
+        # FUSED in-tree set: modules-only build over the standard kernel deb
         # (the linux-modules-arm-device pattern) with the profile overlay
-        # merged on top of the seeded .config.
+        # merged on top of the seeded .config — and, on amd64, the NVIDIA
+        # OPEN kernel modules compiled from the SAME prepared tree into the
+        # same deb.
         # -----------------------------------------------------------------
         OVERLAY="${WORKFLOW}/kernel-src/modules/gpu/${GPU_SET}"
         test -d "${OVERLAY}" \
@@ -1097,6 +917,12 @@ packages:
         test -f "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" \
           || { echo "ERROR: ${COMMON_DEB} carries no Module.symvers" >&2; exit 1; }
         cp "${SEED_DIR}/usr/lib/linux-kernel-build${KERNEL_SUFFIX:-}/Module.symvers" Module.symvers
+        # FULL copy kept aside: the NVIDIA external build (amd64) resolves
+        # the inter-module symbols (ib_core for nvidia-peermem, ...) of the
+        # modules the set build does NOT rebuild; modpost rewrites
+        # Module.symvers to the rebuilt set only, the external build reads
+        # the FULL file.
+        cp Module.symvers /tmp/gpu-set-symvers-full
         awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
         if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
            && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
@@ -1129,6 +955,91 @@ packages:
           mv /tmp/gpu-set-sound-amd "${KEEP}/sound/soc/amd"
         fi
 
+        # ===============================================================
+        # NVIDIA OPEN FUSION (amd64 only — owner 19:3x(b): no ARM NVIDIA at
+        # all, the module is open-gpu-kernel-modules; the USERSPACE stays
+        # NVIDIA's own signed repository, never one of our debs): the open
+        # modules are BUILT HERE, against the same prepared tree, and their
+        # .ko files land in this very deb under kernel/ — the separate
+        # linux-modules-nvidia pair is absorbed and dead.
+        # ===============================================================
+        if [ "${DEB_ARCH}" = amd64 ]; then
+          make -j"$(nproc)" modules_prepare
+          cp /tmp/gpu-set-symvers-full Module.symvers
+
+          # Rolling pin (owner order 2026-11-09, the kernel-stream pattern —
+          # auto detect + fallback): DaemonCores-CI scripts/deb_helpers.sh
+          # nvidia_driver_detect walks NVIDIA's OWN Packages index
+          # NEWEST-FIRST and takes the FIRST release whose
+          # open-gpu-kernel-modules tag exists; a preset
+          # NVIDIA_DRIVER_VERSION is honored verbatim. The pairing gate
+          # against the user-space release stays: the derived lane reads
+          # the release back from THIS deb's version (+r1nv<nvidia>).
+          nvidia_driver_detect
+          NVIDIAOPEN_VER="${NVIDIA_DRIVER_VERSION}"
+          rm -rf /build/nvidia-open
+          git clone --quiet --depth=1 --branch "${NVIDIAOPEN_VER}" \
+            https://github.com/NVIDIA/open-gpu-kernel-modules.git /build/nvidia-open
+          git -C /build/nvidia-open rev-parse HEAD > /build/nvidia-open.commit
+          test -d /build/nvidia-open/kernel-open \
+            || { echo "ERROR: nvidia-open has no kernel-open tree" >&2; exit 1; }
+
+          # GPU module-tree patches (perf, per driver) of the SAME shared
+          # export: patches-gpu/nvidia.yml is applied to THIS NVIDIA tree
+          # BEFORE the module compile — dry-run ALL, all-or-nothing. The
+          # series resolves as the KERNEL series (KVER = 7.2.15-<flav>-
+          # xanmod1 -> 7.2).
+          GPU_NVIDIA_YML="${CI_KERNEL_SHARED}/patches-gpu/nvidia.yml"
+          [[ -f "${GPU_NVIDIA_YML}" ]] \
+            || { echo "ERROR: engine patches-gpu/nvidia.yml missing" >&2; exit 1; }
+          PATCHES_SERIES="${KVER%%-*}"
+          export PATCHES_SERIES
+          kernel_apply_patches "${GPU_NVIDIA_YML}" \
+            "amd64" "${NVIDIAOPEN_VER}" "/build/nvidia-open"
+          unset PATCHES_SERIES
+
+          make -C /build/nvidia-open \
+            SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" -j"$(nproc)" modules
+
+          # Install into a SEPARATE staging tree, then merge ONLY the .ko
+          # files (their kernel/ relative paths) into the set tree — the
+          # metadata files the install regenerates overlap the kernel deb
+          # exactly like the in-tree install's, deleted below.
+          NVDIR="/output/gpu-${GPU_SET}-${GPU_FLAV}-nvstage"
+          rm -rf "${NVDIR}"
+          make -C /build/nvidia-open \
+            SYSSRC="${SRCDIR}" SYSOUT="${SRCDIR}" \
+            INSTALL_MOD_PATH="${NVDIR}" INSTALL_MOD_STRIP=1 modules_install
+          NVROOT=$(find "${NVDIR}/lib/modules" -mindepth 1 -maxdepth 1 -type d | head -1)
+          test -n "$(find "${NVROOT}" -name 'nvidia*.ko*' | head -1)" \
+            || { echo "ERROR: modules_install produced no nvidia*.ko" >&2; exit 1; }
+          strays=$(find "${NVROOT}" -name '*.ko*' -not -name 'nvidia*.ko*' | head -1)
+          test -z "${strays}" \
+            || { echo "ERROR: nvidia-out installs more than the nvidia modules: ${strays}" >&2; exit 1; }
+          find "${NVROOT}" -name 'nvidia*.ko*' | while IFS= read -r ko; do
+            rel="${ko#"${NVROOT}"/}"
+            mkdir -p "${DESTDIR}/lib/modules/${KVER}/$(dirname "${rel}")"
+            mv "${ko}" "${DESTDIR}/lib/modules/${KVER}/${rel}"
+          done
+
+          # The deb carries its own runtime-knob payload (owner order 05/11:
+          # the host-side dc-gpu-lxc tune is folded INTO the driver deb, no
+          # separate package): usr/sbin/dc-nvidia-tune, the one-shot unit it
+          # starts and the postinst that enables the unit. Idempotent knobs;
+          # the MPS branch self-gates on the IA loader-policy conf
+          # (dc-gpu-ia-nvidia.conf), gaming gets the plain tune — the
+          # modprobe dc-gpu-* confs stay the policy.
+          mkdir -p "${DESTDIR}/usr/sbin" "${DESTDIR}/usr/lib/systemd/system"
+          cp "${WORKFLOW}/nvidia/usr/sbin/dc-nvidia-tune" \
+            "${DESTDIR}/usr/sbin/dc-nvidia-tune"
+          cp "${WORKFLOW}/nvidia/usr/lib/systemd/system/dc-nvidia-tune.service" \
+            "${DESTDIR}/usr/lib/systemd/system/dc-nvidia-tune.service"
+          cp "${WORKFLOW}/nvidia/DEBIAN/postinst" \
+            "${DESTDIR}/DEBIAN/postinst"
+          chmod 755 "${DESTDIR}/usr/sbin/dc-nvidia-tune" \
+            "${DESTDIR}/DEBIAN/postinst"
+        fi
+
         # Kernel metadata files (modules.alias, modules.dep...) are generated
         # identically by every modules build and the kernel deb owns them; the
         # set deb must not carry its own (same ownership conflict as the
@@ -1153,7 +1064,16 @@ packages:
         # replaces those files on install, pinned to the exact kernel. The
         # two in-tree sets build amdgpu differently (DC on/off) — exactly one
         # may be installed.
+        # Version: kernel release + the NVIDIA release fused inside (amd64),
+        # so the package version increases on a NVIDIA bump on the same
+        # kernel and the derived lane reads the NVIDIA release back out of
+        # the version string for its same-release pairing gate.
         SET_VER="${BUILT_VER}+r1"
+        if [ "${DEB_ARCH}" = amd64 ]; then
+          test -n "${NVIDIAOPEN_VER}" \
+            || { echo "ERROR: no NVIDIA release resolved for the fusion" >&2; exit 1; }
+          SET_VER="${BUILT_VER}+r1nv${NVIDIAOPEN_VER}"
+        fi
         # The set deb REPLACES the files the seed profile kernel owns
         # (the concrete daemoncores-kernel-<profile>-<KVER> deb — dpkg
         # checks the OWNING package name, a virtual name protects nothing);
@@ -1161,10 +1081,11 @@ packages:
         DEPS="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
         REPLACES="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
         # Exactly one in-tree set may be installed: enumerate the OTHER
-        # set's every flavour variant (dpkg has no Conflicts globs).
+        # set's every flavour variant (dpkg has no Conflicts globs), both
+        # the fused sets and their loader policies.
         OTHER=gaming; [ "${GPU_SET}" = gaming ] && OTHER=ia
         CONFLICTS=""
-        for GPU_FLAVS in x64v1 x64v2 x64v3 x64v4; do
+        for GPU_FLAVS in x64v1 x64v2 x64v3 x64v4 armv8.0 armv8.2-lse armv9-sve2; do
           CONFLICTS="${CONFLICTS:+${CONFLICTS}, }gpu-${OTHER}-${GPU_FLAVS}"
           CONFLICTS="${CONFLICTS}, gpu-${OTHER}-nvidia-${GPU_FLAVS}"
         done
@@ -1174,18 +1095,29 @@ packages:
       # (olddefconfig silently resolves an unmet option): the in-tree builds
       # must carry amdgpu, and the Display Core pin of the profile must hold
       # in the final .config (DC compiled inside amdgpu.ko — there is no
-      # separate .ko file to test, the merged config IS the proof).
+      # separate .ko file to test, the merged config IS the proof). The DC
+      # pins are amd64-only: the DRM_AMD_DC symbol does not exist in an
+      # arm64 kconfig tree, the amdgpu content proof stays on every arch.
       if [ "${GPU_NVIDIA}" != yes ]; then
         test -n "$(find "${DESTDIR}/lib/modules/${KVER}/kernel/drivers/gpu" -name 'amdgpu.ko*' 2>/dev/null)" \
           || { echo "ERROR: gpu-${GPU_SET} deb carries no amdgpu" >&2; exit 1; }
         test -f "${SRCDIR}/.config" \
           || { echo "ERROR: no final .config in the kernel tree" >&2; exit 1; }
-        if [ "${GPU_SET}" = ia ]; then
-          grep -q '^# CONFIG_DRM_AMD_DC is not set$' "${SRCDIR}/.config" \
-            || { echo "ERROR: gpu-ia overlay lost the DC-off pin" >&2; exit 1; }
-        else
-          grep -q '^CONFIG_DRM_AMD_DC=y$' "${SRCDIR}/.config" \
-            || { echo "ERROR: gpu-gaming overlay lost the DC-on pin" >&2; exit 1; }
+        if [ "${DEB_ARCH}" = amd64 ]; then
+          if [ "${GPU_SET}" = ia ]; then
+            grep -q '^# CONFIG_DRM_AMD_DC is not set$' "${SRCDIR}/.config" \
+              || { echo "ERROR: gpu-ia overlay lost the DC-off pin" >&2; exit 1; }
+          else
+            grep -q '^CONFIG_DRM_AMD_DC=y$' "${SRCDIR}/.config" \
+              || { echo "ERROR: gpu-gaming overlay lost the DC-on pin" >&2; exit 1; }
+          fi
+        fi
+        # FUSION content proof (amd64): the NVIDIA open modules ride this
+        # deb — nvidia.ko (the main module) is always of the set's kernel
+        # release tree.
+        if [ "${DEB_ARCH}" = amd64 ]; then
+          test -n "$(find "${DESTDIR}/lib/modules/${KVER}/kernel" -name 'nvidia.ko*' 2>/dev/null)" \
+            || { echo "ERROR: gpu-${GPU_SET} deb carries no fused nvidia module" >&2; exit 1; }
         fi
       fi
 
@@ -1207,9 +1139,13 @@ packages:
         -e "s|/etc/modprobe.d/dc-gpu-{{ SET }}.conf|/etc/modprobe.d/${CONF}|g" \
         "${DESTDIR}/DEBIAN/control"
 
-      # Regenerate md5sums for the shipped files (lib and etc).
+      # Regenerate md5sums for the shipped files (lib, usr and etc).
       ( cd "${DESTDIR}" && \
-        { [ -d lib ] && find lib -type f; [ -d etc ] && find etc -type f; true; } | sort | xargs md5sum | sed -e 's|lib/|/lib/|' -e 's|etc/|/etc/|' \
+        { [ -d lib ] && find lib -type f; \
+          [ -d usr ] && find usr -type f; \
+          [ -d etc ] && find etc -type f; true; } \
+        | sort | xargs md5sum \
+        | sed -e 's|lib/|/lib/|' -e 's|usr/|/usr/|' -e 's|etc/|/etc/|' \
         > DEBIAN/md5sums )
 
       # Empty-Replaces must not ship as a literal empty field: dpkg refuses an
