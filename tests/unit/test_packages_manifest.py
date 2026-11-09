@@ -212,8 +212,7 @@ def test_each_arm_module_follows_its_kernel() -> None:
 
 
 def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
-    """Each device module variant carries its kernel-src/modules/embeded
-    <SoC>.cfg fragment.
+    """Each device module variant carries its embeded <SoC>.cfg fragment.
 
     One fragment per SoC family, not per board: the rpi3 fragment covers
     BCM2710A1 (Pi Zero 2 W), rk3566 covers the RK356x, h616 covers the sun50i
@@ -410,9 +409,10 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
     dead symbols the kconfig gate would reject).
     """
     mod = (
-        REPO / 'workflows' / 'bootc-debs-builder' /
-        'kernel-src' / 'modules' / 'gpu'
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modules' /
+        'gpu'
     )
+
     def _txt(sub: str) -> str:
         return '\n'.join(
             p.read_text(encoding='utf-8')
@@ -448,8 +448,7 @@ def test_gpu_module_sets_ship_their_loader_policy() -> None:
     nvidia_drm modeset.
     """
     conf_dir = (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' /
-        'modprobe'
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modprobe'
     )
     assert (conf_dir / 'dc-gpu-ia.conf'
             ).read_text().rstrip().endswith('blacklist nouveau')

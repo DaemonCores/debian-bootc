@@ -86,8 +86,8 @@ def test_kernel_signing_users() -> None:
         if 'kernel_signing_setup' in str(entry.get('build', ''))
     }
     assert users == {
-        'linux-image', 'linux-image-profile',
-        'linux-modules-arm-device', 'linux-modules-nvidia', 'linux-modules-gpu'
+        'linux-image', 'linux-image-profile', 'linux-modules-arm-device',
+        'linux-modules-nvidia', 'linux-modules-gpu'
     }
 
 
