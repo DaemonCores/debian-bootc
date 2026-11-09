@@ -1349,10 +1349,18 @@ packages:
       # provides march-free mesa_clc + vtn_bindgen2, stage-2 consumes them
       # via -Dmesa-clc=system and the SHIPPED libraries keep the march.
       TOOLDIR=/tmp/dc-mesa-clc-tools; rm -rf "${TOOLDIR}"; mkdir -p "${TOOLDIR}"
+      # NO >/dev/null: a silenced stdout hides meson's ERROR lines (they go to
+      # stdout) and the wrapper's `build ||` context suppresses set -e — a dead
+      # stage-1 surfaced as stage-2 'Program mesa_clc not found' (42711751111).
+      # glx/egl/gbm/glvnd/platforms DISABLED: meson refuses an empty gallium
+      # driver list while glx rides xlib ('xlib based GLX requires at least one
+      # gallium driver'). libclc comes from the Debian mesa build-dep already
+      # installed (with_clc=true, meson.build:850 hard requirement).
       meson setup "${TOOLDIR}" /build/mesa-src --buildtype=release \
         -Dmesa-clc=enabled -Dinstall-mesa-clc=true \
         -Dgallium-drivers= -Dvulkan-drivers= -Dgallium-rusticl=false \
-        -Dbuild-tests=false -Dstrip=true >/dev/null \
+        -Dglx=disabled -Degl=disabled -Dgbm=disabled -Dglvnd=disabled \
+        -Dplatforms= -Dbuild-tests=false -Dstrip=true \
         && ninja -C "${TOOLDIR}"
       export PATH="$(find "${TOOLDIR}" -type f \( -name mesa_clc -o -name vtn_bindgen2 \) -printf '%h\n' | sort -u | tr '\n' ':')${PATH}"
 
