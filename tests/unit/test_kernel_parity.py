@@ -77,7 +77,8 @@ def test_shared_functional_pins_present() -> None:
 
 
 def test_canonical_patch_set_shape() -> None:
-    """One patch list, two consumers: 18 xanmod + 3 clearlinux + bore.
+    """One patch list, two consumers: 17 xanmod + 3 clearlinux(XanMod) + bore
+    + rocknix carrier + MSM IFPC + 2 clearlinux completions = 25.
 
     The module carrier (rocknix-btrtl, moved from packages.yml by the 13:05
     arbitration) rides on the arm64 kernel builds. The bore sibling stays in
@@ -86,6 +87,14 @@ def test_canonical_patch_set_shape() -> None:
 
     0004-ata-before-graphics and 0003-kbuild-sms-pipelining must stay out (they
     no longer apply to the tracked series trees).
+
+    ARM OPTI (owner mandate 2026-11-09): +2 clearlinux generic completions
+    (0166 sched-fair upper-limit, 0174 memcg CHARGE_BATCH 128, both
+    sha256-pinned) and +1 arm64 additive (msm-adreno devfreq IFPC relax,
+    lore URL + sha256); -mcpu flavour proof side lives in the engine
+    kernel_flavour_kcflags. Count 22 -> 25 (17 xanmod, 3 clearlinux carried
+    by XanMod 0001/0002/0003, 2 new clearlinux, bore dormant, rocknix
+    module carrier, msm arm64 additive).
     """
     text = CANONICAL_PATCHES.read_text(encoding='utf-8')
     names = re.findall(r'- name: ([^\s]+)', text)
@@ -93,7 +102,11 @@ def test_canonical_patch_set_shape() -> None:
     assert '0003-kbuild-sms-pipelining' not in names
     assert '0001-bore-cachy.patch' in text
     assert 'bore' in names
-    assert len(names) == 22
+    for new in ('0166-sched-fair-remove-upper-limit',
+                '0174-memcg-charge-batch-128',
+                'msm-adreno-devfreq-ifpc-relax'):
+        assert new in names, new
+    assert len(names) == 25
 
 
 def test_no_carbon_copy_of_the_engine_data() -> None:
