@@ -58,7 +58,11 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
 def test_image_installs_the_project_kernel() -> None:
     """Containerfile installs the single project kernel."""
     root = MANIFEST.parents[2]
-    kernel = 'linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}'
+    # The estate rename made every name profile-aware: the deb is installed
+    # through the virtual name linux-image-minimal-<profile>-<flavour>-<arch>
+    # (flavour resolved in the RUN shell; suffix -16k selects armv8.2-lse).
+    kernel = 'linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}' \
+             '-${_flavour}-${_arch}'
     for name in ('Containerfile', ):
         text = (root / name).read_text()
         install = [
@@ -66,6 +70,7 @@ def test_image_installs_the_project_kernel() -> None:
         ]
         assert any(kernel in ln for ln in install), name
         assert 'ARG KERNEL_VARIANT=minimal' in text, name
+        assert 'ARG KERNEL_PROFILE=ia' in text, name
         assert not any('linux-image-${ARCH}' in ln for ln in install), name
 
 

@@ -231,20 +231,24 @@ RUN apt-get update \
 # Phase 3.1: Kernel and its device modules
 # -----------------------------------------------------------------------------
 # The kernel is the last heavy layer: the project kernel
-# (daemoncores-kernel-<kver>, built from kernel.org) is installed
-# through the virtual name linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH}.
-# Debian's own linux-image-${ARCH} is not installed: a second /usr/lib/modules/<kver>/
-# fails bootc lint. The standard image adds the same per-arch driver modules
-# (linux-modules-*) so its hardware support does not shrink.
-# Kernel variant: `minimal` (default) is the project kernel (the kernel flavour name, not an image).
+# (daemoncores-kernel-<profile>-<kver>, built from kernel.org) is installed
+# through the virtual name its deb PROVIDES,
+# linux-image-minimal-<profile>-<flavour>-<arch> (the kernel estate rename
+# made every name profile-aware: no flat linux-image-*-<arch> name remains).
+# The profile of an image is ALWAYS ia (kernel doctrine: images are generic,
+# gaming is only a moduleset deb on top; VM is a PVE-host kernel).
 ARG KERNEL_VARIANT=minimal
-# arm64 only. The arm64 distribution ships two kernels because the page size is a
-# compile-time choice (docs/Handoff-Decisions.md, "Two arm64 kernels"): the 4 KB kernel
-# (KERNEL_SUFFIX empty) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
-# `-16k`) for recent hardware. KERNEL_SUFFIX completes the kernel package name
-# (page size only: `-16k`; there is no unsigned twin) and ARM_DEVICES lists the device
-# module packages that kernel serves. The CI passes the values per image; the
-# defaults build the 4 KB one.
+ARG KERNEL_PROFILE=ia
+# arm64 only. The arm64 distribution ships three flavours because the page
+# size is a compile-time choice (docs/Handoff-Decisions.md, "Two arm64
+# kernels" + the profile rename): the 4 KB kernel (KERNEL_SUFFIX empty,
+# flavour armv8.0) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
+# `-16k`, flavour armv8.2-lse) for recent hardware. KERNEL_SUFFIX selects the
+# flavour (there is no unsigned twin) and ARM_DEVICES lists the device
+# module packages that kernel serves. The CI passes the suffix per image;
+# the defaults build the 4 KB one. amd64 always x64v1 (the compat floor of
+# the flavour matrix). An explicit KERNEL_FLAVOUR (optional) overrides both.
+ARG KERNEL_FLAVOUR=""
 ARG ARM_DEVICES="rpi3 rpi4"
 ARG KERNEL_SUFFIX=""
 # Fingerprint of the kernel and device-module debs only, set by the CI. Declared here, not
@@ -256,11 +260,21 @@ ARG KERNEL_DEBS_HASH=none
 # transaction.
 RUN apt update \
     && set -- \
-    && if [ "${ARCH}" != "amd64" ]; then \
+    && _arch=$(dpkg --print-architecture) \
+    && if [ "${_arch}" != "amd64" ]; then \
         for _d in ${ARM_DEVICES}; do set -- "$@" "linux-modules-${_d}"; done; \
     fi \
+    && case "${_arch}" in \
+        amd64) _flavour=${KERNEL_FLAVOUR:-x64v1} ;; \
+        arm64) case "${KERNEL_SUFFIX}" in \
+            -16k*) _flavour=${KERNEL_FLAVOUR:-armv8.2-lse} ;; \
+            '') _flavour=${KERNEL_FLAVOUR:-armv8.0} ;; \
+            *) echo "unsupported KERNEL_SUFFIX '${KERNEL_SUFFIX}' for arm64" >&2; exit 1 ;; \
+        esac ;; \
+        *) echo "unsupported arch '${_arch}' for the image kernel" >&2; exit 1 ;; \
+    esac \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}${KERNEL_SUFFIX}-${ARCH} "$@"
+        linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}-${_flavour}-${_arch} "$@"
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
 # public key and the image reference; both are empty until the key exists, in
