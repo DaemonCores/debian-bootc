@@ -217,6 +217,41 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
     assert 'CONFIG_LOCALVERSION="-16k"' in (root / '16k').read_text()
 
 
+def test_each_kernel_variant_publishes_its_headers() -> None:
+    """Every profile kernel deb-glob also lists the republished headers deb.
+
+    The republish block writes a profile-prefixed
+    ``linux-headers-<profile>-<KVER>`` deb next to the image deb; if the
+    variant's deb-glob did not carry it, the deb was never recorded in
+    hashes.json — the end-of-run prune dropped it from the APT index and the
+    cache restored a headers-less set on every later hit, breaking the
+    zfs-module-pve lane ('no linux-headers for flavour x64v3 in the APT
+    index', run 42899558906).
+    """
+    entry = _packages()['linux-image-profile']
+    for key, variant in _variants('linux-image-profile').items():
+        profile, flav = key.split('-', 1)
+        glob = variant['deb-glob']
+        assert glob == (
+            f'linux-image-common-{profile}-{flav}_* '
+            f'linux-headers-{profile}-*'
+        ), (key, glob)
+    # The entry-level glob covers the same two families, never a bare
+    # linux-headers-<KVER> that would collide with sibling profiles in the
+    # pool (the run-41794169405 class).
+    entry_glob = entry['deb-glob']
+    assert 'linux-image-common-*' in entry_glob
+    assert 'linux-headers-*' in entry_glob
+    assert 'HEADERS_GLOB_VER' in entry['env'], (
+        'the bump env must stay: the deb-glob is not a hash input, without it '
+        'the cached headers-less entries are served forever'
+    )
+    build = entry['build']
+    assert \
+        "HEADERS_DEB=$(find /tmp -maxdepth 1 -name 'linux-headers-*.deb'" \
+        in build, 'the silent republish block moved — the glob relies on it'
+
+
 def test_each_arm_module_follows_its_kernel() -> None:
     """Each device's kernel is picked by ARCHITECTURE class, never per device.
 

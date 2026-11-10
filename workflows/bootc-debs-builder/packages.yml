@@ -113,13 +113,25 @@ packages:
       # dry-runs but does not compile is a documented K-PORT, never a pin.
       # The tarball digest is read from kernel.org sha256sums.asc at each
       # build (it is the election's own verification, not a pin).
+      # HEADERS GLOB BUMP (10/11): the deb-glob now also carries the
+      # linux-headers-<profile>-* debs the republish block emits. The
+      # deb-glob is NOT a hash input, so the bump lives here: the run
+      # 42806732961 published the headers deb into the pool, but it never
+      # rode hashes.json (glob = linux-image only), the end-of-run prune
+      # dropped it from the index, and every later cache hit restored/re-
+      # published a headers-less set — the APT index went to ZERO
+      # linux-headers packages, which broke the zfs-module-pve lane
+      # ('ERROR: no linux-headers for flavour x64v3 in the APT index',
+      # run 42899558906). The bump forces the one rebuild that records the
+      # headers debs in hashes.json; every later run restores them.
+      HEADERS_GLOB_VER: "2"
     track:
       KERNEL_VER:
         kernel-org: stable
         require-patches: engine
         digests:
           KERNEL_SHA256: "linux-{version}.tar.xz"
-    deb-glob: "linux-image-common-*"
+    deb-glob: "linux-image-common-* linux-headers-*"
     sources:
       # The IA gpu overlay and the profile THP fragments of this repo: a
       # profile change rebuilds only the touched profile's variants. (VM
@@ -133,62 +145,62 @@ packages:
       # ---- IA profile: the AI compute kernel (DC off, THP always) --------
       "ia-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v1_*"
+        deb-glob: "linux-image-common-ia-x64v1_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-ia-x64v1"}
       "ia-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v2_*"
+        deb-glob: "linux-image-common-ia-x64v2_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-ia-x64v2"}
       "ia-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v3_*"
+        deb-glob: "linux-image-common-ia-x64v3_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-ia-x64v3"}
       "ia-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v4_*"
+        deb-glob: "linux-image-common-ia-x64v4_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-ia-x64v4"}
       "ia-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.0_*"
+        deb-glob: "linux-image-common-ia-armv8.0_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-ia-armv8.0", KERNEL_PAGES: "4k"}
       "ia-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.2-lse_*"
+        deb-glob: "linux-image-common-ia-armv8.2-lse_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-ia-armv8.2-lse"}
       "ia-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv9-sve2_*"
+        deb-glob: "linux-image-common-ia-armv9-sve2_* linux-headers-ia-*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-ia-armv9-sve2"}
       # ---- VM profile: the PVE-host kernel (NO gpu overlay — VM ≠ GPU,
       # owner 05/11 15:1x; the profile delta = the THP NEVER fragment +
       # the hypervisor opts folded in the base config) --------------------
       "vm-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v1_*"
+        deb-glob: "linux-image-common-vm-x64v1_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-vm-x64v1"}
       "vm-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v2_*"
+        deb-glob: "linux-image-common-vm-x64v2_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-vm-x64v2"}
       "vm-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v3_*"
+        deb-glob: "linux-image-common-vm-x64v3_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-vm-x64v3"}
       "vm-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v4_*"
+        deb-glob: "linux-image-common-vm-x64v4_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-vm-x64v4"}
       "vm-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.0_*"
+        deb-glob: "linux-image-common-vm-armv8.0_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-vm-armv8.0", KERNEL_PAGES: "4k"}
       "vm-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.2-lse_*"
+        deb-glob: "linux-image-common-vm-armv8.2-lse_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-vm-armv8.2-lse"}
       "vm-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv9-sve2_*"
+        deb-glob: "linux-image-common-vm-armv9-sve2_* linux-headers-vm-*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-vm-armv9-sve2"}
     build: |
       set -euo pipefail
