@@ -77,8 +77,7 @@ def test_shared_functional_pins_present() -> None:
 
 
 def test_canonical_patch_set_shape() -> None:
-    """One patch list, two consumers: 17 xanmod + 3 clearlinux(XanMod) + bore
-    + rocknix carrier + MSM IFPC + 2 clearlinux completions = 25.
+    """One patch list, two consumers: 25 entries.
 
     The module carrier (rocknix-btrtl, moved from packages.yml by the 13:05
     arbitration) rides on the arm64 kernel builds. The bore sibling stays in
@@ -95,9 +94,11 @@ def test_canonical_patch_set_shape() -> None:
     kernel_flavour_kcflags. msm IFPC arm64 = K-PORT BOTH siblings (run
     42715501467, linux-image-ia-armv8.0): the [16/17] a6xx X1-85 enablement
     fails raw AND [17/17] needs its ADRENO_QUIRK_IFPC, so the arm64 build
-    dies at msm_gpu_devfreq.c:162 — re-arm both siblings later. Count 22 -> 25 (17 xanmod, 3 clearlinux carried
+    dies at msm_gpu_devfreq.c:162 — re-arm both siblings later.
+
+    Count 22 -> 25: 17 xanmod, 3 clearlinux carried
     by XanMod 0001/0002/0003, 2 new clearlinux, bore dormant, rocknix
-    module carrier, msm arm64 additive).
+    module carrier, msm arm64 additive.
     """
     text = CANONICAL_PATCHES.read_text(encoding='utf-8')
     names = re.findall(r'- name: ([^\s]+)', text)
