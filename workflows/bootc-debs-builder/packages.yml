@@ -90,7 +90,9 @@ packages:
     variant-name-prefix: linux-image-
     variant-env: PROFILE_FLAVOUR
     env:
-      HELPERS_VER: 7
+      # Kernel build primitives changed (10/11: kernel_dryrun_patches, the
+      # election gate, landed in kernel_helpers.sh).
+      HELPERS_VER: 8
       # ENTRY-LEVEL PAGE SIZE DEFAULT = 16 KB EVERYWHERE (owner order
       # 05/11 18:4x) — including amd64; the 4 KB is ONLY the AUTOMATIC
       # fallback of an arch that cannot carry the 16 KB granule (armv8.0,
@@ -101,11 +103,22 @@ packages:
       # overlay and falls back automatically — documented, not chosen.
       KERNEL_PAGES: "16k"
       KERNEL_SIGNING_ENFORCE: "no"
-      # TEMPORARY KERNEL PIN: same rationale and same restore block as the
-      # deleted baseline lane carried — no track resolution while the pin is
-      # on (the kernel data + probe = engine, DaemonCores-CI).
-      KERNEL_VER: "7.2.15"
-      KERNEL_SHA256: "d0f6b1d7324c937ccaeb5c4ca7084bfcf71db2edb3e2d3a31f0ad83a681809ab"
+      # KERNEL VERSION = THE ELECTION, NEVER A CONSTANT (owner order
+      # 2026-11-10): the `track:` resolution elects the newest kernel.org
+      # stable/longterm release whose FULL patch set (the engine's shared +
+      # pve + linux-tree gpu manifests) passes the fuzz-0 dry-run on the
+      # real tarball tree — the latest-passing-gate. The retired
+      # TEMPORARY KERNEL PIN (2026-11-04, the bore sibling run 41762298671)
+      # is gone FOR GOOD together with its `series:` anchor: a patch that
+      # dry-runs but does not compile is a documented K-PORT, never a pin.
+      # The tarball digest is read from kernel.org sha256sums.asc at each
+      # build (it is the election's own verification, not a pin).
+    track:
+      KERNEL_VER:
+        kernel-org: stable
+        require-patches: engine
+        digests:
+          KERNEL_SHA256: "linux-{version}.tar.xz"
     deb-glob: "linux-image-common-*"
     sources:
       # The IA gpu overlay and the profile THP fragments of this repo: a
@@ -516,15 +529,19 @@ packages:
     env:
       # Kernel build primitives come from DaemonCores-CI scripts/
       # kernel_helpers.sh (sourced by deb_helpers.sh in the same bash):
-      # bump when those helpers change.
-      HELPERS_VER: 7
-      # TEMPORARY KERNEL PIN (see the linux-image env): the module lane pins
-      # KERNEL_VER with the kernel lane instead of following the `track:`
-      # resolution — the module debs are built against the linux-image dep deb
-      # (kernel_prepare), and the pinned value keeps their content hash in
-      # step with the image (no stale `Depends: daemoncores-kernel-<old_ver>`
-      # once the APT repo only carries the kernel the lane ships).
-      KERNEL_VER: "7.2.15"
+      # bump when those helpers change (8/11-10: the dry-run election gate
+      # kernel_dryrun_patches landed in the helpers).
+      HELPERS_VER: 8
+      # KERNEL VERSION = THE ELECTION (owner order 2026-11-10): the same
+      # `track:` resolution as the linux-image entry — deterministic (same
+      # manifests, same floor), so the device-module debs are electable in
+      # step with the image they build against.
+    track:
+      KERNEL_VER:
+        kernel-org: stable
+        require-patches: engine
+        digests:
+          KERNEL_SHA256: "linux-{version}.tar.xz"
     sources:
       - preinstall/output/linux-modules-arm-device
       # The device fragments of this repo (per-DEVICE overlay of the build):
@@ -804,12 +821,17 @@ packages:
     # publish (owner 05/11: the builds ia/gaming of every brand must show
     # up in the CI artifact list).
     deb-glob: "gpu-{variant}_*"
-    # TEMPORARY KERNEL PIN (see the linux-image env): same logic as the
-    # device module entries — the set debs stay in step with the pinned
-    # kernel lane, their Depends keeping the exact kernel version.
+    # KERNEL VERSION = THE ELECTION (owner order 2026-11-10): the same
+    # `track:` resolution as the kernel entries — the gpu set deb keeps
+    # its Depends in step with the elected kernel (deterministic).
     env:
-      KERNEL_VER: "7.2.15"
-      HELPERS_VER: 7
+      HELPERS_VER: 8
+    track:
+      KERNEL_VER:
+        kernel-org: stable
+        require-patches: engine
+        digests:
+          KERNEL_SHA256: "linux-{version}.tar.xz"
     sources:
       - preinstall/output/linux-modules-gpu
       # The per-set kconfig overlays and the loader-policy confs of this

@@ -44,4 +44,9 @@ patches:
     # status: dry-run-7.2.15 (bytes upstream): FAIL hunk#3/3 intel_crtc.c@752 fuzz-0 (Kconfig + intel_cursor + ksysfs hunks OK); series-sibling entry rides {series}
     url: https://raw.githubusercontent.com/CachyOS/kernel-patches/master/7.2/misc/0001-rt-i915.patch
     sha256: cfc0f69ca9bdf97cd269c5abebed5ff97c8b5f88402c3fd5d0b77ea5a647000b
-    series: "7.2"
+    # SERIES ANCHOR RETIRED (owner order 2026-11-10): the literal
+    # `series: "7.2"` marker is gone — the series this sibling rides is NOT
+    # a constant. The sibling set is elected by the fuzz-0 dry-run at each
+    # kernel election; a series bump that drifts a hunk FAILS the build
+    # all-or-nothing and keeps the last-good deb (never a hand-pinned
+    # series).

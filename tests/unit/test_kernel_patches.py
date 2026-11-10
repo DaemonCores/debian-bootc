@@ -225,8 +225,8 @@ def test_fuzz_override_reports_drift_as_a_warning(setup: Path) -> None:
     manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
-    assert '::warning::patch fuzzy applies' in result.stdout
-    assert 'only with fuzz 2' in result.stdout
+    assert '::warning::patch fuzzy applies' in result.stderr
+    assert 'only with fuzz 2' in result.stderr
 
 
 def test_unneeded_fuzz_override_is_reported(setup: Path) -> None:
@@ -243,4 +243,4 @@ def test_unneeded_fuzz_override_is_reported(setup: Path) -> None:
     manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
-    assert 'fuzz 2 is no longer needed' in result.stdout
+    assert 'fuzz 2 is no longer needed' in result.stderr
