@@ -1093,13 +1093,13 @@ packages:
             grep -q '^CONFIG_DRM_AMD_DC=y$' "${SRCDIR}/.config" \
               || { echo "ERROR: gpu-gaming overlay lost the DC-on pin" >&2; exit 1; }
           fi
-          # genpd must hold in the SEED kernel .config: ACP (gaming) calls
-          # pm_genpd_* and a modules-only rebuild cannot conjure the exports
-          # (run 42727851345: PM=n seed left the pin silently dropped).
+          # genpd must hold in the SEED kernel .config where the set compiles pm_genpd_* callers: ACP selects the promptless PMGDM (a bare =y is
+          # ignored by olddefconfig), so gaming asserts PMGDM=y — which only holds when the PM=y root held; ia pins ACP=n = no genpd calls, no
+          # export need. (42727851345: PM=n seed silently dropped; 42739869836: PMGDM=y wrongly demanded on ia where nothing selects it.)
           grep -q '^CONFIG_PM=y$' "${SRCDIR}/.config" \
             || { echo "ERROR: seed kernel .config lost CONFIG_PM=y (unmet root of PM_GENERIC_DOMAINS)" >&2; exit 1; }
-          grep -q '^CONFIG_PM_GENERIC_DOMAINS=y$' "${SRCDIR}/.config" \
-            || { echo "ERROR: seed kernel .config lost PM_GENERIC_DOMAINS=y" >&2; exit 1; }
+          [ "${GPU_SET}" = ia ] || grep -q '^CONFIG_PM_GENERIC_DOMAINS=y$' "${SRCDIR}/.config" \
+            || { echo "ERROR: gpu-gaming seed lost PM_GENERIC_DOMAINS=y (ACP select + PM root dropped)" >&2; exit 1; }
         fi
         # FUSION content proof (amd64): the NVIDIA open modules ride this
         # deb — nvidia.ko (the main module) is always of the set's kernel
