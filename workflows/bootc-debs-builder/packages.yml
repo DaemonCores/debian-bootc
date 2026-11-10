@@ -1104,9 +1104,13 @@ packages:
       fi
 
       # Control from the shared template: deps, replaces and conflicts differ
-      # per variant (computed above), the rest is verbatim. The NAME is the
-      # expanded variant name itself (gpu-<set>[-nvidia]-<flav>).
-      NAME="${GPU_VARIANT_KEY}"
+      # per variant (computed above), the rest is verbatim. The NAME carries
+      # the class variant-name-prefix: GPU_VARIANT rides the RAW variant key
+      # (ia-x64v1), the engine expands the entry name to gpu-<key> — the sed
+      # below CONSUMES the literal gpu- of the template into its LHS
+      # pattern, so the replacement must re-emit it (run 42720355625: the
+      # deb landed 'ia-x64v1' and the gpu-ia-x64v1 glob found nothing).
+      NAME="gpu-${GPU_VARIANT_KEY}"
       cp "${SAVE_PWD}/workflows/bootc-debs-builder/preinstall/output/linux-modules-gpu/DEBIAN/control" \
         "${DESTDIR}/DEBIAN/control"
       sed -i \
