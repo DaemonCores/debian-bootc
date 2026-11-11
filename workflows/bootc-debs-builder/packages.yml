@@ -208,9 +208,9 @@ packages:
       SAVE_PWD=$(pwd)
       DEB_ARCH=$(dpkg --print-architecture)
       case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
-      BASE_CONFIG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel/config"
+      BASE_CONFIG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/config.cfg"
       test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel config workflows/bootc-debs-builder/kernel/config missing (own repo, owner 11/11: no kernel package data in the engine)" >&2; exit 1; }
+        || { echo "ERROR: kernel config workflows/bootc-debs-builder/kernel-src/config.cfg missing (own repo, owner 11/11: no kernel package data in the engine)" >&2; exit 1; }
       # PROFILE delta of this variant (ia | vm) — merged after the base
       # config, the profile is the final word of the merge. IA = the gpu/ia
       # overlay (AMD64 only — the arm64 flavours carry no amdgpu); VM = the
@@ -1511,7 +1511,7 @@ packages:
 
   # ===========================================================================
   # KERNEL BASE CONFIG: OWNED BY THIS REPOSITORY (owner order 11/11: strictly
-  # no kernel package data in the build engine). kernel/config = the FULL SERVER base (the union of the Debian stock
+  # no kernel package data in the build engine). kernel-src/config.cfg = the FULL SERVER base (the union of the Debian stock
   # distro config and the Proxmox PVE kernel config over the policy blocks —
   # see the file header). The engine kernel-shared/ keeps only PATCH data and
   # the cross-lane kconfig fragments (patches-shared.yml, gpu/flavours),
