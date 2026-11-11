@@ -273,14 +273,14 @@ packages:
         # flavour fragment, PVE deltas fragment (base appended after still
         # wins its arch built-ins).
         SHARED_KCFG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig"
-        CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
+        CONFIG_FILES+=("${SHARED_KCFG}/cpus/x86-common.cfg")
         case "${KERNEL_GPU:-all}" in
           all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
           none) ;;
           *) for PVE_GPU in ${KERNEL_GPU}; do CONFIG_FILES+=("${SHARED_KCFG}/gpu/${PVE_GPU}.cfg"); done ;;
         esac
-        [[ -s "${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
-          CONFIG_FILES+=("${SHARED_KCFG}/${KERNEL_ARCH_LEVEL:-}.cfg")
+        [[ -s "${SHARED_KCFG}/cpus/${KERNEL_ARCH_LEVEL:-}.cfg" ]] && \
+          CONFIG_FILES+=("${SHARED_KCFG}/cpus/${KERNEL_ARCH_LEVEL:-}.cfg")
       fi
       CONFIG_FILES+=("${BASE_CONFIG}")
       # THE PROFILE, LAST: IA amd64 = gpu/ia (DC off, compute); THP follows
