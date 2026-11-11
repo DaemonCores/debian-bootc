@@ -210,7 +210,7 @@ packages:
       case "${DEB_ARCH}" in amd64) ARCH=x86 ;; *) ARCH="${DEB_ARCH}" ;; esac
       BASE_CONFIG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/config.cfg"
       test -f "${BASE_CONFIG}" \
-        || { echo "ERROR: kernel config workflows/bootc-debs-builder/kernel-src/config.cfg missing (own repo, owner 11/11: no kernel package data in the engine)" >&2; exit 1; }
+        || { echo "ERROR: BASE_CONFIG kernel-src/config.cfg missing (owner 11/11: no kernel package data in the engine)" >&2; exit 1; }
       # PROFILE delta of this variant (ia | vm) — merged after the base
       # config, the profile is the final word of the merge. IA = the gpu/ia
       # overlay (AMD64 only — the arm64 flavours carry no amdgpu); VM = the
