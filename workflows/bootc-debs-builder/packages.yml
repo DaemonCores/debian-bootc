@@ -247,18 +247,19 @@ packages:
       # profile kernels carry the SAME patch provenance; the dry-run
       # all-or-nothing fuzz-0 semantics live inside the helper.
       kernel_apply_patches \
-        "${CI_KERNEL_SHARED}/patches-shared.yml" \
+        "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/kernel.yml" \
         "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
-      for GPU_DRIVER in amd intel; do
-        GPU_PATCH_YML="${CI_KERNEL_SHARED}/patches-gpu/${GPU_DRIVER}.yml"
+      case "${KERNEL_PROFILE}" in vm) GPU_PATCH_PROFILE=gaming ;; *) GPU_PATCH_PROFILE="${KERNEL_PROFILE}" ;; esac
+        for GPU_DRIVER in amd intel; do
+        GPU_PATCH_YML="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/gpu/${GPU_PATCH_PROFILE}/${GPU_DRIVER}.yml"
         [[ -f "${GPU_PATCH_YML}" ]] \
-          || { echo "ERROR: engine patches-gpu/${GPU_DRIVER}.yml missing" >&2; exit 1; }
+          || { echo "ERROR: kernel-src/patches/gpu/${GPU_PATCH_PROFILE}/${GPU_DRIVER}.yml missing" >&2; exit 1; }
         kernel_apply_patches "${GPU_PATCH_YML}" \
           "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
       done
-      PVE_PATCHES_YML="${CI_KERNEL_SHARED}/patches-pve.yml"
+      PVE_PATCHES_YML="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/pve.yml"
       [[ -f "${PVE_PATCHES_YML}" ]] \
-        || { echo "ERROR: engine patches-pve.yml missing (the PVE additive series)" >&2; exit 1; }
+        || { echo "ERROR: kernel-src/patches/pve.yml missing (the PVE additive series)" >&2; exit 1; }
       kernel_apply_patches "${PVE_PATCHES_YML}" \
         "${DEB_ARCH}" "${KERNEL_VER}" "${SRCDIR}"
 
@@ -271,7 +272,7 @@ packages:
         # Same fragment order as the baseline: shared x86 base, GPU sets,
         # flavour fragment, PVE deltas fragment (base appended after still
         # wins its arch built-ins).
-        SHARED_KCFG="${CI_KERNEL_SHARED}/kconfig-shared"
+        SHARED_KCFG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig"
         CONFIG_FILES+=("${SHARED_KCFG}/x86-common.cfg")
         case "${KERNEL_GPU:-all}" in
           all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
@@ -292,9 +293,9 @@ packages:
       fi
       CONFIG_FILES+=("${PROFILE_THP}")
       if [ "${DEB_ARCH}" = "arm64" ]; then
-        PAGES_OVERLAY="${CI_KERNEL_SHARED}/pages/${KERNEL_PAGES}"
+        PAGES_OVERLAY="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/pages/${KERNEL_PAGES}.cfg"
         test -f "${PAGES_OVERLAY}" \
-          || { echo "ERROR: engine kernel-shared/pages/${KERNEL_PAGES} overlay missing" >&2; exit 1; }
+          || { echo "ERROR: kernel-src/kconfig/pages/${KERNEL_PAGES}.cfg missing" >&2; exit 1; }
         CONFIG_FILES+=("${PAGES_OVERLAY}")
         # The arm flavour fragment merges AFTER the pages overlay: the
         # pages/16k fragment carries its own CONFIG_LOCALVERSION="-16k"
@@ -305,9 +306,9 @@ packages:
         # fragment only appends its LOCALVERSION on top after the merge).
         case "${KERNEL_ARCH_LEVEL:-}" in
           armv8.0|armv8.2-lse|armv9-sve2)
-            test -f "${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg" \
-              || { echo "ERROR: arm flavour fragment ${KERNEL_ARCH_LEVEL}.cfg missing from the engine export" >&2; exit 1; }
-            CONFIG_FILES+=("${CI_KERNEL_SHARED}/kconfig-shared/${KERNEL_ARCH_LEVEL}.cfg")
+            test -f "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/cpus/${KERNEL_ARCH_LEVEL}.cfg" \
+              || { echo "ERROR: kernel-src/kconfig/cpus/${KERNEL_ARCH_LEVEL}.cfg missing" >&2; exit 1; }
+            CONFIG_FILES+=("${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/cpus/${KERNEL_ARCH_LEVEL}.cfg")
             ;;
         esac
       fi
@@ -582,9 +583,9 @@ packages:
       # export the kernel lane consumes — never a carbon copy of the data.
       # The class filter of the helper picks only this tree's patches per
       # call (kernel vs module).
-      test -f "${CI_KERNEL_SHARED}/patches-shared.yml" \
+      test -f "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/kernel.yml" \
         || { echo "ERROR: engine kernel-shared/patches-shared.yml missing" >&2; exit 1; }
-      PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
+      PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/kernel.yml")
       export PATCHES_JSON
       # Bootstrap shared by the kernel module entries: locate the kernel deb,
       # download the kernel source, seed .config (kernel_prepare).
@@ -912,9 +913,9 @@ packages:
 
         # The engine shared set (see linux-modules-arm-device): the same
         # PATCHES_JSON export consumed by kernel_prepare's class loop.
-        test -f "${CI_KERNEL_SHARED}/patches-shared.yml" \
+        test -f "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/kernel.yml" \
           || { echo "ERROR: engine kernel-shared/patches-shared.yml missing" >&2; exit 1; }
-        PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${CI_KERNEL_SHARED}/patches-shared.yml")
+        PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/kernel.yml")
         export PATCHES_JSON
         kernel_prepare
         # kernel_prepare derives KVER from the Package field of the seed deb
@@ -1005,9 +1006,9 @@ packages:
           # BEFORE the module compile — dry-run ALL, all-or-nothing. The
           # series resolves as the KERNEL series (KVER = 7.2.15-<flav>-
           # xanmod1 -> 7.2).
-          GPU_NVIDIA_YML="${CI_KERNEL_SHARED}/patches-gpu/nvidia.yml"
+          GPU_NVIDIA_YML="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/gpu/${GPU_PROFILE}/nvidia.yml"
           [[ -f "${GPU_NVIDIA_YML}" ]] \
-            || { echo "ERROR: engine patches-gpu/nvidia.yml missing" >&2; exit 1; }
+            || { echo "ERROR: kernel-src/patches/gpu/${GPU_PROFILE}/nvidia.yml missing" >&2; exit 1; }
           PATCHES_SERIES="${KVER%%-*}"
           export PATCHES_SERIES
           kernel_apply_patches "${GPU_NVIDIA_YML}" \
@@ -1515,7 +1516,8 @@ packages:
   # distro config and the Proxmox PVE kernel config over the policy blocks —
   # see the file header). The engine kernel-shared/ keeps only PATCH data and
   # the cross-lane kconfig fragments (patches-shared.yml, gpu/flavours),
-  # consumed by every build as CI_KERNEL_SHARED. This repository carries NO
+  # carried by THIS repository under workflows/bootc-debs-builder/kernel-src (owner 11/11: strictly no
+# kernel data in the build engine; the CI carries the build LOGIC only).
   # copy of that patch data:
   #   kernel-shared/patches-shared.yml  the canonical XanMod patch set —
   #     PATCH PARITY: the debian linux-image build applies it to its own
