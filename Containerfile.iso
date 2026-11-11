@@ -108,6 +108,34 @@ RUN IMAGE_REGISTRY="${IMAGE_REGISTRY}" \
 RUN [ -d /usr/lib/apt2ostree ] \
     || /usr/libexec/debian-bootc/apt2ostree-fetch /usr/lib/apt2ostree
 
+# Live dracut modules (2026-11-11, the initrd-switch-root live ISO regression):
+# the bootc-image-builder ISO pipeline requires dmsquash-live + livenet +
+# ostree dracut modules in this tree (upstream HasModules check) and
+# --add's them when it rebuilds the live initramfs. Debian's dracut ships
+# NO live modules at all (modules.d has no 90dmsquash-live / 90livenet),
+# so the rebuilt live initramfs had no way to mount the /LiveOS squashfs
+# root: the boot reached initrd.target, then initrd-switch-root.service
+# failed in a dracut emergency loop. The modules are vendored here from
+# the upstream pin (dracut-ng 106, the same major version as the Debian
+# dracut 106 in this tree), sha256-pinned, never redistributed by us.
+# livenet/url-lib will be skipped by dracut if their network dependency
+# is unmet in the tree (no network module on Debian) - harmless offline:
+# only dmsquash-live mounts the CD root (dm/rootfs-block/img-lib/
+# overlayfs: img-lib also vendored below).
+RUN mkdir -p /usr/lib/debian-bootc/upstream \
+    && curl -sSL --retry 6 --retry-all-errors --retry-delay 5 -o /tmp/dracut-ng.tar.gz \
+        https://github.com/dracut-ng/dracut-ng/archive/refs/tags/106.tar.gz \
+    && echo "29dafe990036ebbfee996208ff4445fcbd60fef625b430a2f966d099d5c07583  /tmp/dracut-ng.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/dracut-ng.tar.gz -C /usr/lib/debian-bootc/upstream \
+    && for m in 90dmsquash-live 90livenet 45url-lib 99img-lib 45net-lib; do \
+         cp -a "/usr/lib/debian-bootc/upstream/dracut-106/modules.d/${m}" /usr/lib/dracut/modules.d/ ; \
+       done \
+    && rm -rf /usr/lib/debian-bootc/upstream /tmp/dracut-ng.tar.gz \
+    && for d in 90dmsquash-live 90livenet; do \
+         test -d "/usr/lib/dracut/modules.d/${d}" \
+           || { echo "ERROR: live dracut module ${d} missing" >&2; exit 1; }; \
+       done
+
 # -----------------------------------------------------------------------------
 # Phase 1.5: osbuild stage prerequisites on the deployed tree
 #
