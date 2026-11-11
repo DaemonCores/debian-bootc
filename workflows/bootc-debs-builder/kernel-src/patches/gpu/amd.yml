@@ -1,0 +1,113 @@
+# AMD (amdgpu) kernel-tree patch set — DRM-tree patches applied to the
+# kernel source NEXT TO patches-shared.yml, inside the SAME patch run of the
+# kernel build (debian-bootc linux-image; the PVE lane resolves the same
+# manifest). Canonical schema as patches-shared.yml: {series} resolves to
+# the kernel series the packaging tree carries, stage/class/exclude-series
+# filter exactly like the shared set; a patch that does not dry-run clean
+# fails the build (all-or-nothing).
+#
+# OWNER MANDATE 05/11 16:5x (GPU completions): the set carries the patches
+# that REALLY APPLY to the 7.2.15 tree — proven by local dry-run
+# (patch -p1 --fuzz=0, pristine 7.2.15, standalone AND manifest-order)
+# BEFORE this write (mandate: an entry that does not pass fuzz-0 is
+# refused). Only the applying subset enters; the non-applying remainder is
+# a PORTING LANE documented below as K-PORT, never hand-forced.
+#
+# SOURCE SERIES — userq / hung-queue (Jesse Zhang, AMD, 2026-09-21), 21
+# patches + 2 in-thread follow-up replies, lore.kernel.org amd-gfx:
+#   https://lore.kernel.org/amd-gfx/20260921075326.2409021-1-Jesse.Zhang@amd.com/
+#   full-thread mbox sha256 (t.mbox.gz):
+#     ac74122280c077224d8bb479ad0f07dc9058698fe7b2921d6caf5641dee8d76f
+#
+# URL convention of the entries: the gnuweeb lore mirror serves the RAW
+# per-message mail with a bare curl; lore.kernel.org itself 403s a bare
+# curl fetch of /raw (only /t.mbox.gz and user-agent-tagged clients
+# pass). The gnuweeb mirror bytes were verified IDENTICAL to the lore
+# /raw bytes, so the sha256 pins hold for either. The mail carries mbox
+# headers BEFORE the diff; patch(1) skips them. The dry-run gate
+# re-judges every resolved build: mirror drift or outage fails the build
+# loudly and keeps the last good deb (the all-or-nothing contract).
+#
+# APPLIED (6 of 23 messages, dry-run OK on 7.2.15 — the real build applies
+# AFTER the shared set; none of these file paths is touched by it):
+#   [01/21] gfx: add a detect_hung_queue callback (amdgpu_gfx.h)
+#   [03/21] gfx11: implement detect_hung_queue
+#   [09/21] gfx12: set KMD_QUEUE for kernel gfx queues (hung-queue detect)
+#   [10/21] gfx11: set KMD_QUEUE for kernel gfx queues
+#   [20/21] gfx11: defer gfx pipe reset enablement
+#   [21/21] gfx12: defer gfx pipe reset enablement
+#
+# K-PORT — the 17 series patches that DO NOT apply to 7.2.15 raw (verified
+# probe verdict per patch, 05/11): [02/21] gfx12 implement detect_hung_queue
+# (next-port candidate: depends on entered [01/21] only, re-probe), [04/21]
+# mes12 restore collateral gfx queues, [05/21] mes12 read the gfx user queue
+# VMID for MMIO, [06/21] mes11 restore collateral gfx queues, [07/21] mes11
+# read the gfx user queue VMID for MMIO, [08/21] support non-guilty job save
+# on ring backup, [11/21] fix empty fence backup and replay intervals,
+# [12/21] factor out the MES user queue reset body, [13/21] add a shared gfx
+# pipe reset helper, [14/21] add a gfx ME pipe reset capability, [15/21]
+# preserve collateral rings during gfx pipe reset, [16/21] mes11 gate gfx
+# pipe reset on PER_PIPE, [17/21] mes12 gate gfx pipe reset on PER_PIPE,
+# [18/21] userq preserve kernel rings during gfx pipe reset, [19/21]
+# (mes11/12 variant files), + the 2 follow-up replies (no independent
+# body). PORTING TASK (explicit, never hand-forced): rebase the 17 onto the
+# 7.2.15 amdgpu MES/gfx-pipe-reset code (the series targets 7.3-rc2-side
+# MES12 paths that do not exist on 7.2.15); per-patch fuzz-0 dry-run probe
+# on a PRISTINE tree, then add ONLY the clean ones here in series order
+# (the engine gate does the rest). Owner GO required per entry batch.
+#
+# K-PORT — IOMMU PerfOpt (owner lead 04/11, re-probed 05/11): the series
+# does NOT apply raw to 7.2.15 — probe conflicts on amdgpu_device.c (the
+# amdgpu_device.c hunk targets the 7.3-rc2 tree; 7.2.15 diverges). Versions
+# re-probed: v2 Mario Limonciello 20260908041207.38113-1-mario.limonciello@amd.com
+# (t.mbox.gz sha256
+#  c23da0c9c7232f9beb6a112519cc84f4403d4fc0d35fcecc8d3224fff436bbf0) and
+# v3/v4-side 20260930162401.273907-1-superm1@kernel.org "Make PerfOpt
+# compulsory" + in-thread revised patches (t.mbox.gz sha256
+#  c27410e24871c6c9f08929fae4a8a4d7a3f508d70c681174a1232261c822ccb4).
+# ~20% LLM-task gain documented upstream (Phoronix amd-perfopt).
+# PORTING TASK: rebase the iommu/amd half and the amdgpu half onto
+# 7.2.15, per-patch fuzz-0 probe, entries enter ONLY on clean probe.
+#
+# NOT AMDS (checked 04/11, nothing enters): CachyOS kernel-patches
+# 5.15/AMD/0001-amd-gpu.patch (legacy, sha256
+#  b2550e2b5827c8a3c66d3b371d5ee7abe8f362427b2412cb567b3bb1b4523037); the
+# 6.12 0001-amd-cache-optimizer.patch (CPU-cache side, sha256
+#  3a8e756865e88ff5dff486e15e6f888d17714d3b555c9a87f918e70b8b454fc1);
+# amd-staging-drm-next / drm-misc (TREES, not patch lists — cherry-pick
+# adoption is an owner arbitration); Frogging-Family (legacy 5.x only).
+#
+# All entries: stage amd64 (the gfx11/12 hung-queue work targets the x86_64
+# dGPU profile builds; the arm64 deb lane is untouched). Order = series
+# order; the engine dry-runs the whole list on the pristine tree first.
+patches:
+      - name: userq-01-gfx-detect-hung-queue-callback
+        url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-1-Jesse.Zhang@amd.com/raw
+        stage: amd64
+        sha256: 5a6089d98c42492d7aa2a01b5cf149fcf6b63702e557a852a209a8066e5c5434
+        license: GPL-2.0-only
+      - name: userq-03-gfx11-implement-detect-hung-queue
+        url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-3-Jesse.Zhang@amd.com/raw
+        stage: amd64
+        sha256: c5795d155f74c5ed701d7a889635a1d81f41a51356726be7c9e6183670d7d6f4
+        license: GPL-2.0-only
+      - name: userq-09-gfx12-kmd-queue-hung-detect
+        url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-9-Jesse.Zhang@amd.com/raw
+        stage: amd64
+        sha256: 6f0acfb089db4d5325d4ac2c67f869dc538dd9e1c9ea088cce8d5b5aacd6a4f4
+        license: GPL-2.0-only
+      - name: userq-10-gfx11-kmd-queue-hung-detect
+        url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-10-Jesse.Zhang@amd.com/raw
+        stage: amd64
+        sha256: 1d1cea967c61c5e873423c6f45d154e65853030bc20abb8dfa4afcf01504ca5b
+        license: GPL-2.0-only
+      - name: userq-20-gfx11-defer-pipe-reset
+        url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-20-Jesse.Zhang@amd.com/raw
+        stage: amd64
+        sha256: 07b91e81f3b42e48d4674d6e21cebe9c44397016227b26dbdafd0179f4757ffe
+        license: GPL-2.0-only
+      - name: userq-21-gfx12-defer-pipe-reset
+        url: https://lore-kernel.gnuweeb.org/amd-gfx/20260921075326.2409021-21-Jesse.Zhang@amd.com/raw
+        stage: amd64
+        sha256: a82cb4717cb23eeb5bc7b747acbf5b732051f735965d7e12d6d6a9661777070a
+        license: GPL-2.0-only

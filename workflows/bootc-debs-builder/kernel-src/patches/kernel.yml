@@ -1,11 +1,8 @@
 ---
-# shared kernel patch data — the CANONICAL patch list BOTH kernel lanes
-# consume. PATCH PARITY (owner arbitration 2026-11-03 12:30): the data lives
-# HERE, in the build engine (build-deb/kernel-shared/), beside the helpers it
-# feeds: build-deb.sh exports its directory as CI_KERNEL_SHARED (content
-# hashed like the helper scripts) and both lanes consume the set from that
-# checkout — the debian linux-image build (packages.yml linux-image) applies
-# the manifest file-mode in addition to its own anchor patches; the PVE
+# shared kernel patch data — the CANONICAL patch list (owner 11/11: the
+# kernel data lives in the PRODUCT repo, strictly nothing in the engine):
+# shipped here under kernel-src/patches/, consumed by the linux-image build
+# (packages.yml) in file mode; the PVE side seeds from the published deb.
 # kernel build (DaemonCores-VE) applies the same manifest resolved by the
 # REAL kernel version of the packaging tree. One list, two consumers, no
 # copy in either consumer repo, no fetch between production repositories.
@@ -13,9 +10,14 @@
 # (DaemonCores-CI): each lane resolves its own kernel series (the PVE
 # packaging carries a Debian 6.12.x kernel tree — the series resolves by
 # that tree's Makefile, not by the 7.0.x packaging version). Source
-# reviewed 2026-10-29: 17 xanmod + 3 clearlinux entries + bore (which
+# Source reviewed 2026-10-29: 17 xanmod + 3 clearlinux entries + bore (which
 # travels with the shared set so the SCHED_BORE pin of
 # kconfig/x86-common.cfg resolves on both kernels);
+# ARM OPTI update 2026-11-09 (owner mandate): +2 clearlinux generic
+# completions (0166 sched-fair upper-limit, 0174 memcg CHARGE_BATCH) and
+# +1 arm64 additive (msm-adreno devfreq IFPC relax, lore-pinned) — counts
+# now 25 entries (23 common, 2 stage arm64) + the dormant bore + the
+# rocknix module carrier; bore re-probed and still K-PORT (see its entry).
 # 0004-ata-before-graphics removed (does not apply to the consumer trees);
 # 0003-kbuild-sms-pipelining retired (dry-run fails on both series
 # variants). A patch that cannot be downloaded or applied fails the
@@ -108,6 +110,25 @@ patches:
         url: https://gitlab.com/xanmod/linux-patches/-/raw/master/{seriesdir}/{topic}/0003-locking-rwsem-spin-faster.patch
         topic: clearlinux
         stage: common
+      # Clear-linux generic completions (owner mandate ARM OPTI 2026-11-09):
+      # the two generic Serie.clr entries the shared set was missing. Dry-run
+      # fuzz 0 PASS on pristine 7.2.15 (2026-11-09) and in manifest order on
+      # the FULL set (log: build-local, tarball sha256 d0f6b1d7...809ab).
+      # 0166 drops the fair.c upper limit on CPU numbers (big NR_CPUS sched
+      # domains); 0174 raises MEMCG_CHARGE_BATCH to 128 (fewer memcg charge
+      # round-trips, LLM-shaped allocations). Both touch generic files,
+      # stage common = arm64 AND amd64.
+      - name: 0166-sched-fair-remove-upper-limit
+        url: https://raw.githubusercontent.com/clearlinux-pkgs/linux/main/0166-sched-fair-remove-upper-limit-on-cpu-number.patch
+        stage: common
+        sha256: e6a7bfa9844f5f6bde6ef0a149dd58a7ad7dcfceae45cb08a9a4fd638d6ff0e9
+        license: GPL-2.0-only
+      # 0174-memcg-charge-batch-128 K-PORT (2026-11-09, run 42713342754): the
+      # patch applies fuzz-0 but does NOT build — mainline carries
+      # BUILD_BUG_ON(MEMCG_CHARGE_BATCH > S8_MAX) in memcontrol.h (s8 field,
+      # hard cap 127); bumping to 128 fails every kernel build at
+      # mm/memcontrol.o (21 wave0 reds amd64+arm64). Re-introduction requires
+      # a follow-up s8->s16 field change upstream, out of scope here.
       # 0004-ata-before-graphics REMOVED (series 7.0 review): downloads but no
       # longer applies to the 7.0.x tree — drivers initialize ata before
       # graphics upstream now.
@@ -138,7 +159,14 @@ patches:
         fuzz: 2
         license: GPL-2.0-only
       - name: bore
-        # DORMANT (2026-11-04, proven): the CachyOS 7.2/7.3 bore hunks no longer
+        # DORMANT — RE-PROBED 2026-11-09 (owner mandate ARM OPTI): still KO.
+        # The CachyOS series siblings {7.2,7.3} both FAIL the fuzz-0 dry-run
+        # against vanilla 7.2.15 (fair.c: hunks #2,#10-#12,#15-#19 of 22, the
+        # LOG->NONE drift; 6.12 sibling fails even harder). Verdict per
+        # series: K-PORT everywhere, series-gating unchanged. The byte
+        # identity of the upstream siblings (2026-11-09):
+        # 7.2 1809a4d4d6508a2a..., 7.3 d2eaa8e8dbf1f56b..., 6.12 b6174446ed6d...
+        # (full digests in the dry-run report). DORMANT (2026-11-04, proven): the CachyOS 7.2/7.3 bore hunks no longer
         # apply to any vanilla tree (fair.c LOG->NONE upstream drift; dry-run
         # FAIL on vanilla 7.2.15 AND 7.3). Series-gated OFF until upstream
         # ships a bore patch matching the vanilla tree again — REMOVE the
@@ -149,259 +177,19 @@ patches:
         stage: common
         exclude-series: ["7.0", "7.1", "7.2", "7.3"]
         license: GPL-2.0-only
-
-      - name: 0001-Make-mkcompile_h-accept-an-alternate-timestamp-strin.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0001-Make-mkcompile_h-accept-an-alternate-timestamp-strin.patch
-        stage: common
-        sha256: fd83c9bb484501c0455f1040f9a0348f0334b10b12c998244459d63bf2a974de
-        license: GPL-2.0-only
-      - name: 0002-wireless-Add-Debian-wireless-regdb-certificates.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0002-wireless-Add-Debian-wireless-regdb-certificates.patch
-        stage: common
-        sha256: 75e45ad38a61eae3fb35fb7c005317563c99af0f6ab6a4138fafabde4dd06a96
-        license: GPL-2.0-only
-      - name: 0003-bridge-keep-MAC-of-first-assigned-port.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0003-bridge-keep-MAC-of-first-assigned-port.patch
-        stage: common
-        sha256: 4cdc7c8b7624e819043018c1e4572412a31de5ab37cef69d7d19c99ababd2f5d
-        license: GPL-2.0-only
-      - name: 0006-net-core-downgrade-unregister_netdevice-refcount-lea.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0006-net-core-downgrade-unregister_netdevice-refcount-lea.patch
-        stage: common
-        sha256: dad93c41c85e2f69cecd4ddbf7340579fcb37f9e0bb987a9af3875a6e47821b4
-        license: GPL-2.0-only
-      - name: 0007-Revert-fortify-Do-not-cast-to-unsigned-char.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0007-Revert-fortify-Do-not-cast-to-unsigned-char.patch
-        stage: common
-        sha256: 2bf6da1f61ab7cd855790d7298386fcd216eeb8f493605341be4da2265d759bf
-        license: GPL-2.0-only
-      - name: 0008-kvm-xsave-set-mask-out-PKRU-bit-in-xfeatures-if-vCPU.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0008-kvm-xsave-set-mask-out-PKRU-bit-in-xfeatures-if-vCPU.patch
-        stage: common
-        sha256: d5ed1b5ab7b2b56a67fa0aff6625987f182d8e5dcdbd31570ce18596654762ab
-        license: GPL-2.0-only
-      - name: 0010-revert-memfd-improve-userspace-warnings-for-missing-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0010-revert-memfd-improve-userspace-warnings-for-missing-.patch
-        stage: common
-        sha256: fe67bf910c60021ca9a771f4473d0b5e6397c479ceb0a6a41f97aa0902940820
-        license: GPL-2.0-only
-      - name: 0050-apparmor-fix-NULL-ctx-peer-derefs-in-unix-socket-ctx.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0050-apparmor-fix-NULL-ctx-peer-derefs-in-unix-socket-ctx.patch
-        stage: common
-        sha256: 1b44bdfb5072375de308054abad449e6534df8d5d83ff60b15639f22f9b2111b
-        license: GPL-2.0-only
-      - name: 0054-ip-reject-partial-checksums-covering-network-headers.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0054-ip-reject-partial-checksums-covering-network-headers.patch
-        stage: common
-        sha256: 3f0f0dc3e38723455267664db392762696d9c35c562b27cd5279dc3b5ae576f7
-        license: GPL-2.0-only
-      - name: 0055-KVM-Check-for-duplicate-vcpu_id-as-early-as-possible.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0055-KVM-Check-for-duplicate-vcpu_id-as-early-as-possible.patch
-        stage: common
-        sha256: f884ede290f0d76ecbaa4a9e23d988af4f4596ee15baf52d2aa3d6866246be69
-        license: GPL-2.0-only
-      - name: 0056-KVM-VMX-Fix-stale-PID-pointer-table-entry-left-after.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0056-KVM-VMX-Fix-stale-PID-pointer-table-entry-left-after.patch
-        stage: common
-        sha256: fc27131e1b70bb1186f05ad17a217df7fd3855253921c588a83a8d3885125681
-        license: GPL-2.0-only
-      - name: 0058-btrfs-fix-memory-barrier-order-in-reloc_root_is_dead.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0058-btrfs-fix-memory-barrier-order-in-reloc_root_is_dead.patch
-        stage: common
-        sha256: da9e4372c44ea01dec3f80c08288109b6c1e6b8e92ff473773bec277089a8c60
-        license: GPL-2.0-only
-      - name: 0059-ixgbe-fix-NULL-pointer-dereference-on-MDD-event-with.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0059-ixgbe-fix-NULL-pointer-dereference-on-MDD-event-with.patch
-        stage: common
-        sha256: acc9cd2af0bb9eef97e48011a7fe8cc3908c3a32bbed99d7e2f2f9b3e5a0edfe
-        license: GPL-2.0-only
-      - name: 0060-ixgbe-do-not-enable-MDD-without-VFs.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0060-ixgbe-do-not-enable-MDD-without-VFs.patch
-        stage: common
-        sha256: 60816860282d6765e6a45ef47d3adb02b9c7cdb61c2b862b7f748fd045bad09f
-        license: GPL-2.0-only
-      - name: 0062-KVM-SVM-Add-paranoid-helper-for-checking-if-vCPU-is-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0062-KVM-SVM-Add-paranoid-helper-for-checking-if-vCPU-is-.patch
-        stage: common
-        sha256: aac25a32b71c4fef7a57b58fe2d4be8b2f6b06cec236a552ad73609bdcac789a
-        license: GPL-2.0-only
-      - name: 0063-KVM-SVM-Clear-AVIC-Physical-ID-table-entry-if-vCPU-c.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0063-KVM-SVM-Clear-AVIC-Physical-ID-table-entry-if-vCPU-c.patch
-        stage: common
-        sha256: 7a282c1b2a12d75278fc78897e2abc0758a499027b390d058d60f7c495b19891
-        license: GPL-2.0-only
-      - name: 0077-aio-prevent-eventfd-epoll-recursion-on-poll.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0077-aio-prevent-eventfd-epoll-recursion-on-poll.patch
-        stage: common
-        sha256: 7683504042f0c934ba210cd66a08fd6481bb8df628de834e1f8c7f9bc69c9723
-        license: GPL-2.0-only
-      - name: 0079-Revert-net-advertise-TCP-MSS-from-the-configured-MTU.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0079-Revert-net-advertise-TCP-MSS-from-the-configured-MTU.patch
-        stage: common
-        sha256: ff738e9a61e931ac0ecda11d3ba60f86ea7da6e7eaaf4175d27afbd56dd2ced6
-        license: GPL-2.0-only
-      - name: 0082-net-limit-priority-VLAN-untag-depth.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0082-net-limit-priority-VLAN-untag-depth.patch
-        stage: common
-        sha256: d3805aad840d0e29a4ae672fd4d1e5b243b90bc83a2ef667ce3fa03724bc4c55
-        license: GPL-2.0-only
-      - name: 0083-netfilter-nf_reject-initialize-IPCB-at-inet-ingress.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0083-netfilter-nf_reject-initialize-IPCB-at-inet-ingress.patch
-        stage: common
-        sha256: c4e0fc4ab078aea6881b62ff190c8967cc91a591fd04f0c118d85597010d2599
-        license: GPL-2.0-only
-      - name: 0084-net-ipv4-add-zero-check-for-snd_cwnd_clamp.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0084-net-ipv4-add-zero-check-for-snd_cwnd_clamp.patch
-        stage: common
-        sha256: 034fa8d5b03d0bb66fb21ee89a9f404260f5e2b02791781e1564629e322fb728
-        license: GPL-2.0-only
-      - name: 0085-net-packet-check-TX_RING-fragments-before-memory-acc.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0085-net-packet-check-TX_RING-fragments-before-memory-acc.patch
-        stage: common
-        sha256: 0cd181702152c794c56a04cb745b788230868ccea935220efa3e550de3f7f1b9
-        license: GPL-2.0-only
-      - name: 0086-net-sched-cls_flower-avoid-stale-mask-references-aft.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0086-net-sched-cls_flower-avoid-stale-mask-references-aft.patch
-        stage: common
-        sha256: 73d6a16f4533a72f4ac0649bedb6fde76309049a6476302ae301230a256a7161
-        license: GPL-2.0-only
-      - name: 0087-mm-swap-fix-swap_cache_get_folio-returning-a-folio-t.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0087-mm-swap-fix-swap_cache_get_folio-returning-a-folio-t.patch
-        stage: common
-        sha256: df170eb1d52e904d1c487366afc3e1d5f4c1b2c18d3e39b5d58c8d3fc49fae55
-        license: GPL-2.0-only
-      - name: 0091-block-restore-the-iterator-when-rejecting-a-misalign.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0091-block-restore-the-iterator-when-rejecting-a-misalign.patch
-        stage: common
-        sha256: d64c7cac3d2596b23c9e7fd7d6ec4238668ec6626609f744c546f849572b18af
-        license: GPL-2.0-only
-      - name: 0092-crypto-algif_skcipher-rewind-rounded-output-bytes.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0092-crypto-algif_skcipher-rewind-rounded-output-bytes.patch
-        stage: common
-        sha256: 7ca3e568f8080dd6d99896cdf50cfac4559ce6f466143a58155ebc41630c4a52
-        license: GPL-2.0-only
-      - name: 0095-KVM-x86-mmu-Bug-the-VM-if-KVM-attempts-to-walk-more-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0095-KVM-x86-mmu-Bug-the-VM-if-KVM-attempts-to-walk-more-.patch
-        stage: common
-        sha256: 17357a2b45eb58beee9ef62beced893997f866068fb576784f52a5f56104b375
-        license: GPL-2.0-only
-      - name: 0096-KVM-x86-mmu-Bug-the-VM-if-KVM-calcs-a-CPU-role-with-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0096-KVM-x86-mmu-Bug-the-VM-if-KVM-calcs-a-CPU-role-with-.patch
-        stage: common
-        sha256: 9cadc418a92d12a872184dec19adcd097dc83934bde8b7d5b4c2e07f02141b49
-        license: GPL-2.0-only
-      - name: 0097-KVM-x86-mmu-Convert-MMU-walker-s-bounds-check-from-B.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0097-KVM-x86-mmu-Convert-MMU-walker-s-bounds-check-from-B.patch
-        stage: common
-        sha256: c18bc1c471e12ded762e9410dfe12f39501c2dd4cbfc2f35dd92ef54fe131a98
-        license: GPL-2.0-only
-      - name: 0100-xfrm-interface-validate-the-IP-header-on-xmit.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0100-xfrm-interface-validate-the-IP-header-on-xmit.patch
-        stage: common
-        sha256: 069fadb69ea29a10bf7846281b2567d843aa3a38215b03056ed4de8e329e3b19
-        license: GPL-2.0-only
-      - name: 0102-ucount-take-the-rlimit-reference-before-checking-the.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0102-ucount-take-the-rlimit-reference-before-checking-the.patch
-        stage: common
-        sha256: 96f00451050e9dc5d17fa3cc71a0a8b429941ee5653388b9720fcb051e1f9e2f
-        license: GPL-2.0-only
-      - name: 0103-mm-khugepaged-flush-deferred-unmaps-before-dropping-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0103-mm-khugepaged-flush-deferred-unmaps-before-dropping-.patch
-        stage: common
-        sha256: 793dc801e4c7d552a479d84dc0a64da1b7f9d4cde8a88e1aa4936a7375a4b445
-        license: GPL-2.0-only
-      - name: 0105-ipv6-raw-fix-use-after-free-in-rawv6_send_hdrinc.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0105-ipv6-raw-fix-use-after-free-in-rawv6_send_hdrinc.patch
-        stage: common
-        sha256: f2993376c4706688a9d9787cf66319abd3009839ab465b03385b96856f9e01cb
-        license: GPL-2.0-only
-      - name: 0106-xfrm4-use-a-full-socket-for-local-errors.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0106-xfrm4-use-a-full-socket-for-local-errors.patch
-        stage: common
-        sha256: e782b102db92d4bec867a65d53185430b48f2bf47bbce57c65e7ac65b9c6b2cd
-        license: GPL-2.0-only
-      - name: 0108-xattr-always-invoke-cap_convert_nscap-for-security.c.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0108-xattr-always-invoke-cap_convert_nscap-for-security.c.patch
-        stage: common
-        sha256: 661d8ca84bb051d33b02f9b01766b7c290c108f0865e54122e500c9873d80704
-        license: GPL-2.0-only
-      - name: 0109-ovl-do-not-copy-up-an-xattr-value-that-was-never-rea.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0109-ovl-do-not-copy-up-an-xattr-value-that-was-never-rea.patch
-        stage: common
-        sha256: 67779aa81027aa95cc5c1067c87faaab2b47f6826684ee7043f39171bd61c5ac
-        license: GPL-2.0-only
-      - name: 0110-iov_iter-fix-NULL-deref-in-iov_iter_alignment.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0110-iov_iter-fix-NULL-deref-in-iov_iter_alignment.patch
-        stage: common
-        sha256: d5461fa3d3c6b3ad52fd5673f571b81c965f553665bf0db96d2fded41fe494e9
-        license: GPL-2.0-only
-      - name: 0111-io_uring-io-wq-save-worker-type-before-dropping-its-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0111-io_uring-io-wq-save-worker-type-before-dropping-its-.patch
-        stage: common
-        sha256: f5667029b52b28b64888f105e0360755e54e25332e80d04773e07743c01f8e75
-        license: GPL-2.0-only
-      - name: 0112-aio-fix-NULL-deref-when-a-fault-races-ring-truncatio.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0112-aio-fix-NULL-deref-when-a-fault-races-ring-truncatio.patch
-        stage: common
-        sha256: 1a5bc531e81177bc664bea6a9a3690bd09c6a967196851961f0319f7fdc940f3
-        license: GPL-2.0-only
-      - name: 0116-ksmbd-ignore-network-devices-of-other-namespaces.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0116-ksmbd-ignore-network-devices-of-other-namespaces.patch
-        stage: common
-        sha256: 4427aa0624dd889d1eb8ad236d856a3cbb75023fce03c0beaa0bf54835ee0278
-        license: GPL-2.0-only
-      - name: 0117-drm-amd-display-Don-t-warn-about-links-without-an-HP.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0117-drm-amd-display-Don-t-warn-about-links-without-an-HP.patch
-        stage: common
-        sha256: 72caf78768e55219dbad681a386a28f897afdba7e882ce8b5142dce1cb642f6e
-        license: GPL-2.0-only
-      - name: 0118-ovl-set-OVL_WHITEOUTS-before-publishing-the-upper-di.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0118-ovl-set-OVL_WHITEOUTS-before-publishing-the-upper-di.patch
-        stage: common
-        sha256: d70001d8883f296cc99bef97f2c79eb9c6c8e32d94f2b3fa4c69f8166c7c6929
-        license: GPL-2.0-only
-      - name: 0120-ovl-take-a-snapshot-of-the-name-for-copy-up.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0120-ovl-take-a-snapshot-of-the-name-for-copy-up.patch
-        stage: common
-        sha256: 8f6cc1bee39d9cb6a88a5776f088277784a59103956ade8d2710d92e5ec4b9e3
-        license: GPL-2.0-only
-      - name: 0121-vfs-add-try_take_dentry_name_snapshot.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0121-vfs-add-try_take_dentry_name_snapshot.patch
-        stage: common
-        sha256: e3006afd0de68428606840b7dd93ec4edab767b7b25f45530e8d2c29e0ca6553
-        license: GPL-2.0-only
-      - name: 0122-ovl-do-not-take-a-name-snapshot-in-RCU-walk.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0122-ovl-do-not-take-a-name-snapshot-in-RCU-walk.patch
-        stage: common
-        sha256: 0e9eed8d395b37d88ec2a0a95cf187b07532184116aa78a42c20cd79b009d281
-        license: GPL-2.0-only
-      - name: 0123-ovl-use-the-pinned-upper-dir-in-ovl_fix_origin.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0123-ovl-use-the-pinned-upper-dir-in-ovl_fix_origin.patch
-        stage: common
-        sha256: efa966acd7c722893e237dff7a7710e42b4c8166868be3e2b7143fa0a494d96f
-        license: GPL-2.0-only
-      - name: 0124-ovl-hold-a-reference-on-the-parent-in-readdir.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0124-ovl-hold-a-reference-on-the-parent-in-readdir.patch
-        stage: common
-        sha256: d70ccdc9f916d6386de4d3e075e9bb1823c59f9648249e65a3129866abe7e3e1
-        license: GPL-2.0-only
-      - name: 0125-ovl-do-not-copy-up-a-dentry-that-was-removed.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0125-ovl-do-not-copy-up-a-dentry-that-was-removed.patch
-        stage: common
-        sha256: 0b2be380c930331f975d2cb80bda3f4f17716e05ea83ae2206c10e524a815c89
-        license: GPL-2.0-only
-      - name: 0133-xsk-account-ring-allocations-to-memcg.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0133-xsk-account-ring-allocations-to-memcg.patch
-        stage: common
-        sha256: 72cb9989a9102e765602732ecb4e012d5b2b6001ac9bb15933eb3544859aa4bf
-        license: GPL-2.0-only
-      - name: 0134-netfilter-ebtables-bound-num_counters-like-nentries-.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0134-netfilter-ebtables-bound-num_counters-like-nentries-.patch
-        stage: common
-        sha256: 9bd9079504f4e5a157b201b420e221d0887de0dd674b58cb3433adfb6471619a
-        license: GPL-2.0-only
-      - name: 0136-e1000e-work-around-TSO-erratum-that-corrupts-data-an.patch
-        url: https://raw.githubusercontent.com/proxmox/pve-kernel/master/patches/kernel/0136-e1000e-work-around-TSO-erratum-that-corrupts-data-an.patch
-        stage: common
-        sha256: f1b99fd7161b52d798b0f6baa080d9db9f43a6ded7fda93e68584dfd5501c179
-        license: GPL-2.0-only
+      # drm/msm/adreno devfreq IFPC (owner mandate ARM OPTI 2026-11-09, the
+      # feasibility report item 6). ARM-NEUTRE HOME DECISION: the patch goes
+      # HERE (stage arm64), NOT patches-gpu/amd.yml — the gpu manifests
+      # patch the AMDGPU/nvidia drivers of the amd64 gpu DEB lane (arm64
+      # carries NO gpu deb, doctrine), while msm is an arm64 SoC in-tree
+      # driver that only arm64 KERNEL builds need. lore:
+      # https://lore.kernel.org/dri-devel/20250720-ifpc-support-v1-17-9347aa5bcbd6@oss.qualcomm.com
+      # (the mbox serves headers before the diff; patch(1) skips them —
+      # same convention as the patches-gpu lore entries). K-PORT BOTH
+      # siblings of the series: the [16/17] a6xx X1-85 enablement FAILS raw
+      # (a6xx_catalog.c table drifted), and the [17/17] devfreq relax itself
+      # does NOT COMPILE without it — run 42715501467 job linux-image-ia-
+      # armv8.0: msm_gpu_devfreq.c:162 'ADRENO_QUIRK_IFPC undeclared', the
+      # quirk is introduced only by [16/17]. Dry-run fuzz 0 proved the
+      # application, never the compilation (same lesson as 0174 memcg).
+      # Re-arm = re-probe both when the a6xx catalog matches again.
