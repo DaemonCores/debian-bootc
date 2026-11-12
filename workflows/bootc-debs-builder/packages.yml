@@ -639,6 +639,11 @@ packages:
       # not produce them. Provide empty stubs so modules_install succeeds.
       [ -f modules.builtin ] || touch modules.builtin
       [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
+      # kbuild 7.x stages modules.builtin.ranges during the full vmlinux
+      # build; modules_install demands it even in a modules-only build
+      # (run 43232793168: 'No rule to make target modules.builtin.ranges'
+      # at the LAST install step, after every .ko was built).
+      [ -f modules.builtin.ranges ] || touch modules.builtin.ranges
       make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
       # Remove all files already shipped by the kernel deb so this device
@@ -934,6 +939,7 @@ packages:
         # natively; a seeded export table duplicates every export.
         [ -f modules.builtin ] || touch modules.builtin
         [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
+        [ -f modules.builtin.ranges ] || touch modules.builtin.ranges
         make -j"$(nproc)" modules
 
         DESTDIR="/output/gpu-${GPU_SET}-${GPU_FLAV}"
@@ -941,6 +947,7 @@ packages:
         mkdir -p "${DESTDIR}/DEBIAN" "${DESTDIR}/lib/modules/${KVER}"
         [ -f modules.builtin ] || touch modules.builtin
         [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
+        [ -f modules.builtin.ranges ] || touch modules.builtin.ranges
         make modules_install INSTALL_MOD_PATH="${DESTDIR}" INSTALL_MOD_STRIP=1
 
         # Keep ONLY the vendor driver subtree of the profile build (everything
