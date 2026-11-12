@@ -999,6 +999,10 @@ packages:
           # BEFORE the module compile — dry-run ALL, all-or-nothing. The
           # series resolves as the KERNEL series (KVER = 7.2.15-<flav>-
           # xanmod1 -> 7.2).
+          # The per-PROFILE nvidia manifest (gpu/<profile>/nvidia.yml): this entry runs
+          # with GPU_SET=ia|gaming (the fused-in-tree set is a per-profile product
+          # of the 11/11 owner structure) — the profile IS the set.
+          GPU_PROFILE="${GPU_SET}"
           GPU_NVIDIA_YML="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/gpu/${GPU_PROFILE}/nvidia.yml"
           [[ -f "${GPU_NVIDIA_YML}" ]] \
             || { echo "ERROR: kernel-src/patches/gpu/${GPU_PROFILE}/nvidia.yml missing" >&2; exit 1; }
