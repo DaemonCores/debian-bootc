@@ -619,23 +619,12 @@ packages:
       # Build only the modules (no vmlinuz, no full bindeb-pkg). This is
       # the N-1 rebuild saving: modules are an order of magnitude faster
       # than a full kernel build.
-      # Filter Module.symvers to vmlinux-only exports before patching modpost.
-      # The full Module.symvers includes inter-module exports (ehci-hcd, xhci-hcd,
-      # etc.); if we feed those to modpost via -i it flags duplicate exports when
-      # those same modules are rebuilt.  Only vmlinux symbols are "external" to
-      # the module build; inter-module exports are discovered by scanning .ko files.
-      if [ -f Module.symvers ]; then
-        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
-      fi
-      # Patch Makefile.modpost: add -i /tmp/vmlinux-only.symvers when vmlinux.o is
-      # absent. In-tree modules-only builds skip this flag by default (only the
-      # KBUILD_EXTMOD path reads it); without it modpost has no kernel symbol table
-      # and reports 1400+ undefined-symbol errors.
-      if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
-         && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
-        printf '\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\n' \
-          >> scripts/Makefile.modpost
-      fi
+      # NO -i seed of vmlinux exports: the FULL union config (owner 11/11)
+      # compiles the builtin core in THIS tree (modpost links vmlinux.a
+      # natively), so the seeded Module.symvers duplicates every export
+      # (run 43103418468: 'exported twice'). modpost takes the kernel
+      # symbol table from the local vmlinux.a; inter-module symbols come
+      # from the scanned .ko files.
       make -j"$(nproc)" modules
 
       # Install the modules into a DESTDIR packaging tree, then build a
@@ -940,12 +929,9 @@ packages:
         # Module.symvers to the rebuilt set only, the external build reads
         # the FULL file.
         cp Module.symvers /tmp/gpu-set-symvers-full
-        awk -F'\t' '$3 == "vmlinux"' Module.symvers > /tmp/vmlinux-only.symvers
-        if [ -f scripts/Makefile.modpost ] && [ -f /tmp/vmlinux-only.symvers ] \
-           && ! grep -q 'vmlinux-only.symvers' scripts/Makefile.modpost; then
-          printf '\nifeq ($(KBUILD_EXTMOD),)\nifneq ($(wildcard /tmp/vmlinux-only.symvers),)\nmodpost-args += -i /tmp/vmlinux-only.symvers\nendif\nendif\n' \
-            >> scripts/Makefile.modpost
-        fi
+        # NO -i seed (same union-era contract as the device entry): the
+        # builtin core is compiled in THIS tree, modpost reads vmlinux.a
+        # natively; a seeded export table duplicates every export.
         [ -f modules.builtin ] || touch modules.builtin
         [ -f modules.builtin.modinfo ] || touch modules.builtin.modinfo
         make -j"$(nproc)" modules

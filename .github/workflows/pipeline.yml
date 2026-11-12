@@ -41,6 +41,10 @@ on:
         description: 'Build ISO'
         type: boolean
         default: true
+      only_deb:
+        description: 'Scoped-cycle validation: build only the .deb whose name is <only_deb> or starts with <only_deb>- (empty = the normal plan)'
+        type: string
+        default: ''
       run_image:
         description: 'Build container image'
         type: boolean
@@ -80,6 +84,9 @@ jobs:
       run_debs: ${{ inputs.run_debs }}
       run_image: ${{ inputs.run_image }}
       run_iso: ${{ inputs.run_iso }}
+      # Scoped-cycle passthrough: the 11/12 modules-lane fix cycles on one
+      # consumer deb at a time (minutes), the kernel wave stays cached.
+      only_deb: ${{ inputs.only_deb }}
       # Forward the rpi disk-image opt-in to the shared workflow.
       # run_img_gallium is intentionally NOT forwarded: this repo
       # (debian-bootc) does not ship a Gallium phone target, so the
