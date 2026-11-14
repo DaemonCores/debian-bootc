@@ -268,11 +268,13 @@ packages:
       make defconfig
 
       CONFIG_FILES=()
+      # Both arches read the same fragment tree (the virt fragment below is
+      # arch-agnostic and needs this path outside the amd64 branch).
+      SHARED_KCFG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig"
       if [ "${DEB_ARCH}" = "amd64" ]; then
         # Same fragment order as the baseline: shared x86 base, GPU sets,
         # flavour fragment, PVE deltas fragment (base appended after still
         # wins its arch built-ins).
-        SHARED_KCFG="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig"
         CONFIG_FILES+=("${SHARED_KCFG}/cpus/x86-common.cfg")
         case "${KERNEL_GPU:-all}" in
           all) CONFIG_FILES+=("${SHARED_KCFG}/gpu/amd.cfg" "${SHARED_KCFG}/gpu/intel.cfg" "${SHARED_KCFG}/gpu/nvidia.cfg") ;;
@@ -283,6 +285,16 @@ packages:
           CONFIG_FILES+=("${SHARED_KCFG}/cpus/${KERNEL_ARCH_LEVEL:-}.cfg")
       fi
       CONFIG_FILES+=("${BASE_CONFIG}")
+      # VIRTUALISATION (owner 14/11): KVM + VFIO are ADDED here, after the
+      # immutable base (R-869b) — the union config carried neither, so no PVE
+      # guest could ever start ('KVM virtualisation configured, but not
+      # available'). Both arches get it; olddefconfig resolves the deps.
+      VIRT_CFG="${SHARED_KCFG}/virt/kvm.cfg"
+      if [ "${DEB_ARCH}" = "amd64" ] || [ "${DEB_ARCH}" = "arm64" ]; then
+        test -f "${VIRT_CFG}" \
+          || { echo "ERROR: kernel-src/kconfig/virt/kvm.cfg missing" >&2; exit 1; }
+        CONFIG_FILES+=("${VIRT_CFG}")
+      fi
       # THE PROFILE, LAST: IA amd64 = gpu/ia (DC off, compute); THP follows
       # the profile fragment itself (ia = ALWAYS pin, vm = NEVER — real
       # kconfig lines, appended after the base so the profile wins).
