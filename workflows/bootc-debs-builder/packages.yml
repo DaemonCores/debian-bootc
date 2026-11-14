@@ -237,6 +237,7 @@ packages:
       apt-get update
       apt-get install -y --no-install-recommends \
         build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+        dwarves \
         rsync libudev-dev elfutils dpkg-dev \
         debhelper kmod libdw-dev curl xz-utils python3
 
@@ -328,6 +329,10 @@ packages:
         test -f "${IA_PERF}" \
           || { echo "ERROR: kernel-src/kconfig/perf/ia-latency.cfg missing" >&2; exit 1; }
         CONFIG_FILES+=("${IA_PERF}")
+        SCHED_EXT_CFG="${SHARED_KCFG}/perf/sched-ext.cfg"
+        test -f "${SCHED_EXT_CFG}" \
+          || { echo "ERROR: kernel-src/kconfig/perf/sched-ext.cfg missing" >&2; exit 1; }
+        CONFIG_FILES+=("${SCHED_EXT_CFG}")
       fi
       if [ "${DEB_ARCH}" = "arm64" ]; then
         PAGES_OVERLAY="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/pages/${KERNEL_PAGES}.cfg"
