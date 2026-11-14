@@ -320,6 +320,15 @@ packages:
         done
       fi
       CONFIG_FILES+=("${PROFILE_THP}")
+      # IA LATENCY (owner 14/11): HZ=1000 for the compute profile — the union
+      # base pins 250 and wins over the x86-common pin, so it is re-asserted
+      # here, after the base. vm keeps 250.
+      if [ "${DEB_ARCH}" = "amd64" ] && [ "${KERNEL_PROFILE}" = ia ]; then
+        IA_PERF="${SHARED_KCFG}/perf/ia-latency.cfg"
+        test -f "${IA_PERF}" \
+          || { echo "ERROR: kernel-src/kconfig/perf/ia-latency.cfg missing" >&2; exit 1; }
+        CONFIG_FILES+=("${IA_PERF}")
+      fi
       if [ "${DEB_ARCH}" = "arm64" ]; then
         PAGES_OVERLAY="${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/kconfig/pages/${KERNEL_PAGES}.cfg"
         test -f "${PAGES_OVERLAY}" \
