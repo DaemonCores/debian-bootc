@@ -2123,10 +2123,13 @@ packages:
       git clone --depth=1 --branch "${BOOTUPD_VER}" \
         https://github.com/coreos/bootupd.git /build/bootupd
 
-      # Debian port: bootupd upstream reads the rpm database for bootloader
-      # package metadata (packagesystem::query_files); Debian has none. Patch it
-      # to fall back to dpkg so the BIOS component's generate-update-metadata
-      # works here instead of crashing. The rpm path stays intact for Fedora.
+      # Debian support is UPSTREAM since bootupd v0.4.0: packagesystem.rs now
+      # delegates to a per-format script (packagesystem/query-file-owner-<fmt>,
+      # dpkg included) instead of hardcoding rpm. The local packagesystem.rs
+      # patch is therefore obsolete — v0.4.0 rewrote query_files around that
+      # script and the patch no longer applies ("overlay drift", run
+      # 43655836093). The overlay directory stays (empty) so the mechanism is
+      # unchanged if a future release needs a local delta again.
       deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/bootupd-src" /build/bootupd
 
       curl --retry 3 -fsSL \
@@ -2139,20 +2142,15 @@ packages:
       . ${RUSTUP_HOME}/env
       cargo build --release --manifest-path /build/bootupd/Cargo.toml
 
-      # Content check on the applied dpkg patch: the patch adds a unit test that
-      # exercises query_files_dpkg against a real dpkg-owned file, so a patch that
-      # compiles but behaves wrong fails HERE. Require it to actually run (>=1
-      # passed) so a vacuous "0 tests" can't pass silently. On failure the build
-      # aborts; CI then keeps the last-good bootupd deb and opens an issue instead
-      # of shipping a broken package.
-      chk=$(cargo test --release --manifest-path /build/bootupd/Cargo.toml \
-        query_files_dpkg 2>&1) || { printf '%s\n' "${chk}"; exit 1; }
-      printf '%s\n' "${chk}"
-      printf '%s\n' "${chk}" \
-        | grep -qE 'test result: ok\. [1-9][0-9]* passed' \
-        || { echo "ERROR: dpkg patch content check did not run" >&2; exit 1; }
+      # Content check (upstream dpkg path): v0.4.0 ships the dpkg query script,
+      # so assert the SOURCE carries it before building — a release that drops
+      # it would silently regress Debian support.
+      test -f /build/bootupd/packagesystem/query-file-owner-dpkg \
+        || { echo "ERROR: bootupd ${BOOTUPD_VER} carries no query-file-owner-dpkg (upstream Debian support gone)" >&2; exit 1; }
 
-      make -C /build/bootupd install-all DESTDIR=/output/bootupd
+      # PACKAGESYSTEM=dpkg makes install-all ship query-file-owner-dpkg as the
+      # sysroot's query-file-owner.
+      make -C /build/bootupd install-all PACKAGESYSTEM=dpkg DESTDIR=/output/bootupd
 
       cd /output/bootupd/
       ln -sf DEBIAN debian
@@ -2170,8 +2168,12 @@ packages:
         -e "s|{{ GRUB_ARCH }}|${GRUB_ARCH}|g" \
         /output/bootupd/DEBIAN/control
 
-      # Content check: the built bootupd binary exists (its patched dpkg
-      # behaviour is validated by cargo test above).
+      # Content check: the binary AND the installed dpkg query script exist
+      # (the script is what makes query_files work on Debian).
+      test -x /output/bootupd/usr/lib/bootupd/packagesystem/query-file-owner \
+        || { echo "ERROR: bootupd ships no query-file-owner script" >&2; exit 1; }
+      grep -qi dpkg /output/bootupd/usr/lib/bootupd/packagesystem/query-file-owner \
+        || { echo "ERROR: bootupd's query-file-owner is not the dpkg variant" >&2; exit 1; }
       _b=$(find /output/bootupd -type f -name bootupd | head -1)
       test -n "${_b}" && test -s "${_b}" \
         || { echo "ERROR: bootupd binary missing from output" >&2; exit 1; }
