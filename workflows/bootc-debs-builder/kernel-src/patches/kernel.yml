@@ -193,3 +193,22 @@ patches:
       # quirk is introduced only by [16/17]. Dry-run fuzz 0 proved the
       # application, never the compilation (same lesson as 0174 memcg).
       # Re-arm = re-probe both when the a6xx catalog matches again.
+      - name: iwlwifi-lar-disable
+        # 5 GHz AP is unreachable on Intel cards whose firmware regulatory
+        # table keeps the band passive-scan: LAR registers the wiphy
+        # REGULATORY_WIPHY_SELF_MANAGED, cfg80211 then ignores every country
+        # (iw reg set as well as hostapd's country_code) and nl80211 answers
+        # NO-IR / "Could not select hw_mode and channel" (measured on the AX200
+        # of iartistique, kernel 7.2.15-ia, channels 36 AND 149, interface
+        # free). The escape hatch upstream removed in f06021a18fcf ("iwlwifi:
+        # remove lar_disable module parameter") is restored here: with
+        # iwlwifi.lar_disable=1 iwl_mvm_is_lar_supported() returns false, the
+        # driver takes the pre-LAR path (no self-managed flag, no MCC init)
+        # and the in-kernel regdb applies. HOME PATCH (lives in this repo,
+        # next to the manifest): the URL follows main, so the sha256 pin is
+        # what freezes the content. Dry-run fuzz 0 verified on vanilla 7.2 and
+        # 7.3 (iwl-modparams.h, iwl-drv.c, mvm/mvm.h).
+        url: https://raw.githubusercontent.com/DaemonCores/debian-bootc/main/workflows/bootc-debs-builder/kernel-src/patches/iwlwifi/0001-iwlwifi-restore-lar-disable.patch
+        stage: common
+        sha256: c89eb52ebb9d766b082e6fbc0e45b70f248175ca8ef8f5b55d953cd656550507
+        license: GPL-2.0-only
