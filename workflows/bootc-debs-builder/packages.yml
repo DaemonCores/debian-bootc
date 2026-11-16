@@ -133,11 +133,11 @@ packages:
           KERNEL_SHA256: "linux-{version}.tar.xz"
     deb-glob: "linux-image-common-* linux-headers-*"
     sources:
-      # The IA gpu overlay and the profile THP fragments of this repo: a
-      # profile change rebuilds only the touched profile's variants. (VM
-      # carries NO gpu data — VM ≠ GPU, owner correction 05/11 15:1x.)
+      # IA gpu overlay + THP fragments: a profile change rebuilds only its
+      # variants (VM: NO gpu data, owner 05/11); patches are inputs too.
       - kernel-src/modules/gpu/ia
       - kernel-src/kconfig/thp
+      - kernel-src/patches
     secret-env:
       SB_SIGNING_KEY: SB_SIGNING_KEY
       SB_SIGNING_CERT: SB_SIGNING_CERT
