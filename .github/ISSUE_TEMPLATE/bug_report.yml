@@ -20,6 +20,8 @@ body:
         - Bare metal (bootc install to disk)
         - Virtual machine (bootc install to VM disk)
         - Container (e.g., `podman run`, `docker run`)
+        - Derived image / downstream distribution built on debian-bootc
+        - Documentation problem (no deployment)
       default: 0
     validations:
       required: true

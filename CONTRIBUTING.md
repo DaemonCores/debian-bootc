@@ -5,17 +5,27 @@
 </p>
 
 <p>
-  <strong align="left">Simplify and Innovate for Everyone.</strong>
+  <strong align="left">Foundations for immutable, Debian-based distributions.</strong>
   <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
   <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
   <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
   
-  <em>Identify gaps and fill them, make improvements where possible, but above all, empower developers to offer more to users.</em>
+  <em>Bring the atomic operating-system model to the Debian ecosystem, server side included.</em>
 </p>
 
 ---
 
-Contributions are welcome for packaging, image composition, boot tests, installer tooling, and documentation.
+Debian bootc is a Developer Alpha: a foundation for building immutable, Debian-based distributions. Its CI/CD is being repaired, so a green pipeline is not yet a reliable signal; say which paths you tested by hand.
+
+## Contributions we are looking for
+
+- Derived images and distributions built on the base, and feedback on how well the template supports them.
+- bootc, OSTree, composefs, bootupd and Debian-integration work.
+- Packaging and integration of server software from the Debian ecosystem for an atomic model.
+- Boot tests, hardware and virtual-machine testing with technical reports.
+- Documentation, packages, installer tooling and build tooling.
+
+Pipeline changes (`.github/workflows/`, shared CI interfaces) interact with the ongoing CI rework: open an issue first. Questions and ideas go to the [organization discussions](https://github.com/orgs/DaemonCores/discussions).
 
 ## Bug reports
 
@@ -33,6 +43,12 @@ Use the repository issue forms for bugs and feature proposals. Report vulnerabil
 | Runtime tests | `workflows/tests.yml` |
 | Pipeline triggers | `.github/workflows/pipeline.yml` |
 | Documentation | `README.md`, `docs/` (wiki symlink) |
+
+## AI-assisted development
+
+The project is developed with extensive use of AI coding assistants for implementation, testing, documentation and debugging. Architecture, requirements, integration decisions and acceptance remain the maintainer's responsibility, and results are validated by real tests, not by successful compilation alone. The maintainer does not claim a line-by-line review of generated code.
+
+If you contribute AI-assisted changes, say so in the pull request, state how you verified them, and be able to answer for them. Only a human may add `Signed-off-by`.
 
 ## Local image build
 

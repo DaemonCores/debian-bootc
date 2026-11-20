@@ -5,17 +5,21 @@
 </p>
 
 <p>
-  <strong align="left">Simplify and Innovate for Everyone.</strong>
+  <strong align="left">Foundations for immutable, Debian-based distributions.</strong>
   <a href="https://github.com/DaemonCores/debian-bootc/wiki"><img align="right" src="https://img.shields.io/badge/Wiki-FFFFFF?style=for-the-badge&logoColor=white" alt="Documentation"/></a>
   <a href="https://github.com/orgs/DaemonCores/discussions"><img align="right" src="https://img.shields.io/badge/Community-000000?style=for-the-badge&logoColor=white" alt="Community"/></a>
   <a href="https://github.com/DaemonCores/debian-bootc"><img align="right" src="https://img.shields.io/badge/Base_debian_for_all_project-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian Bootc"/></a>
   
-  <em>Identify gaps and fill them, make improvements where possible, but above all, empower developers to offer more to users.</em>
+  <em>Bring the atomic operating-system model to the Debian ecosystem, server side included.</em>
 </p>
 
 ---
 
-Support is provided through GitHub issues on a best-effort basis.
+Support is provided on a best-effort basis. Debian bootc is a Developer Alpha and its CI/CD is under repair.
+
+- **Questions, ideas, derivative-image discussions:** [organization discussions](https://github.com/orgs/DaemonCores/discussions).
+- **Reproducible problems** (the base image, a derived image, the documentation): [GitHub issues](https://github.com/DaemonCores/debian-bootc/issues/new/choose).
+- **Vulnerabilities:** never in public; follow [SECURITY.md](SECURITY.md).
 
 ## Before opening an issue
 
@@ -26,7 +30,7 @@ Provide:
 - image digest or commit;
 - `amd64` or `arm64` and the exact hardware or VM type;
 - image variant (standard; the NVIDIA stack is the install-time derived lane);
-- online ISO, offline ISO, raw image, or direct bootc installation;
+- installation method (direct bootc installation of the OCI image, raw image, or a derived image; installer ISOs are currently known to be broken);
 - relevant console, journal, `bootc status`, and failed-unit output;
 - reproduction steps and expected result.
 
