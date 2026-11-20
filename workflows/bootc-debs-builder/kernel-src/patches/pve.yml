@@ -8,8 +8,10 @@
 # patches re-enter as ADDITIVES applied AFTER the shared XanMod+clearlinux
 # set, sourced from the GitHub read-only mirror of git.proxmox.com/git/pve-kernel
 # (https://raw.githubusercontent.com/proxmox/pve-kernel/b52e6172908b4d449da7a8596fcdf6cf23c030f3/patches/kernel/):
-# the mirror serves git-format .patch files, byte-stable, downloadable with
-# no re-encoding. Entries carry a sha256 pin (the exact bytes are immutable;
+# the mirror serves git-format .patch files, downloadable with no re-encoding.
+# The URLs carry a COMMIT, never `master`: Proxmox rebased its patch directory
+# on 2026-11-16 (46 of these files vanished from master, 2 changed bytes) and a
+# moving ref under a sha256 pin broke every kernel build. Entries carry a sha256 pin (the exact bytes are immutable;
 # the doctrine stays — the TARBALL digest is NOT pinned, it is read from
 # sha256sums.asc every build). Same canonical schema as patches-shared.yml,
 # applied by the standard kernel_apply_patches — dry-run ALL first, fuzz 0,
