@@ -48,6 +48,17 @@ case "$1" in
 
     bootupctl backend generate-update-metadata /
 
+    # On x86_64 bootupd also has a BIOS component, and set-default-bootloader
+    # loops over every component that supports grub. The BIOS metadata is named
+    # after the dpkg package owning /usr/sbin/grub2-install (grub-efi-<arch>-
+    # signed here), but bootupd recognises grub by the RPM name prefix "grub2"
+    # (src/model.rs is_bootloader_available), so it fails with "grub is not
+    # present in metadata". Name the BIOS entry as bootupd expects; the version
+    # is untouched. Absent on arm64, where there is no BIOS component.
+    if [ -f /usr/lib/bootupd/updates/BIOS.json ]; then
+      sed -i 's/grub-efi-[a-z0-9]*-signed/grub2/g' /usr/lib/bootupd/updates/BIOS.json
+    fi
+
     # bootupd >= 0.3 refuses to install when the metadata does not name a
     # default bootloader and it cannot pick exactly one itself. grub is the only
     # bootloader this distribution ships, so record it explicitly.
