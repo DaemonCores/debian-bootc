@@ -288,7 +288,7 @@ tests:
     run: '[ "$(cat /sys/module/module/parameters/sig_enforce)" = Y ]'
     diag: |
       cat /sys/module/module/parameters/sig_enforce 2>&1
-      dpkg-query -W 'daemoncores-kernel-*' 2>&1
+      dpkg-query -W 'linux-image-ia-*' 'linux-image-vm-*' 2>&1
       cat /proc/cmdline 2>&1
   - name: unsigned-kernel variant does not enforce module signatures
     category:
@@ -296,7 +296,7 @@ tests:
     run: '[ "$(cat /sys/module/module/parameters/sig_enforce)" = N ]'
     diag: |
       cat /sys/module/module/parameters/sig_enforce 2>&1
-      dpkg-query -W 'daemoncores-kernel-*' 2>&1
+      dpkg-query -W 'linux-image-ia-*' 'linux-image-vm-*' 2>&1
   # PATCH PARITY / THP arbitration (owner, 2026-11-03 12:14 revised): the
   # embedded image primes the AI-optimised compute profile — THP ALWAYS.
   # (DaemonCores-VE: same patch set, THP NEVER — hugepages belong to the
@@ -309,7 +309,7 @@ tests:
     diag: |
       cat /sys/kernel/mm/transparent_hugepage/enabled 2>&1
       grep . /sys/kernel/mm/transparent_hugepage/defrag 2>&1
-      dpkg-query -W 'daemoncores-kernel-*' 2>&1
+      dpkg-query -W 'linux-image-ia-*' 'linux-image-vm-*' 2>&1
   # Every arm64 image now ships BOTH boot stacks (grub-efi-arm64-signed +
   # bootupd + the U-Boot tooling); the one used on the disk is decided at
   # install time from the firmware the machine booted through: UEFI → bootupd
@@ -384,7 +384,7 @@ tests:
         [ "${enforce}" != Y ]
       fi
     diag: |
-      dpkg-query -W 'daemoncores-kernel-*' 2>&1
+      dpkg-query -W 'linux-image-ia-*' 'linux-image-vm-*' 2>&1
       cat /sys/module/module/parameters/sig_enforce 2>&1
       cat /proc/keys 2>&1 | head -n 20
       cat /proc/cmdline 2>&1

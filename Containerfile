@@ -231,7 +231,7 @@ RUN apt-get update \
 # Phase 3.1: Kernel and its device modules
 # -----------------------------------------------------------------------------
 # The kernel is the last heavy layer: the project kernel
-# (daemoncores-kernel-<profile>-<kver>, built from kernel.org) is installed
+# (linux-image-<profile>-<flavour>, versionless, built from kernel.org) is installed
 # through the virtual name its deb PROVIDES,
 # linux-image-minimal-<profile>-<flavour> (no arch: the APT channels are per-arch; the kernel estate rename
 # made every name profile-aware: no flat linux-image-*-<arch> name remains).

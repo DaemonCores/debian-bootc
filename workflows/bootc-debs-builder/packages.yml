@@ -64,7 +64,7 @@ packages:
   # linux-image-<profile>-<flavour>, deb names
   # linux-image-common-<profile>-<flavour>, kernel build-tree paths
   # /usr/lib/linux-kernel-build-<profile>-<flavour> (no unpack collision),
-  # packages daemoncores-kernel-<profile>-<KVER>. The RELEASE string stays
+  # packages linux-image-<profile>-<flavour> (versionless). The RELEASE string stays
   # the plain flavour string (7.2.15-<flavour>-xanmod1 — no -pve, no
   # -<profile>) so the vermagic is identical across the estate; the profile
   # identity lives in the PACKAGING only (owner 05/11 midi). The profile
@@ -124,7 +124,7 @@ packages:
       # ('ERROR: no linux-headers for flavour x64v3 in the APT index',
       # run 42899558906). The bump forces the one rebuild that records the
       # headers debs in hashes.json; every later run restores them.
-      HEADERS_GLOB_VER: "2"
+      HEADERS_GLOB_VER: "3"
     track:
       KERNEL_VER:
         kernel-org: stable
@@ -145,62 +145,62 @@ packages:
       # ---- IA profile: the AI compute kernel (DC off, THP always) --------
       "ia-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v1_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-x64v1_* linux-headers-ia-x64v1_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-ia-x64v1"}
       "ia-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v2_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-x64v2_* linux-headers-ia-x64v2_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-ia-x64v2"}
       "ia-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v3_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-x64v3_* linux-headers-ia-x64v3_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-ia-x64v3"}
       "ia-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-ia-x64v4_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-x64v4_* linux-headers-ia-x64v4_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-ia-x64v4"}
       "ia-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.0_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-armv8.0_* linux-headers-ia-armv8.0_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-ia-armv8.0", KERNEL_PAGES: "4k"}
       "ia-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv8.2-lse_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-armv8.2-lse_* linux-headers-ia-armv8.2-lse_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-ia-armv8.2-lse"}
       "ia-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-ia-armv9-sve2_* linux-headers-ia-*"
+        deb-glob: "linux-image-common-ia-armv9-sve2_* linux-headers-ia-armv9-sve2_*"
         env: {KERNEL_PROFILE: ia, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-ia-armv9-sve2"}
       # ---- VM profile: the PVE-host kernel (NO gpu overlay — VM ≠ GPU,
       # owner 05/11 15:1x; the profile delta = the THP NEVER fragment +
       # the hypervisor opts folded in the base config) --------------------
       "vm-x64v1":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v1_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-x64v1_* linux-headers-vm-x64v1_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v1, KERNEL_SUFFIX: "-vm-x64v1"}
       "vm-x64v2":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v2_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-x64v2_* linux-headers-vm-x64v2_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v2, KERNEL_SUFFIX: "-vm-x64v2"}
       "vm-x64v3":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v3_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-x64v3_* linux-headers-vm-x64v3_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v3, KERNEL_SUFFIX: "-vm-x64v3"}
       "vm-x64v4":
         when: {arch: amd64}
-        deb-glob: "linux-image-common-vm-x64v4_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-x64v4_* linux-headers-vm-x64v4_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: x64v4, KERNEL_SUFFIX: "-vm-x64v4"}
       "vm-armv8.0":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.0_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-armv8.0_* linux-headers-vm-armv8.0_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.0, KERNEL_SUFFIX: "-vm-armv8.0", KERNEL_PAGES: "4k"}
       "vm-armv8.2-lse":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv8.2-lse_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-armv8.2-lse_* linux-headers-vm-armv8.2-lse_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv8.2-lse, KERNEL_SUFFIX: "-vm-armv8.2-lse"}
       "vm-armv9-sve2":
         when: {arch: arm64}
-        deb-glob: "linux-image-common-vm-armv9-sve2_* linux-headers-vm-*"
+        deb-glob: "linux-image-common-vm-armv9-sve2_* linux-headers-vm-armv9-sve2_*"
         env: {KERNEL_PROFILE: vm, KERNEL_ARCH_LEVEL: armv9-sve2, KERNEL_SUFFIX: "-vm-armv9-sve2"}
     build: |
       set -euo pipefail
@@ -435,11 +435,16 @@ packages:
 
       ORIG_PKG=$(sed -n 's/^Package: //p' "${REPACK_DIR}/DEBIAN/control")
       KVER="${ORIG_PKG#linux-image-}"
-      # Explicit packaging identity: daemoncores-kernel-<profile>-<KVER> —
-      # the release string itself stays the plain flavour string (the
-      # vermagic is identical across the estate; the PACKAGING distinguishes.
+      # Packaging identity: linux-image-<profile>-<flavour> (KERNEL_SUFFIX is
+      # -<profile>-<flavour>), WITHOUT the version: the version lives in the
+      # dpkg Version field, so an upgrade replaces the package in place (the
+      # rolling model) and the flavours of one release (x64v1..v4, armv8.x)
+      # stay distinct in the APT pool. The release string is shared by every
+      # flavour of a profile (one ABI, owner 13/11): it must not carry the
+      # flavour, the package name does. daemoncores-kernel-<profile>-<KVER> is
+      # the retired name, kept in Conflicts/Replaces for the migration only.
       OTHER_PROFILE=vm; [ "${KERNEL_PROFILE}" = vm ] && OTHER_PROFILE=ia
-      KERNEL_PKG="daemoncores-kernel-${KERNEL_PROFILE}-${KVER}"
+      KERNEL_PKG="linux-image${KERNEL_SUFFIX}"
       # Drop Provides/Conflicts/Replaces INCLUDING multiline continuations
       # (continuations start with a space and survive a plain /d sed — that
       # dup-Provides crashed dpkg-deb on daemoncores-kernel-{ia,vm}, run
@@ -458,7 +463,10 @@ packages:
       # the plain kernel deb and the sibling profile.
       # ONE line per control field (dpkg-deb rejects a repeated field — the
       # printf emitted two Provides:, run 42632521818) — values comma-joined.
-      printf 'Provides: %s, linux-image-%s (= %s)\nConflicts: %s, daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: daemoncores-kernel-%s-%s\n' \
+      # daemoncores-kernel is the virtual every flavour of every profile
+      # Provides and Conflicts with: dpkg ignores a package's conflict with a
+      # virtual it provides itself, so exactly ONE kernel package installs.
+      printf 'Provides: %s, linux-image-%s (= %s), daemoncores-kernel\nConflicts: %s, daemoncores-kernel, daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: daemoncores-kernel-%s-%s\n' \
         "linux-image-minimal${KERNEL_SUFFIX:-}" \
         "${KVER}" \
         "${BUILT_VER}" \
@@ -484,8 +492,10 @@ packages:
         ! -name '*-dbg*' | head -1)
       if test -n "${HEADERS_DEB}"; then
         HDR_VER=$(dpkg-deb -f "${HEADERS_DEB}" Version)
-        HDR_RPKG=$(dpkg-deb -f "${HEADERS_DEB}" Package | sed 's/^linux-headers-//')
-        HDR_RPKG="linux-headers-${KERNEL_PROFILE}-${HDR_RPKG}"
+        # linux-headers-<profile>-<flavour>, versionless like the image: the
+        # release string is identical across the flavours of a profile, so a
+        # name derived from it collided in the pool (run 44729273130).
+        HDR_RPKG="linux-headers${KERNEL_SUFFIX}"
         HREPACK=/tmp/linux-headers-repack
         rm -rf "${HREPACK}"
         dpkg-deb -R "${HEADERS_DEB}" "${HREPACK}"
@@ -634,11 +644,9 @@ packages:
       # The seeded .config is the kernel's own (base + arm overlay + pages), so
       # only the device overlay is merged on top.
       kernel_prepare
-      # kernel_prepare derives KVER from the Package field of the seed deb;
-      # the profile kernel deb is daemoncores-kernel-<profile>-<KVER>, so
-      # strip the profile prefix: KVER stays the plain release string of the
-      # modprobe tree (7.2.15-<flavour>-xanmod1) and of the virtual Depends.
-      case "${KVER}" in ia-*|vm-*) KVER="${KVER#*-}" ;; esac
+      # kernel_prepare derives KVER (the release string of the modprobe tree
+      # and of the virtual Depends) from the linux-image-<KVER> the seed deb
+      # Provides.
       # The standard kernel helper merges the device overlay in place
       # (append + olddefconfig) — same final .config as merge_config.sh -m.
       kernel_merge_config "${SRCDIR}" "${OVERLAY}"
@@ -761,7 +769,7 @@ packages:
   # through that one sibling. The sets build against the IA-profile kernel
   # of their flavour (dep linux-image-ia-<flav>; DC on/off by the set
   # overlay): the set deb Replaces the exact files the seed profile kernel
-  # owns (daemoncores-kernel-ia-<KVER>), the way the DC pin per set is
+  # owns (linux-image-ia-<flavour>), the way the DC pin per set is
   # proofed; a VM-profile host carries no gpu set (VM != GPU, jamais eu).
   - name: linux-modules-gpu
     variants:
@@ -954,10 +962,8 @@ packages:
         PATCHES_JSON=$(yq -o=json -I=0 '.patches' "${GITHUB_WORKSPACE:-$(pwd)}/workflows/bootc-debs-builder/kernel-src/patches/kernel.yml")
         export PATCHES_JSON
         kernel_prepare
-        # kernel_prepare derives KVER from the Package field of the seed deb
-        # (daemoncores-kernel-<profile>-<KVER>) — strip the profile prefix:
-        # the modules install under the plain release string.
-        case "${KVER}" in ia-*|vm-*) KVER="${KVER#*-}" ;; esac
+        # kernel_prepare derives KVER from the linux-image-<KVER> the seed deb
+        # Provides: the modules install under the plain release string.
         for GPU_SET_CFG in "${OVERLAY}"/*.cfg; do
           kernel_merge_config "${SRCDIR}" "${GPU_SET_CFG}"
         done
@@ -1131,11 +1137,11 @@ packages:
           SET_VER="${BUILT_VER}+r1nv${NVIDIAOPEN_VER}"
         fi
         # The set deb REPLACES the files the seed profile kernel owns (the
-        # concrete daemoncores-kernel-ia-<KVER> deb: the GAMING sets build on
+        # concrete linux-image-ia-<flavour> deb: the GAMING sets build on
         # the SAME ia-profile kernel, only ia/vm kernels exist, NO gaming
         # kernel package — owner order 05/11 kept 09/11) and pins it exact.
-        DEPS="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
-        REPLACES="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"
+        DEPS="linux-image${SEED_SUFFIX} (= ${BUILT_VER})"
+        REPLACES="linux-image${SEED_SUFFIX} (= ${BUILT_VER})"
         # Exactly one in-tree set may be installed: enumerate the OTHER
         # set's every flavour variant (dpkg has no Conflicts globs), both
         # the fused sets and their loader policies.

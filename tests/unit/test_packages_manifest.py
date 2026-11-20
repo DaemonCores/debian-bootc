@@ -47,7 +47,7 @@ def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     lines = _packages()['linux-image-profile']['build'].splitlines()
     build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
     assert 'Package: ${KERNEL_PKG}/' in build
-    assert 'KERNEL_PKG="daemoncores-kernel-' in build
+    assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in build
     assert 'linux-image-minimal' in build
     assert 'Conflicts' in build
     assert 'Replaces' in build
@@ -221,7 +221,7 @@ def test_each_kernel_variant_publishes_its_headers() -> None:
     """Every profile kernel deb-glob also lists the republished headers deb.
 
     The republish block writes a profile-prefixed
-    ``linux-headers-<profile>-<KVER>`` deb next to the image deb; if the
+    ``linux-headers-<profile>-<flavour>`` deb next to the image deb; if the
     variant's deb-glob did not carry it, the deb was never recorded in
     hashes.json — the end-of-run prune dropped it from the APT index and the
     cache restored a headers-less set on every later hit, breaking the
@@ -234,7 +234,7 @@ def test_each_kernel_variant_publishes_its_headers() -> None:
         glob = variant['deb-glob']
         assert glob == (
             f'linux-image-common-{profile}-{flav}_* '
-            f'linux-headers-{profile}-*'
+            f'linux-headers-{profile}-{flav}_*'
         ), (key, glob)
     # The entry-level glob covers the same two families, never a bare
     # linux-headers-<KVER> that would collide with sibling profiles in the
@@ -325,7 +325,7 @@ def test_kernel_build_provides_the_signed_names() -> None:
     build = _packages()['linux-image-profile']['build']
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}' in build
     assert 'OTHER_PKG' not in build
-    assert 'daemoncores-kernel-${KERNEL_PROFILE}-${KVER}' in build
+    assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in build
     # The virtual release name is provided versioned: the module pairs
     # Depends on linux-image-<KVER> (= kernel version) on either profile.
     assert 'linux-image-%s (= %s)' in build
@@ -356,7 +356,7 @@ def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
     """The profile kernel Provides the names the modules install by."""
     build = _packages()['linux-image-profile']['build']
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}' in build
-    assert 'daemoncores-kernel-${KERNEL_PROFILE}-${KVER}' in build
+    assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in build
     assert 'OTHER_PKG' not in build
 
 
@@ -585,7 +585,7 @@ def test_gpu_module_sets_own_the_kernel_paths_once() -> None:
     ):
         assert field in control, field
     build = _packages()['linux-modules-gpu']['build']
-    assert 'REPLACES="daemoncores-kernel-ia-${KVER} (= ${BUILT_VER})"' in build
+    assert 'REPLACES="linux-image${SEED_SUFFIX} (= ${BUILT_VER})"' in build
     assert 'gpu-${OTHER}-${GPU_FLAVS}' in build
     # The profile build is proved in the build: DC pin greps the final config.
     assert 'CONFIG_DRM_AMD_DC is not set$' in build
