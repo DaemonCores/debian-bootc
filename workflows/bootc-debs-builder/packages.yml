@@ -1654,9 +1654,15 @@ packages:
       echo "GRUB ${GRUB_VER} from ${GRUB_BRANCH}@${GRUB_COMMIT}"
 
       # bootstrap clones gnulib from git.savannah.gnu.org, which answers HTTP 500
-      # now and then (run 41382456261, arm64). Retry with a growing pause on a
-      # clean gnulib directory; a persistent failure still fails the build.
+      # now and then (run 41382456261, arm64) and stayed down for 25+ minutes
+      # (run 44776058951: 4 attempts, all 500/502). Retry with a growing pause
+      # on a clean gnulib directory; the last two attempts use the official
+      # GitHub mirror (bootstrap honours GNULIB_URL); a persistent failure on
+      # both still fails the build.
       for attempt in 1 2 3 4; do
+        if [ "${attempt}" -ge 3 ]; then
+          export GNULIB_URL=https://github.com/coreutils/gnulib.git
+        fi
         ./bootstrap && break
         [ "${attempt}" -lt 4 ] || exit 1
         rm -rf gnulib
@@ -1926,9 +1932,15 @@ packages:
       echo "GRUB ${GRUB_VER} from ${GRUB_BRANCH}@${GRUB_COMMIT}"
 
       # bootstrap clones gnulib from git.savannah.gnu.org, which answers HTTP 500
-      # now and then (run 41382456261, arm64). Retry with a growing pause on a
-      # clean gnulib directory; a persistent failure still fails the build.
+      # now and then (run 41382456261, arm64) and stayed down for 25+ minutes
+      # (run 44776058951: 4 attempts, all 500/502). Retry with a growing pause
+      # on a clean gnulib directory; the last two attempts use the official
+      # GitHub mirror (bootstrap honours GNULIB_URL); a persistent failure on
+      # both still fails the build.
       for attempt in 1 2 3 4; do
+        if [ "${attempt}" -ge 3 ]; then
+          export GNULIB_URL=https://github.com/coreutils/gnulib.git
+        fi
         ./bootstrap && break
         [ "${attempt}" -lt 4 ] || exit 1
         rm -rf gnulib
