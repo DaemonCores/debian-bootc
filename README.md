@@ -136,6 +136,25 @@ The installer design below describes what the installer does once ISO generation
 
 The installer is destructive to the selected disk. Review the prompt carefully and test in a virtual machine before using it on physical hardware.
 
+## Try it in a VM
+
+The published image can be installed on a virtual disk and booted exactly as the CI does it, with the CI's own harness ([`DaemonCores-CI/image-test`](https://github.com/DaemonCores/DaemonCores-CI/tree/main/image-test)). This needs rootful podman, QEMU, OVMF and `sudo`; nothing touches a real disk (a sparse raw file is used).
+
+```bash
+git clone https://github.com/DaemonCores/DaemonCores-CI
+export IMAGE=ghcr.io/daemoncores/debian-bootc:latest
+export IMAGE_TEST_STATE="$PWD/vm-state"        # holds the raw disk, keys, OVMF vars
+sudo -E podman pull "$IMAGE"
+sudo -E bash DaemonCores-CI/image-test/image-test.sh prepare
+sudo -E bash DaemonCores-CI/image-test/image-test.sh test "$IMAGE"
+```
+
+`test` partitions the disk (ESP, `/boot`, Btrfs pool), runs `bootc install to-filesystem` from the image, boots it under QEMU with UEFI Secure Boot and runs the checks of [`workflows/tests.yml`](workflows/tests.yml). The installed disk is left in `$IMAGE_TEST_STATE/test-disk.raw`.
+
+![Console of the installed image booted in QEMU](assets/demo/boot-console.png)
+
+*Real console of the installed `:latest` image (kernel `7.2.15-x64v1-xanmod1`, Secure Boot on).*
+
 ## Required repository configuration
 
 | Secret | Purpose |
