@@ -233,7 +233,7 @@ RUN apt-get update \
 # The kernel is the last heavy layer: the project kernel
 # (daemoncores-kernel-<profile>-<kver>, built from kernel.org) is installed
 # through the virtual name its deb PROVIDES,
-# linux-image-minimal-<profile>-<flavour>-<arch> (the kernel estate rename
+# linux-image-minimal-<profile>-<flavour> (no arch: the APT channels are per-arch; the kernel estate rename
 # made every name profile-aware: no flat linux-image-*-<arch> name remains).
 # The profile of an image is ALWAYS ia (kernel doctrine: images are generic,
 # gaming is only a moduleset deb on top; VM is a PVE-host kernel).
@@ -274,7 +274,7 @@ RUN apt update \
         *) echo "unsupported arch '${_arch}' for the image kernel" >&2; exit 1 ;; \
     esac \
     && apt install -y --no-install-recommends \
-        linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}-${_flavour}-${_arch} "$@"
+        linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}-${_flavour} "$@"
 
 # Host-side signature enforcement. The pipeline passes the repository's cosign
 # public key and the image reference; both are empty until the key exists, in

@@ -459,7 +459,7 @@ packages:
       # ONE line per control field (dpkg-deb rejects a repeated field — the
       # printf emitted two Provides:, run 42632521818) — values comma-joined.
       printf 'Provides: %s, linux-image-%s (= %s)\nConflicts: %s, daemoncores-kernel-%s-%s, daemoncores-kernel-%s-%s\nReplaces: daemoncores-kernel-%s-%s\n' \
-        "linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}" \
+        "linux-image-minimal${KERNEL_SUFFIX:-}" \
         "${KVER}" \
         "${BUILT_VER}" \
         "${ORIG_PKG}" \

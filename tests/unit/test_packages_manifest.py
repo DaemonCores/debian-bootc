@@ -59,10 +59,10 @@ def test_image_installs_the_project_kernel() -> None:
     """Containerfile installs the single project kernel."""
     root = MANIFEST.parents[2]
     # The estate rename made every name profile-aware: the deb is installed
-    # through the virtual name linux-image-minimal-<profile>-<flavour>-<arch>
+    # through the virtual name linux-image-minimal-<profile>-<flavour>
     # (flavour resolved in the RUN shell; suffix -16k selects armv8.2-lse).
     kernel = 'linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}' \
-             '-${_flavour}-${_arch}'
+             '-${_flavour}'
     for name in ('Containerfile', ):
         text = (root / name).read_text()
         install = [
@@ -323,7 +323,7 @@ def test_there_is_no_unsigned_twin_anymore() -> None:
 def test_kernel_build_provides_the_signed_names() -> None:
     """The profile kernel Provides the names images and modules install by."""
     build = _packages()['linux-image-profile']['build']
-    assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
+    assert 'linux-image-minimal${KERNEL_SUFFIX:-}' in build
     assert 'OTHER_PKG' not in build
     assert 'daemoncores-kernel-${KERNEL_PROFILE}-${KVER}' in build
     # The virtual release name is provided versioned: the module pairs
@@ -355,7 +355,7 @@ def test_the_boot_manifest_has_no_nosign_category_suffix() -> None:
 def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
     """The profile kernel Provides the names the modules install by."""
     build = _packages()['linux-image-profile']['build']
-    assert 'linux-image-minimal${KERNEL_SUFFIX:-}-${DEB_ARCH}' in build
+    assert 'linux-image-minimal${KERNEL_SUFFIX:-}' in build
     assert 'daemoncores-kernel-${KERNEL_PROFILE}-${KVER}' in build
     assert 'OTHER_PKG' not in build
 
