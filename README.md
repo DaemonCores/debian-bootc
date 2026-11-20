@@ -149,6 +149,13 @@ sudo -E bash DaemonCores-CI/image-test/image-test.sh prepare
 sudo -E bash DaemonCores-CI/image-test/image-test.sh test "$IMAGE"
 ```
 
+Prerequisites by host distribution (the harness checks the firmware under `/usr/share/OVMF` and `/usr/share/edk2/x64`, and needs `/dev/kvm` on amd64):
+
+| Host | Packages | Notes |
+|------|----------|-------|
+| Arch Linux | `podman qemu-system-x86 edk2-ovmf jq sudo git` | Validated end to end. |
+| Debian 13 | `podman qemu-system-x86 ovmf jq sudo git` | Package names and the `/usr/share/OVMF` firmware layout checked in a Debian 13 container; the full boot was not run on a Debian host. Do not `apt install yq`: Debian's `yq` is a different tool from the one the harness expects, which it downloads itself (pinned, checksummed) when `yq` is absent. |
+
 `test` partitions the disk (ESP, `/boot`, Btrfs pool), runs `bootc install to-filesystem` from the image, boots it under QEMU with UEFI Secure Boot and runs the checks of [`workflows/tests.yml`](workflows/tests.yml). The installed disk is left in `$IMAGE_TEST_STATE/test-disk.raw`.
 
 ![Console of the installed image booted in QEMU](assets/demo/boot-console.png)
