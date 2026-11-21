@@ -135,3 +135,10 @@
 - Cause prouvée: bootupd v0.4.0 `src/cli/bootupd.rs:165-182` boucle sur TOUS les composants gérant grub, BIOS compris (x86_64). `src/model.rs:50-54 is_bootloader_available` exige une version commençant par `grub2`. `BIOS.json` généré (src/bios.rs:209-219 via le paquet dpkg propriétaire de /usr/sbin/grub2-install) contient `"version":"grub-efi-amd64-signed 1+2.12..."` -> pas de préfixe `grub2` -> échec. EFI.json est correct (`grub2 1+2.12...`).
 - Correctif: postinst renomme `grub-efi-<arch>-signed` en `grub2` dans BIOS.json s'il existe (absent sur arm64). Validé en direct: deb repackagé avec le postinst corrigé, install trixie rc=0, `default-bootloader":"Grub"` dans BIOS.json et EFI.json.
 - Non poussé: un push sur main annule le Full Pipeline 44829740030 (4 h). À pousser quand ce run est terminé; clore le bug seulement après install réelle de l'image.
+
+## test_kernel_parity: CONFIG_DRM_AMD_DC in the base (autonomy tick, 2026-11-21)
+
+Symptom: `tests/unit/test_kernel_parity.py::test_no_arch_overlay_merge` fails on `assert 'CONFIG_DRM_AMD_DC=y\n' not in cfg`.
+Observed (not a hypothesis): `kernel-src/config.cfg:2552` is `CONFIG_DRM_AMD_DC=y` (git blame: 99b8279, 2026-11-11, "FULL SERVER base"), while `config.cfg:599` and `:1011` say DC is "left out of the base: a PROFILE choice". Other sources: `kconfig/gpu/amd.cfg:19` sets DC=y (kernel-level default), `modules/gpu/ia/amd.cfg:41` forces `# CONFIG_DRM_AMD_DC is not set`, `modules/gpu/gaming/amd.cfg:43` sets `=y`.
+Not established: whether dropping line 2552 changes any resolved .config (needs a kconfig resolve per lane). Not done, test left failing on purpose rather than weakened. Decision for the owner: keep DC=y in the base (then update the comments and the pin) or remove line 2552 (then prove with an olddefconfig on the base lane).
+The other four failures of this file were stale paths (engine kernel-shared deleted, 61254d5) and are fixed in 67501b4.
