@@ -156,3 +156,10 @@ The other four failures of this file were stale paths (engine kernel-shared dele
 - `CONFIG_DRM_AMD_DC` removed from the base (1d72540): `DRM_AMD_DC_FP`, `DRM_AMD_DC_SI`, `DRM_AMD_SECURE_DISPLAY` stay in the base file and drop silently under `olddefconfig` for any profile that does not set DC itself (gaming sets it, ia forces it off). Check on the next run: the kconfig gate output per profile. The owner prefers DC to stay available (amdgpu is a module, so DC costs nothing on machines without AMD hardware); restoring it needs `test_kernel_parity.py::test_no_arch_overlay_merge` to accept it. Pending the owner's decision.
 
 **Correction (autonomy, 2026-11-21):** the DRM_AMD_DC removal from the base does NOT drop DC from the standard kernel. packages.yml:279-283 merges kconfig/gpu/amd.cfg (CONFIG_DRM_AMD_DC=y, DC_SI=y, DC_FP=y) before the base on amd64 (KERNEL_GPU=all), and kconfig/pve/pve-parity.cfg (DC=y/DC_FP/DC_SI) is merged after it. The base line was redundant; DC stays on, `gpu-ia` still turns it off by overlay. The earlier "drops silently" concern above applies only to a build that merges none of those fragments (KERNEL_GPU=none). Still to confirm in the next kconfig gate output: DRM_AMD_DC=y in the final .config of linux-image-ia-*.
+
+## Skip never triggered (plan.sh), 2026-11-21
+
+- Symptom: run 44937194880 plan log: 43/43 amd64 packages "build", e.g. `plan netavark/amd64: build changed (255f157cf754 -> baf130b94e1b)`.
+- Test: netavark hash recomputed from packages.yml with the BUILD trailing newline = 255f157cf754 (= published, hashes.json); without it = baf130b94e1b (= plan value).
+- Proven cause: plan.sh read BUILD through `$(...)` (strips trailing newline); the build job receives it through a step-output heredoc (keeps it).
+- Fix: DaemonCores-CI d974eca (plan reads BUILD byte for byte) + test_deb_plan.py. Not closed until a run shows `skip unchanged`.
