@@ -19,11 +19,9 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[2]
-CANONICAL_DATA = Path(
-    REPO.parent
-) / 'DaemonCores-CI' / 'build-deb' / 'kernel-shared'
-X86_COMMON = CANONICAL_DATA / 'kconfig-shared' / 'x86-common.cfg'
-CANONICAL_PATCHES = CANONICAL_DATA / 'patches-shared.yml'
+KERNEL_SRC = REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src'
+X86_COMMON = KERNEL_SRC / 'kconfig' / 'cpus' / 'x86-common.cfg'
+CANONICAL_PATCHES = KERNEL_SRC / 'patches' / 'kernel.yml'
 PACKAGES_YML = (REPO / 'workflows' / 'bootc-debs-builder' / 'packages.yml')
 VE_MANIFEST = (
     REPO.parent / 'DaemonCores-VE' / 'workflows' / 'bootc-debs-builder' /
@@ -109,7 +107,10 @@ def test_canonical_patch_set_shape() -> None:
     assert '0166-sched-fair-remove-upper-limit' in names
     assert '0174-memcg-charge-batch-128' not in names
     assert 'msm-adreno-devfreq-ifpc-relax' not in names
-    assert len(names) == 23
+    # 24: the 23 above plus iwlwifi-lar-disable (cebc495, 2026-11-16: Intel
+    # cards need the lar_disable parameter to run a 5 GHz AP).
+    assert 'iwlwifi-lar-disable' in names
+    assert len(names) == 24
     # K-PORT: 0174 memcg (run 42713342754, BUILD_BUG_ON vs S8_MAX) and
     # msm IFPC 17/17 (run 42715501467, ADRENO_QUIRK_IFPC from the dropped
     # [16/17] sibling). Dry-run proved the application, never the build.
@@ -130,8 +131,10 @@ def test_no_carbon_copy_of_the_engine_data() -> None:
         REPO / 'workflows' / 'bootc-debs-builder' / 'kernel' / 'kconfig-shared'
     ).exists()
     text = PACKAGES_YML.read_text(encoding='utf-8')
-    assert '"${CI_KERNEL_SHARED}/patches-shared.yml"' in text
-    assert '"${CI_KERNEL_SHARED}/kconfig-shared"' in text
+    # The engine no longer carries kernel data (owner order 11/11, engine
+    # 61254d5): the manifest reads the patch set from the product tree.
+    assert 'CI_KERNEL_SHARED' not in text
+    assert 'kernel-src/patches/kernel.yml' in text
     assert 'bootc-debs-builder/kernel/patches-shared.yml' not in text
     assert 'bootc-debs-builder/kernel/kconfig-shared' not in text
 
@@ -201,7 +204,7 @@ def test_no_arch_overlay_merge() -> None:
         REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modprobe' /
         'dc-gpu-gaming-nvidia.conf'
     ).is_file()
-    cfg = (CANONICAL_DATA / 'config').read_text(encoding='utf-8')
+    cfg = (KERNEL_SRC / 'config.cfg').read_text(encoding='utf-8')
     for section in ('# arm64 built-in', '# amd64 built-in'):
         assert section in cfg, section
     # The GPU drivers are modules again (the fold is undone): the amd64
