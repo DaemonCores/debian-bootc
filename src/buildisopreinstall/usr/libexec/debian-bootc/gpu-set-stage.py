@@ -392,7 +392,8 @@ RUN base="{NVIDIA_REPO_BASE}" \\
     && dpkg -i "$work/cuda-keyring.deb" \\
     && rm -rf "$work"
 RUN apt-get update \\
-    && kpkg=$(dpkg-query -W -f='\\${{Package}}\\n' 'linux-image-ia-*' 'linux-image-vm-*' \\
+    && kpkg=$(dpkg-query -W -f='\\${{Package}}\\n' \\
+         'linux-image-ia-*' 'linux-image-vm-*' \\
          | head -n 1) \\
     && kflav=$(printf '%s' "$kpkg" | sed -E 's/^linux-image-[a-z]+-//') \\
     && [ -n "$kflav" ] \

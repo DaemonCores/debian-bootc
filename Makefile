@@ -120,9 +120,19 @@ check-shell:
 	shfmt -d $(SHFMT_FLAGS) $(SHELL_SRCS)
 	shfmt -d $(SHFMT_FLAGS) -ln posix $(POSTINST_SRCS)
 
+# hadolint: the local binary when installed, else the upstream container image
+# through podman/docker (repo mounted read-only; .hadolint.yaml is read from
+# the working directory). Neither available is a hard error, never a skip.
+HADOLINT_IMAGE ?= ghcr.io/hadolint/hadolint:latest-alpine
+
 check-containerfile:
-	@command -v hadolint >/dev/null 2>&1 || { echo "hadolint not found — apt install hadolint" >&2; exit 1; }
-	hadolint $(CONTAINERFILES)
+	@if command -v hadolint >/dev/null 2>&1; then \
+	  hadolint $(CONTAINERFILES); \
+	elif engine=$$(command -v podman || command -v docker); then \
+	  "$$engine" run --rm -v "$$PWD:/work:ro" -w /work $(HADOLINT_IMAGE) hadolint $(CONTAINERFILES); \
+	else \
+	  echo "hadolint not found and no podman/docker — apt install hadolint" >&2; exit 1; \
+	fi
 
 check-yaml:
 	@command -v yamllint >/dev/null 2>&1 || { echo "yamllint not found — pip install yamllint" >&2; exit 1; }
