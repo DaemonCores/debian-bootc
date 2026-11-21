@@ -144,3 +144,9 @@ Not established: whether dropping line 2552 changes any resolved .config (needs 
 The other four failures of this file were stale paths (engine kernel-shared deleted, 61254d5) and are fixed in 67501b4.
 
 **Decision (autonomy, 2026-11-21):** the base follows its own documented rule (config.cfg comments: DC is a PROFILE choice). Line `CONFIG_DRM_AMD_DC=y` removed from kernel-src/config.cfg (it came from the PVE union at 99b8279); gpu/amd.cfg and the gaming profile still set it. Needs a kernel rebuild to confirm on hardware; revert this one line if the owner wants DC built into the base.
+
+## unsigned-kernel image test: sig_enforce=Y without karg (run 44930286457)
+
+- Symptom: `unsigned-kernel variant does not enforce module signatures` fails; diag reads `Y` (log of Build images (amd64)).
+- Proven: the unsigned boot cmdline has no `module.sig_enforce` (log line 5794); the shipped kernel config has `# CONFIG_MODULE_SIG_FORCE is not set` but `CONFIG_IMA_ARCH_POLICY=y` (/boot/config-7.2.15-ia:12270, from the published linux-image-common-ia-x64v1 deb); Linux `security/integrity/ima/ima_efi.c:30` calls `set_module_sig_enforced()` when IMA_ARCH_POLICY is on and Secure Boot is active (category secure_boot=1).
+- Fix: `# CONFIG_IMA_ARCH_POLICY is not set` in kernel-src/config.cfg (line came from the PVE union); parity test asserts it. Unverified until the kernel is rebuilt and the image test passes (to check on the next run).

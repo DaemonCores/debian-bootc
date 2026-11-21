@@ -214,6 +214,11 @@ def test_no_arch_overlay_merge() -> None:
     for modular in ('CONFIG_DRM_AMDGPU=m', 'CONFIG_DRM_I915=m'):
         assert modular in cfg, modular
     assert 'CONFIG_DRM_AMD_DC=y\n' not in cfg
+    # Module signatures are enforced by the module.sig_enforce=1 karg only:
+    # IMA_ARCH_POLICY would force them under Secure Boot (run 44930286457,
+    # unsigned-kernel boot read sig_enforce=Y with no karg).
+    assert 'CONFIG_IMA_ARCH_POLICY=y\n' not in cfg
+    assert 'CONFIG_MODULE_SIG_FORCE=y\n' not in cfg
 
 
 def test_ve_consumer_uses_the_engine_export() -> None:
