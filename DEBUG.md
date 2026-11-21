@@ -163,3 +163,8 @@ The other four failures of this file were stale paths (engine kernel-shared dele
 - Test: netavark hash recomputed from packages.yml with the BUILD trailing newline = 255f157cf754 (= published, hashes.json); without it = baf130b94e1b (= plan value).
 - Proven cause: plan.sh read BUILD through `$(...)` (strips trailing newline); the build job receives it through a step-output heredoc (keeps it).
 - Fix: DaemonCores-CI d974eca (plan reads BUILD byte for byte) + test_deb_plan.py. Not closed until a run shows `skip unchanged`.
+
+## Kernel perf review: stray CONFIG_PREEMPT_VOLUNTARY (2026-11-22)
+
+- config.cfg:405-406 states PREEMPT_NONE/VOLUNTARY are not selectable on x86_64 (7.x, they depend on !ARCH_HAS_PREEMPT_LAZY); config.cfg:408 sets PREEMPT_LAZY=y; kconfig/cpus/x86-common.cfg:11-12 sets PREEMPT=y + PREEMPT_DYNAMIC=y.
+- config.cfg:5996 and pve/debian-parity.cfg:285 still list VOLUNTARY=y: olddefconfig drops it. Not verified on a built .config, so left untouched (no change without a proof). Check the final .config of the next kernel build.
