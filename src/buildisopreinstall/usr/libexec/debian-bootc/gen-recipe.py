@@ -10,6 +10,11 @@ Args:
     recipe_path: Path to the recipe.json to update in-place (static fields
         kept).
 
+The same document is also written as ``images.json`` next to the recipe: the
+installer reads its catalog (``images``, ``fallback_flatpaks``, ...) from
+``/etc/bootc-installer/images.json`` and only falls back to the file shipped
+in the installer package when it is absent, so the live ISO must carry it.
+
 The script replaces only the ``imgref`` and ``images`` fields; all other fields
 (branding, tour, steps, …) are preserved from the existing file.
 
@@ -153,9 +158,11 @@ def main() -> None:
     recipe["imgref"] = images[0]["imgref"] if images else ""
     recipe["images"] = images
 
-    with open(recipe_path, "w", encoding="utf-8") as fh:
-        json.dump(recipe, fh, indent=4)
-        fh.write("\n")
+    catalog_path = os.path.join(os.path.dirname(recipe_path), "images.json")
+    for out in (recipe_path, catalog_path):
+        with open(out, "w", encoding="utf-8") as fh:
+            json.dump(recipe, fh, indent=4)
+            fh.write("\n")
 
 
 if __name__ == "__main__":

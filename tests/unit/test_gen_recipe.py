@@ -98,6 +98,41 @@ def test_main_updates_only_images_fields(tmp_path: Path) -> None:
     assert len(data["images"]) == 2
 
 
+def test_main_writes_the_catalog_the_installer_reads(tmp_path: Path) -> None:
+    """images.json (the installer's system override) mirrors the recipe.
+
+    The installer loads /etc/bootc-installer/images.json and, when it is
+    absent, the package's own copy, which lacks ``fallback_flatpaks``:
+    ``KeyError: 'fallback_flatpaks'`` at image.py:150 killed the live session.
+
+    Args:
+        tmp_path: Scratch directory holding the Containerfile and recipe.
+    """
+    (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
+    recipe = tmp_path / "recipe.json"
+    recipe.write_text(
+        json.dumps({
+            "distro_name": "Deb",
+            "fallback_flatpaks": []
+        }),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [sys.executable,
+         str(SCRIPT), str(tmp_path),
+         str(recipe)],
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ, "IMAGE_REGISTRY": "reg/x"
+        },
+    )
+    catalog = json.loads((tmp_path / "images.json").read_text(encoding="utf-8"))
+    assert catalog == json.loads(recipe.read_text(encoding="utf-8"))
+    assert catalog["fallback_flatpaks"] == []
+    assert catalog["images"]
+
+
 def test_tracked_recipe_is_a_static_template_only() -> None:
     """The tracked recipe.json carries NO hardcoded image catalog (P-196b).
 
