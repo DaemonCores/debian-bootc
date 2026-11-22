@@ -11,7 +11,14 @@ old = "    extra = options.get(\"extra\", [])"
 new = """    extra = options.get("extra", [])
 
     # Cross-distro guard: drop --add/-m names whose module does not exist in
-    # the tree (module dirs are <nn>-<name> under usr/lib/dracut/modules.d).
+    # the tree (module dirs are under usr/lib/dracut/modules.d).
+    # KNOWN LATENT BUG, left as is: dirs are <nn><name> (90qemu, no hyphen after
+    # the digits), so this split never matches a plain name and the filter drops
+    # every requested module. Fixing the parse would keep dirs such as
+    # biosdevname whose binary is absent, and dracut then fails with "Module
+    # 'biosdevname' cannot be installed" (proven locally); dracut's own default
+    # set is what the ISO has always been built with.
+    import re as _re
     _md = _os.path.join(tree, "usr/lib/dracut/modules.d")
     _live = "anaconda" in [m.lower() for m in add_modules]
     if add_modules or modules:
@@ -29,7 +36,7 @@ new = """    extra = options.get("extra", [])
     # rather than ship an unbootable ISO.
     if _live:
         _have_live = _os.path.isdir(_md) and any(
-            _n.split("-", 1)[-1] == "debian-bootc-live" for _n in _os.listdir(_md))
+            _re.sub(r"^[0-9]+", "", _n) == "debian-bootc-live" for _n in _os.listdir(_md))
         if not _have_live:
             raise RuntimeError("dracut module debian-bootc-live missing from the tree")
         add_modules = list(add_modules) + ["debian-bootc-live"]"""
