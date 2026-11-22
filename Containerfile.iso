@@ -57,7 +57,9 @@ SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 # Only the policy-rc.d guard is needed while apt runs; the whole overlay (which
 # carries the recipe generator) is copied after it so editing either leaves the
 # cached installer-stack install alone.
-COPY ./src/buildisopreinstall/sbin /sbin
+# /sbin is a symlink to usr/sbin in the tree: copy to the real path, a COPY
+# onto /sbin would replace the symlink with a directory.
+COPY ./src/buildisopreinstall/usr/sbin/policy-rc.d /usr/sbin/policy-rc.d
 RUN apt update \
     && apt install -y --no-install-recommends \
         fisherman \
@@ -72,6 +74,7 @@ RUN apt update \
         gir1.2-nm-1.0 \
         libgnome-desktop-4-2t64 \
         gir1.2-gnomedesktop-4.0 \
+        mutter-common \
         libgweather-4-0t64 \
         gir1.2-gweather-4.0 \
         xdg-utils \

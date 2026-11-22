@@ -28,7 +28,7 @@ WIKI_URL ?= https://github.com/DaemonCores/debian-bootc.wiki.git
 # ---- file sets ------------------------------------------------------------ #
 
 SHELL_SRCS := \
-	src/buildisopreinstall/sbin/policy-rc.d \
+	src/buildisopreinstall/usr/sbin/policy-rc.d \
 	src/buildisopreinstall/usr/libexec/debian-bootc/mok-stage \
 	src/debianpreinstall/usr/sbin/policy-rc.d \
 	workflows/bootc-debs-builder/preinstall/usr/sbin/policy-rc.d \

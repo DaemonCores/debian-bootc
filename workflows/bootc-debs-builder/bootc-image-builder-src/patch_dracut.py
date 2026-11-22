@@ -13,13 +13,26 @@ new = """    extra = options.get("extra", [])
     # Cross-distro guard: drop --add/-m names whose module does not exist in
     # the tree (module dirs are <nn>-<name> under usr/lib/dracut/modules.d).
     _md = _os.path.join(tree, "usr/lib/dracut/modules.d")
+    _live = "anaconda" in [m.lower() for m in add_modules]
     if add_modules or modules:
         _have = set()
         if _os.path.isdir(_md):
             for _n in _os.listdir(_md):
                 _have.add(_n.split("-", 1)[-1].lower())
         add_modules = [m for m in add_modules if m.lower() in _have]
-        modules = [m for m in modules if m.lower() in _have]"""
+        modules = [m for m in modules if m.lower() in _have]
+
+    # The live root: the Fedora-only "anaconda" module (dropped above on a
+    # Debian tree) is what turns inst.stage2= into a mounted squashfs root.
+    # debian-bootc-live (shipped by Containerfile.iso) replaces it and pulls
+    # in dmsquash-live. Without it the ISO cannot mount its root: fail here
+    # rather than ship an unbootable ISO.
+    if _live:
+        _have_live = _os.path.isdir(_md) and any(
+            _n.split("-", 1)[-1] == "debian-bootc-live" for _n in _os.listdir(_md))
+        if not _have_live:
+            raise RuntimeError("dracut module debian-bootc-live missing from the tree")
+        add_modules = list(add_modules) + ["debian-bootc-live"]"""
 assert old in src, 'dracut stage shape changed'
 src = src.replace(old, new, 1)
 # main() takes (tree, options) but does not import os; add it at function scope
