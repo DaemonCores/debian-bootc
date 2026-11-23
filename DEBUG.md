@@ -322,3 +322,10 @@ Push of debian-bootc (5 local commits, 65ff1f9 last) is blocked by `regress_guar
 - Dormant risk: if an elected kernel stops selecting ARCH_HAS_PREEMPT_LAZY, VOLUNTARY (last in merge order) wins silently. The CI gate `check_kconfig.py` is not choice-aware and its `--config` call is non-blocking (`packages.yml:364-366`).
 - Built on the upstream tree, not the patched CI tree (remote patches are not in the repo).
 - Open (not applied): drop the VOLUNTARY lines and `x86-common.cfg:11`, make the gate choice-aware and blocking, with a test that fails on today's fragments.
+
+31. arm64 smoke: no login at 900 s (run 45205961443, head bd69523, frozen 2026-11-23).
+- Red job `Build ISO / build-iso (arm64)`, step `Boot smoke test the ISO (QEMU)`, log line 4906: `::error::live ISO never reached the login prompt of the live root in 900 s: stalled in USERSPACE, after /init started`.
+- The `-cpu neoverse-n2` fix (409f07d) did its job: the kernel runs and hands over. Guest timeline from the job's serial tail: systemd[1] first line [295.0], journald flush [312.4], `virtio_net virtio0 enp0s1: renamed from eth0` [412.05], last line [468.47] `ACPI: button: Power Button`. No failed unit, no dependency loop, no login marker. amd64 ISO job green in the same run.
+- Undecided: slow-under-TCG vs real hang. A local timed boot of the published arm64 ISO was started and stopped by the owner's freeze, so no verdict.
+- Local lead, not the CI cause: `/home/gabriel/.cache/daemoncores-iso-debug/arm64_slow/serial-pub.log:370` reaches `Entering emergency mode` in the initrd at [9.80] right after `device-mapper: ioctl: 4.50.0-ioctl (2025-04-28) initialised`, then `Cannot open access to console, the root account is locked`. No `Failed`/`Timed out` line precedes it. That boot used `-cdrom` on `-machine virt`, not the CI wiring (initrd handed to QEMU directly), so it says nothing about the CI failure until re-run with the CI line.
+- Next: re-run that ISO with the exact CI QEMU line and a long timeout, record the first login marker time and any failed unit; only then decide between a timeout budget change (with the login marker still required) and a real fix.
