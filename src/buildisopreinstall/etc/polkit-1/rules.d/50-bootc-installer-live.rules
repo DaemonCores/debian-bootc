@@ -25,3 +25,14 @@ polkit.addRule(function(action, subject) {
         return polkit.Result.YES;
     }
 });
+// The GPU module set selector, called by the installer GPU step right after
+// the usage choice (gpu_config.stage_choice); without this rule the step
+// fails with "The choice could not be recorded" in the agent-less session.
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.policykit.exec" &&
+        action.lookup("program") ===
+            "/usr/libexec/debian-bootc/gpu-set-stage.py" &&
+        subject.user === "live") {
+        return polkit.Result.YES;
+    }
+});
