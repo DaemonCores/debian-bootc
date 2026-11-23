@@ -27,11 +27,17 @@ case "$*" in
     [[ -n "${STUB_IP:-}" ]] && echo "    inet ${STUB_IP}/24 scope global eth0"
     exit 0 ;;
   "-o link show")
-    echo "2: eth0: <BROADCAST> mtu 1500 link/ether 52:54:00:00:00:01"
+    name=eth0
+    # STUB_RENAME_FLAG: udev renames the NIC only once "udevadm settle" ran.
+    [[ -n "${STUB_RENAME_FLAG:-}" && -e "$STUB_RENAME_FLAG" ]] && name=enp0s2
+    echo "2: $name: <BROADCAST> mtu 1500 link/ether 52:54:00:00:00:01"
     exit 0 ;;
 esac
 exit 0
 """,
+    'udevadm':
+    '#!/bin/bash\n[[ "$1" == settle && -n "${STUB_RENAME_FLAG:-}" ]] && '
+    'touch "$STUB_RENAME_FLAG"\nexit 0\n',
     'hostname':
     '#!/bin/bash\necho node1\n',
     'timeout':
@@ -189,3 +195,27 @@ def test_autoconf_stanzas(
     assert content.startswith('# ifupdown2-autoconf')
     domain = (sandbox / 'run' / 'ifupdown2-dhcp-domain').read_text().strip()
     assert domain == ('lab.example' if dhcp4 == '1' else '')
+
+
+def test_autoconf_waits_for_udev_to_rename_the_nic(sandbox: Path) -> None:
+    """The interface is picked after udev settled, not under its kernel name.
+
+    The NIC is ``eth0`` until ``udevadm settle`` returns, then ``enp0s2``.  A
+    config naming ``eth0`` makes ``ifup`` run dhclient on a device that is gone
+    and leaves the live system without IPv4.
+
+    Args:
+        sandbox: Sandbox root built by the ``sandbox`` fixture.
+    """
+    interfaces = sandbox / 'etc' / 'network' / 'interfaces'
+    interfaces.write_text('# ifupdown2-autoconf\n')
+    result = run_script(
+        sandbox,
+        'ifupdown2-autoconf',
+        STUB_DHCP4='1',
+        STUB_RENAME_FLAG=str(sandbox / 'udev-settled'),
+    )
+    assert result.returncode == 0, result.stderr
+    content = interfaces.read_text()
+    assert 'auto enp0s2' in content, content
+    assert 'eth0' not in content, content

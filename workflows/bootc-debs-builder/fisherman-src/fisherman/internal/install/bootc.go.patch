@@ -1,0 +1,22 @@
+diff --git a/fisherman/internal/install/bootc.go b/fisherman/internal/install/bootc.go
+--- a/fisherman/internal/install/bootc.go
++++ b/fisherman/internal/install/bootc.go
+@@ -477,7 +477,17 @@
+ 	useOciLayout := opts.ComposeFsBackend || nonComposefsRoot != ""
+ 
+ 	if opts.NeedsPull {
+-		if err := pullImage(opts.SourceImgref, opts.LayerCount, nonComposefsRoot, nonComposefsRunRoot, nonComposefsDriver); err != nil {
++		// containers/image stages layer blobs in /var/tmp whatever TMPDIR
++		// says (see overrideVarTmp). When the store is redirected because
++		// the live /var is space-constrained, the pull needs /var/tmp on the
++		// target disk too, or it dies with ENOSPC on the RAM overlay.
++		restoreVarTmp := func() {}
++		if nonComposefsRoot != "" {
++			restoreVarTmp = overrideVarTmp(scratch)
++		}
++		err := pullImage(opts.SourceImgref, opts.LayerCount, nonComposefsRoot, nonComposefsRunRoot, nonComposefsDriver)
++		restoreVarTmp()
++		if err != nil {
+ 			return fmt.Errorf("pulling image: %w", err)
+ 		}
+ 	} else {
