@@ -2178,7 +2178,12 @@ packages:
         -O /build/bootupd/target/release/bootupd \
         | sed 's/shlibs:Depends=//' > /tmp/bootupd-deps
 
-      DEPS="$(cat /tmp/bootupd-deps), util-linux"
+      # efibootmgr: bootupd 0.4 execs it to clear and write the NVRAM boot
+      # entries on every UEFI install; without it the install dies with
+      # "Clearing EFI boot entries that match target Debian GNU/Linux: No such
+      # file or directory" (DEBUG.md 23). The binary is not linked, so
+      # dpkg-shlibdeps cannot see it.
+      DEPS="$(cat /tmp/bootupd-deps), util-linux, efibootmgr"
       GRUB_ARCH="${ARCH}"
       sed -i \
         -e "s|{{ VER }}|${BOOTUPD_VER#v}|g" \
@@ -2681,7 +2686,7 @@ packages:
       apt-get update
       apt-get install -y --no-install-recommends \
         -t "${SUITE}-backports" golang-1.25-go \
-        libgpgme-dev
+        libgpgme-dev libseccomp-dev
       test -x "${GO_BIN}" \
         || { echo "ERROR: golang-1.25-go did not install" >&2; exit 1; }
       "${GO_BIN}" version
@@ -2689,7 +2694,7 @@ packages:
       PATH=/usr/lib/go-1.25/bin:"${PATH}" go build \
         -C /build/podman \
         -mod=vendor \
-        -tags "exclude_graphdriver_btrfs" \
+        -tags "seccomp exclude_graphdriver_btrfs" \
         -trimpath \
         -ldflags "-s -w" \
         -o /tmp/podman-bin \
@@ -2732,6 +2737,11 @@ packages:
       _needed=$(objdump -p /tmp/podman-check/usr/bin/podman | grep NEEDED)
       echo "${_needed}" | grep -E "libgpgme.so.11|libc.so.6" >/dev/null \
         || { echo "ERROR: unexpected link map: ${_needed}" >&2; exit 1; }
+      # Without the `seccomp` build tag podman reports seccompEnabled=false
+      # and every `podman run` with the default profile dies with "seccomp
+      # not enabled in this build" (the installer's bootc run, DEBUG.md 21).
+      echo "${_needed}" | grep -F "libseccomp.so.2" >/dev/null \
+        || { echo "ERROR: podman built without seccomp: ${_needed}" >&2; exit 1; }
       if echo "${_needed}" | grep libsubid; then
         echo "ERROR: libsubid must not be linked" >&2
         exit 1

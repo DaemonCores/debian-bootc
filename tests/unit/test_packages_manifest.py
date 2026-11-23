@@ -590,3 +590,50 @@ def test_gpu_module_sets_own_the_kernel_paths_once() -> None:
     # The profile build is proved in the build: DC pin greps the final config.
     assert 'CONFIG_DRM_AMD_DC is not set$' in build
     assert 'CONFIG_DRM_AMD_DC=y$' in build
+
+
+def _podman_build() -> str:
+    """Return the podman build script without its comment lines.
+
+    Returns:
+        The non-comment lines of the podman entry ``build`` script.
+    """
+    lines = _packages()['podman']['build'].splitlines()
+    return '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
+
+
+def test_podman_is_built_with_seccomp() -> None:
+    """Without the seccomp tag every ``podman run`` default profile fails.
+
+    A podman built with only ``exclude_graphdriver_btrfs`` reports
+    ``seccompEnabled: false`` and refuses to start the installer's bootc
+    container: ``loading seccomp profile ... seccomp not enabled in this
+    build``.  The build needs the tag, libseccomp headers, the runtime
+    dependency and a link-map check that fails the build if it is lost.
+    """
+    build = _podman_build()
+    tags = re.search(r'-tags "([^"]*)"', build)
+    assert tags is not None
+    assert 'seccomp' in tags.group(1).split()
+    assert 'libseccomp-dev' in build
+    assert 'libseccomp.so.2' in build
+    control = (
+        MANIFEST.parent / 'preinstall' / 'output' / 'podman' / 'DEBIAN' /
+        'control'
+    ).read_text()
+    assert 'libseccomp2' in control
+
+
+def test_bootupd_depends_on_efibootmgr() -> None:
+    """Bootupd execs ``efibootmgr``; the deb must pull it on every arch.
+
+    The amd64 image installed no ``efibootmgr`` (only the arm64 branch of the
+    Containerfile did), so ``bootc install`` aborted at the bootloader step
+    with ``Clearing EFI boot entries ... No such file or directory``.  The
+    dependency belongs to the package that runs the binary.
+    """
+    lines = _packages()['bootupd']['build'].splitlines()
+    build = [ln for ln in lines if not ln.lstrip().startswith('#')]
+    deps = [ln for ln in build if ln.lstrip().startswith('DEPS=')]
+    assert len(deps) == 1
+    assert 'efibootmgr' in deps[0]

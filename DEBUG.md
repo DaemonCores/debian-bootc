@@ -234,3 +234,35 @@ Not proven yet: real GRUB UEFI boot of the final ISO (kargs `quiet`, `console=tt
 - Fix: `ifupdown2-autoconf` runs `udevadm settle --timeout=30` before choosing the interface (a failure is logged, not swallowed); `networking.service.d/ifupdown2-autoconf.conf` orders it After `systemd-udev-trigger.service`.
 - Test: `tests/unit/test_shell_scripts.py::test_autoconf_waits_for_udev_to_rename_the_nic` (`udevadm` stub renames `eth0` to `enp0s2` on settle). Replayed on the HEAD script (copy in the scratchpad): FAILS with `assert 'auto enp0s2' in ...` and `auto eth0` in the file; passes on the fixed script (9 passed).
 - Not yet validated live: the fix only reaches the ISO after a pipeline build; to verify on the next ISO (`ip -4 addr` non-empty, `grep auto /etc/network/interfaces` shows `enp0s2`).
+
+## Open question for the owner (2026-11-23, autonomy)
+
+Push of debian-bootc (5 local commits, 65ff1f9 last) is blocked by `regress_guard.py`: `make test` of DaemonCores-CI fails 2 tests, both because the agent shim `~/.local/bin/sleep` is first in PATH: `tests/test_apt_key_hash.py::test_a_stale_published_key_is_refused` stderr = `REFUSED: 'sleep' is forbidden for the agent. Wait with separate tool calls.` and `tests/test_image_ci.py::test_a_hung_boot_test_is_killed_by_the_timeout` (`'timeout' in 'exit 2'`). Not a code regression, not bypassed with `Regress-Accept`. DaemonCores-CI 6121acb is pushed; debian-bootc must be pushed from a shell where `sleep` is real. Until then the arm64 smoke failure of run 45087765493 stays unexplained: the log only prints the HEAD of the serial (ends at kernel t=37 s `PM: genpd: Disabling unused power domains`), the new `iso-smoke-failure-arm64` artifact needs a new run.
+
+21. Install fails at "exporting image to OCI layout" (same VM, patched fisherman of item 19, network configured by hand with `dhclient`, GPU hotfix applied).
+- Reproduced: walkthrough to "Become Legend"; pull now passes; `fisherman-output.log`: `skopeo copy containers-storage:[overlay@…] oci:/mnt/fisherman-target/.fisherman-scratch/oci-cache` fails with `level=fatal msg="Can not copy signatures to oci:/mnt/fisherman-target/.fisherman-scratch/oci-cache:: Pushing signatures for OCI images is not supported"`.
+- Cause (proved): the live `/etc/containers/policy.json` requires `sigstoreSigned` for `ghcr.io/daemoncores/debian-bootc` and `registries.d/image-signature.yaml` has `use-sigstore-attachments: true`; the pull keeps the signature in the store and skopeo cannot write it into an OCI layout.
+- Fix: `--remove-signatures` in `skopeoExportOCI` (overlay `bootc.go.patch`); the signature is verified at pull time, the OCI directory is a private scratch copy. Security note: the signature is not carried to the OCI copy; it is checked before, by the pull.
+- Tests: `skopeo_export_signatures_test.go` (fails on the original: `skopeo copy keeps signatures`), and the two upstream argv assertions in `bootc_direct_test.go` updated through `bootc_direct_test.go.patch` (3 → 4 args).
+- Live validation: with the rebuilt binary, `fisherman-output.log`: `+ skopeo copy --remove-signatures containers-storage:[…]` then `OCI export complete` (overall_pct 63.92).
+
+22. Install fails at "bootc install to-filesystem (via container)" (next step after item 21).
+- Reproduced: `fisherman: fatal: bootc install: bootc install to-filesystem (via container): exit status 125 — … Error: loading seccomp profile (/usr/share/containers/seccomp.json) failed: seccomp not enabled in this build`.
+- Cause (proved): in the live `podman info` reports `seccompEnabled: false` although the kernel has seccomp (`/proc/self/status: Seccomp: 0` field present); the project podman (packages.yml, v5.8.6) is built with `-tags "exclude_graphdriver_btrfs"` only, without the `seccomp` tag, so the profile loader is the stub that returns that error. `podman run --security-opt seccomp=unconfined …` works in the same VM.
+- Fix: build tag `seccomp`, `libseccomp-dev` in the build, `libseccomp2` in the deb Depends, link-map check `libseccomp.so.2` in the build.
+- Test: `tests/unit/test_packages_manifest.py::test_podman_is_built_with_seccomp`; replayed on the HEAD manifest: FAILS (tag assertion).
+
+23. Install fails at the bootloader step of `bootc install to-filesystem` (after item 22).
+- Reproduced: same VM; `bootc install` aborts in bootupd with `Clearing EFI boot entries … No such file or directory`.
+- Cause (proved): `efibootmgr` is absent from the published amd64 image (bootupd shells out to it); in a derived image (`apt-get install efibootmgr`) the same install passes: `fisherman-output.log` line 214 `Bootloader: grub`, line 243 `Installation complete!`, line 437 `"type":"complete"` (elapsed 524944 ms).
+- Fix: `packages.yml` bootupd deb `Depends` += `util-linux, efibootmgr`.
+- Test: `tests/unit/test_packages_manifest.py::test_bootupd_depends_on_efibootmgr`; replayed on the HEAD manifest: FAILS.
+- Live note (test-only hack, not in the repo): the VM used a local registry mirror and an edited `policy.json`, so the signature policy was bypassed for that run.
+
+24. Installed disk looks hung: screen frozen on `Booting 'Debian GNU/Linux 13 (trixie) (ostree:0)'` (LUKS install, amd64 UEFI VM, QEMU `-vga std`).
+- Reproduced: reboot on the installed disk without the ISO, `screendump` d1/d2/f1 identical to the GRUB line for several minutes.
+- Cause (proved): the machine was NOT hung, the passphrase prompt was invisible. With `console=ttyS0` the serial log shows `Please enter passphrase for disk root:` and, once answered, the system reaches `dctest login:`. The initramfs holds no display driver: `cpio` listing of `initramfs-7.2.15-ia.img` shows only `kernel/drivers/gpu/drm/drm.ko.xz` (no bochs/simpledrm/virtio_gpu); `dmesg` of that boot has `fbcon: Taking over console` but no KMS driver; `30-bootc-build.conf` had only `add_drivers+=" erofs overlay "`.
+- Fix: `add_drivers+=" simpledrm bochs virtio_gpu cirrus-qemu qxl vmwgfx hyperv_drm "` in `30-bootc-build.conf` (all are `=m` in `kernel-src/config.cfg`).
+- Live validation: initrd rebuilt in the VM with that exact list (`dracut rc=0`, 7 modules present in `lsinitrd`); reboot: VGA shows `Please enter passphrase for disk root:` (k1.png), then `dctest login:` on tty1 (k2.png); `dmesg`: `[drm] Initialized bochs-drm` at 1.96 s; `systemctl --failed` empty; `bootc status`: image `ghcr.io/daemoncores/debian-bootc:latest_amd64`, booted; `/` = composefs, root on LUKS+btrfs.
+- Tests: `tests/unit/test_dracut_conf.py` (2 tests); replayed on the HEAD conf: FAILS with `initrd has no display driver: ['bochs','cirrus-qemu','hyperv_drm','qxl','simpledrm','virtio_gpu','vmwgfx']`.
+- Not yet covered: a CI smoke that boots the installed disk and checks the passphrase prompt is drawn on the display (serial alone cannot see it).

@@ -1,6 +1,6 @@
 diff --git a/fisherman/internal/install/bootc.go b/fisherman/internal/install/bootc.go
---- a/fisherman/internal/install/bootc.go
-+++ b/fisherman/internal/install/bootc.go
+--- a/fisherman/internal/install/bootc.go	2026-11-23 05:59:53.839987610 +0100
++++ b/fisherman/internal/install/bootc.go	2026-11-23 05:59:53.840709078 +0100
 @@ -477,7 +477,17 @@
  	useOciLayout := opts.ComposeFsBackend || nonComposefsRoot != ""
  
@@ -20,3 +20,16 @@ diff --git a/fisherman/internal/install/bootc.go b/fisherman/internal/install/bo
  			return fmt.Errorf("pulling image: %w", err)
  		}
  	} else {
+@@ -982,8 +992,12 @@
+ 	restoreVarTmp := overrideVarTmp(tmpdir)
+ 	defer restoreVarTmp()
+ 
++	// --remove-signatures: the pull already verified the sigstore signature
++	// against the policy; skopeo cannot store signatures in an OCI layout and
++	// aborts ("Pushing signatures for OCI images is not supported") otherwise.
+ 	skopeoArgs := []string{
+ 		"copy",
++		"--remove-signatures",
+ 		containersStorageSource(image),
+ 		"oci:" + destDir,
+ 	}

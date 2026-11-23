@@ -5,7 +5,7 @@ Maintainer: Gabriel Guillou guillou.gabriel@gmail.com
 Homepage: https://github.com/DaemonCores/debian-bootc
 Section: admin
 Priority: optional
-Depends: conmon, crun | runc, golang-github-containers-common, netavark (>= 1.15), init-system-helpers (>= 1.52), libc6 (>= 2.38), libgpgme11t64 (>= 1.23.2)
+Depends: conmon, crun | runc, golang-github-containers-common, netavark (>= 1.15), init-system-helpers (>= 1.52), libc6 (>= 2.38), libgpgme11t64 (>= 1.23.2), libseccomp2 (>= 2.5.0)
 Recommends: catatonit, passt, aardvark-dns, nftables, uidmap, fuse-overlayfs, containers-storage
 Description: podman 5.8 built for trixie (no libsubid linkage)
  Built from the upstream source tag (vendored tree) with the Go 1.25

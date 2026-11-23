@@ -1,0 +1,46 @@
+diff --git a/fisherman/internal/install/bootc_direct_test.go b/fisherman/internal/install/bootc_direct_test.go
+--- a/fisherman/internal/install/bootc_direct_test.go	2026-11-23 06:00:23.504573679 +0100
++++ b/fisherman/internal/install/bootc_direct_test.go	2026-11-23 06:00:23.505544704 +0100
+@@ -104,17 +104,20 @@
+ 	}
+ 
+ 	args := readCapture(t, capture)
+-	if len(args) != 3 {
+-		t.Fatalf("skopeo argv = %v, want [copy containers-storage:... oci:...]", args)
++	if len(args) != 4 {
++		t.Fatalf("skopeo argv = %v, want [copy --remove-signatures containers-storage:... oci:...]", args)
+ 	}
+ 	if args[0] != "copy" {
+ 		t.Errorf("skopeo argv[0] = %q, want copy", args[0])
+ 	}
+-	if want := "containers-storage:" + image; args[1] != want {
+-		t.Errorf("skopeo source = %q, want %q", args[1], want)
++	if args[1] != "--remove-signatures" {
++		t.Errorf("skopeo argv[1] = %q, want --remove-signatures", args[1])
+ 	}
+-	if want := "oci:" + destDir; args[2] != want {
+-		t.Errorf("skopeo dest = %q, want %q", args[2], want)
++	if want := "containers-storage:" + image; args[2] != want {
++		t.Errorf("skopeo source = %q, want %q", args[2], want)
++	}
++	if want := "oci:" + destDir; args[3] != want {
++		t.Errorf("skopeo dest = %q, want %q", args[3], want)
+ 	}
+ }
+ 
+@@ -148,11 +151,11 @@
+ 		t.Fatalf("skopeoExportOCI() error = %v", err)
+ 	}
+ 	args := readCapture(t, capture)
+-	if len(args) != 3 {
+-		t.Fatalf("skopeo argv = %v, want 3 args", args)
++	if len(args) != 4 {
++		t.Fatalf("skopeo argv = %v, want 4 args", args)
+ 	}
+-	if !strings.HasPrefix(args[2], "oci:") {
+-		t.Errorf("skopeo dest = %q, want oci: prefix", args[2])
++	if !strings.HasPrefix(args[3], "oci:") {
++		t.Errorf("skopeo dest = %q, want oci: prefix", args[3])
+ 	}
+ }
+ 
