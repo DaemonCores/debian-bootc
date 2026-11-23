@@ -6,9 +6,15 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, cast
 
-import yaml
+from tests.support.documents import (
+    YamlValue,
+    load_json,
+    load_yaml,
+    mapping,
+    sequence,
+    text,
+)
 
 MANIFEST = (
     Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
@@ -19,14 +25,57 @@ GRUB_PACKAGES = ('grub-efi-amd64-signed', 'grub-efi-arm64-signed')
 REPO = Path(__file__).resolve().parents[2]
 
 
-def _packages() -> dict[str, dict[str, Any]]:
+def _packages() -> dict[str, dict[str, YamlValue]]:
     """Load the manifest entries keyed by package name.
 
     Returns:
         The ``packages.yml`` entries indexed by their ``name``.
     """
-    data = cast(dict[str, Any], yaml.safe_load(MANIFEST.read_text()))
-    return {p['name']: p for p in data['packages']}
+    data = mapping(load_yaml(MANIFEST.read_text()))
+    return {
+        text(mapping(entry)['name']): mapping(entry)
+        for entry in sequence(data['packages'])
+    }
+
+
+def _variants(name: str) -> dict[str, dict[str, YamlValue]]:
+    """Return the ``variants`` mapping of a manifest template.
+
+    Args:
+        name: Name of a package entry that declares ``variants``.
+
+    Returns:
+        The variant overrides keyed by variant key.
+    """
+    return {
+        key: mapping(value)
+        for key, value in mapping(_packages()[name]['variants']).items()
+    }
+
+
+def _deps(variant: dict[str, YamlValue]) -> list[str]:
+    """Return the dependency list of a manifest variant.
+
+    Args:
+        variant: One entry of a ``variants`` mapping.
+
+    Returns:
+        The package names it depends on.
+    """
+    return [text(dep) for dep in sequence(variant['deps'])]
+
+
+def _when(variant: dict[str, YamlValue]) -> dict[str, YamlValue]:
+    """Return the ``when`` condition of a manifest variant.
+
+    Args:
+        variant: One entry of a ``variants`` mapping.
+
+    Returns:
+        The condition mapping, empty when the variant has none.
+    """
+    raw = variant.get('when')
+    return mapping(raw) if raw else {}
 
 
 def test_grub_entries_follow_the_fedora_mainline() -> None:
@@ -34,25 +83,26 @@ def test_grub_entries_follow_the_fedora_mainline() -> None:
     packages = _packages()
     for name in GRUB_PACKAGES:
         entry = packages[name]
-        assert entry['track']['GRUB_COMMIT'] == {
+        assert mapping(entry['track'])['GRUB_COMMIT'] == {
             'repo': 'rhboot/grub2',
             'head': True
         }, name
         for pin in GRUB_PINS:
-            assert pin not in entry.get('env', {}), (name, pin)
+            assert pin not in mapping(entry.get('env', {})), (name, pin)
 
 
 def test_custom_kernel_does_not_masquerade_as_debian() -> None:
     """The profile kernels own their name; Provides stay the minimal one."""
-    lines = _packages()['linux-image-profile']['build'].splitlines()
-    build = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
-    assert 'Package: ${KERNEL_PKG}/' in build
-    assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in build
-    assert 'linux-image-minimal' in build
-    assert 'Conflicts' in build
-    assert 'Replaces' in build
-    assert 'linux-image-stock' not in build
-    assert 'linux-image-${DEB_ARCH}, linux-image-' not in build
+    build = text(_packages()['linux-image-profile']['build'])
+    lines = build.splitlines()
+    kept = '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
+    assert 'Package: ${KERNEL_PKG}/' in kept
+    assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in kept
+    assert 'linux-image-minimal' in kept
+    assert 'Conflicts' in kept
+    assert 'Replaces' in kept
+    assert 'linux-image-stock' not in kept
+    assert 'linux-image-${DEB_ARCH}, linux-image-' not in kept
 
 
 def test_image_installs_the_project_kernel() -> None:
@@ -64,26 +114,29 @@ def test_image_installs_the_project_kernel() -> None:
     kernel = 'linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}' \
              '-${_flavour}'
     for name in ('Containerfile', ):
-        text = (root / name).read_text()
+        content = (root / name).read_text()
         install = [
-            ln for ln in text.splitlines() if not ln.lstrip().startswith('#')
+            ln for ln in content.splitlines()
+            if not ln.lstrip().startswith('#')
         ]
         assert any(kernel in ln for ln in install), name
-        assert 'ARG KERNEL_VARIANT=minimal' in text, name
-        assert 'ARG KERNEL_PROFILE=ia' in text, name
+        assert 'ARG KERNEL_VARIANT=minimal' in content, name
+        assert 'ARG KERNEL_PROFILE=ia' in content, name
         assert not any('linux-image-${ARCH}' in ln for ln in install), name
 
 
-def _install_lines(text: str) -> list[str]:
+def _install_lines(content: str) -> list[str]:
     """Return the non-comment lines of a Containerfile.
 
     Args:
-        text: Containerfile content.
+        content: Containerfile content.
 
     Returns:
         Every line that is not a comment.
     """
-    return [ln for ln in text.splitlines() if not ln.lstrip().startswith('#')]
+    return [
+        ln for ln in content.splitlines() if not ln.lstrip().startswith('#')
+    ]
 
 
 def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
@@ -93,7 +146,7 @@ def test_image_installs_no_nvidia_or_foreign_arch_modules() -> None:
     NVIDIA image at install only.
     """
     root = MANIFEST.parents[2]
-    modules = {}
+    modules: dict[str, set[str]] = {}
     for name in ('Containerfile', ):
         modules[name] = {
             tok
@@ -138,31 +191,19 @@ def test_standard_image_keeps_the_login_stack() -> None:
     installs them.
     """
     root = MANIFEST.parents[2]
-    text = (root / 'Containerfile').read_text()
+    content = (root / 'Containerfile').read_text()
     base = (root / 'Containerfile.base').read_text()
     for pkg in (
         'systemd-sysv', 'libpam-systemd', 'dbus-user-session', 'kbd',
         'keyboard-configuration'
     ):
-        assert pkg in text or pkg in base, pkg
+        assert pkg in content or pkg in base, pkg
     for pkg in (
         'systemd-sysv', 'libpam-systemd', 'dbus-user-session', 'kbd',
         'keyboard-configuration'
     ):
-        line = f'        {pkg} \\' if pkg in text else f'        {pkg}'
-        assert line in text or line in base, pkg
-
-
-def _variants(name: str) -> dict[str, Any]:
-    """Return the ``variants`` mapping of a manifest template.
-
-    Args:
-        name: Name of a package entry that declares ``variants``.
-
-    Returns:
-        The variant overrides keyed by variant key.
-    """
-    return cast(dict[str, Any], _packages()[name]['variants'])
+        line = f'        {pkg} \\' if pkg in content else f'        {pkg}'
+        assert line in content or line in base, pkg
 
 
 def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
@@ -187,24 +228,29 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
     }
     # x64v4 = MANQUANT AJOUTÉ: present in BOTH profiles.
     for profile in ('ia', 'vm'):
-        assert variants[f'{profile}-x64v4']['env']['KERNEL_ARCH_LEVEL'
-                                                   ] == 'x64v4'
-        assert variants[f'{profile}-x64v4']['when'] == {'arch': 'amd64'}
+        variant = variants[f'{profile}-x64v4']
+        env = mapping(variant['env'])
+        assert text(env['KERNEL_ARCH_LEVEL']) == 'x64v4'
+        assert mapping(variant['when']) == {'arch': 'amd64'}
     # ENTRY-LEVEL default = 16 KB EVERYWHERE (owner 05/11 18:4x, amd64
     # included); the ONLY 4k redeclaration = the armv8.0 arch-incompatible
     # signal (no 16 KB granule); the x64 variants never redeclare a page
     # size (their fallback is architectural, x86 mainline has none).
-    assert entry['env']['KERNEL_PAGES'] == '16k'
+    assert text(mapping(entry['env'])['KERNEL_PAGES']) == '16k'
     for profile in ('ia', 'vm'):
         for flav in ('armv8.2-lse', 'armv9-sve2'):
-            assert 'KERNEL_PAGES' not in variants[f'{profile}-{flav}']['env'], (
-                f'{profile}-{flav}'
-            )
-            assert variants[f'{profile}-{flav}']['when'] == {'arch': 'arm64'}
-        assert variants[f'{profile}-armv8.0']['env']['KERNEL_PAGES'] == '4k'
-        assert variants[f'{profile}-armv8.0']['when'] == {'arch': 'arm64'}
+            variant = variants[f'{profile}-{flav}']
+            assert 'KERNEL_PAGES' not in mapping(variant['env']
+                                                 ), (f'{profile}-{flav}')
+            assert mapping(variant['when']) == {'arch': 'arm64'}
+        variant = variants[f'{profile}-armv8.0']
+        env = mapping(variant['env'])
+        assert text(env['KERNEL_PAGES']) == '4k'
+        assert mapping(variant['when']) == {'arch': 'arm64'}
         for flav in ('x64v1', 'x64v2', 'x64v3', 'x64v4'):
-            assert 'KERNEL_PAGES' not in variants[f'{profile}-{flav}']['env']
+            assert 'KERNEL_PAGES' not in mapping(
+                variants[f'{profile}-{flav}']['env']
+            )
     assert 'when' not in entry
     root = (
         MANIFEST.parents[2].parent / 'DaemonCores-CI' / 'build-deb' /
@@ -220,18 +266,17 @@ def test_arm64_has_a_4k_and_a_16k_kernel() -> None:
 def test_each_kernel_variant_publishes_its_headers() -> None:
     """Every profile kernel deb-glob also lists the republished headers deb.
 
-    The republish block writes a profile-prefixed
-    ``linux-headers-<profile>-<flavour>`` deb next to the image deb; if the
-    variant's deb-glob did not carry it, the deb was never recorded in
-    hashes.json — the end-of-run prune dropped it from the APT index and the
-    cache restored a headers-less set on every later hit, breaking the
-    zfs-module-pve lane ('no linux-headers for flavour x64v3 in the APT
-    index', run 42899558906).
+    The republish block writes a profile-prefixed ``linux-
+    headers-<profile>-<flavour>`` deb next to the image deb; if the variant's
+    deb-glob did not carry it, the deb was never recorded in hashes.json — the
+    end-of-run prune dropped it from the APT index and the cache restored a
+    headers-less set on every later hit, breaking the zfs-module-pve lane ('no
+    linux-headers for flavour x64v3 in the APT index', run 42899558906).
     """
     entry = _packages()['linux-image-profile']
     for key, variant in _variants('linux-image-profile').items():
         profile, flav = key.split('-', 1)
-        glob = variant['deb-glob']
+        glob = text(variant['deb-glob'])
         assert glob == (
             f'linux-image-common-{profile}-{flav}_* '
             f'linux-headers-{profile}-{flav}_*'
@@ -239,17 +284,18 @@ def test_each_kernel_variant_publishes_its_headers() -> None:
     # The entry-level glob covers the same two families, never a bare
     # linux-headers-<KVER> that would collide with sibling profiles in the
     # pool (the run-41794169405 class).
-    entry_glob = entry['deb-glob']
+    entry_glob = text(entry['deb-glob'])
     assert 'linux-image-common-*' in entry_glob
     assert 'linux-headers-*' in entry_glob
-    assert 'HEADERS_GLOB_VER' in entry['env'], (
+    assert 'HEADERS_GLOB_VER' in mapping(entry['env']), (
         'the bump env must stay: the deb-glob is not a hash input, without it '
         'the cached headers-less entries are served forever'
     )
-    build = entry['build']
-    assert \
-        "HEADERS_DEB=$(find /tmp -maxdepth 1 -name 'linux-headers-*.deb'" \
-        in build, 'the silent republish block moved — the glob relies on it'
+    build = text(entry['build'])
+    assert (
+        "HEADERS_DEB=$(find /tmp -maxdepth 1 -name 'linux-headers-*.deb'"
+        in build
+    ), 'the silent republish block moved — the glob relies on it'
 
 
 def test_each_arm_module_follows_its_kernel() -> None:
@@ -263,11 +309,13 @@ def test_each_arm_module_follows_its_kernel() -> None:
     """
     devices = _variants('linux-modules-arm-device')
     for old in ('rpi3', 'rpi4', 'rk3399', 'h616', 'imx8m', 'mt8183', 'rk3566'):
-        assert devices[old]['deps'] == ['linux-image-ia-armv8.0'], old
-        assert devices[old]['env'] == {'KERNEL_SUFFIX': '-ia-armv8.0'}, old
+        assert _deps(devices[old]) == ['linux-image-ia-armv8.0'], old
+        assert mapping(devices[old]['env']) == {
+            'KERNEL_SUFFIX': '-ia-armv8.0'
+        }, old
     for recent in ('rpi5', 'rk3588'):
-        assert devices[recent]['deps'] == ['linux-image-ia-armv8.2-lse'], recent
-        assert devices[recent]['env'] == {
+        assert _deps(devices[recent]) == ['linux-image-ia-armv8.2-lse'], recent
+        assert mapping(devices[recent]['env']) == {
             'KERNEL_SUFFIX': '-ia-armv8.2-lse'
         }, recent
     # The kernel entries never name a device.
@@ -298,10 +346,10 @@ def test_every_arm_family_has_a_variant_and_a_fragment() -> None:
     for device in devices:
         overlay = overlays / device
         assert overlay.is_file(), device
-        text = overlay.read_text()
-        assert 'CONFIG_' in text, f'{device}: fragment carries no config'
+        fragment = overlay.read_text()
+        assert 'CONFIG_' in fragment, f'{device}: fragment carries no config'
         # The built-in SoC platform core is stated in every fragment.
-        assert re.search(r'^CONFIG_ARCH_\w+=y', text, re.M), device
+        assert re.search(r'^CONFIG_ARCH_\w+=y', fragment, re.M), device
 
 
 def test_there_is_no_unsigned_twin_anymore() -> None:
@@ -310,19 +358,16 @@ def test_there_is_no_unsigned_twin_anymore() -> None:
     assert not any('-nosign' in k for k in variants)
     # The enforcement is decided at install (module.sig_enforce=1 karg), so the
     # kernel itself is built without MODULE_SIG_FORCE.
-    assert (
-        _packages()['linux-image-profile']['env']['KERNEL_SIGNING_ENFORCE'] ==
-        'no'
-    )
+    entry = _packages()['linux-image-profile']
+    assert text(mapping(entry['env'])['KERNEL_SIGNING_ENFORCE']) == 'no'
     assert all(
-        'unsigned-kernel' not in (v.get('when') or {})
-        for v in variants.values()
+        'unsigned-kernel' not in _when(variant) for variant in variants.values()
     )
 
 
 def test_kernel_build_provides_the_signed_names() -> None:
     """The profile kernel Provides the names images and modules install by."""
-    build = _packages()['linux-image-profile']['build']
+    build = text(_packages()['linux-image-profile']['build'])
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}' in build
     assert 'OTHER_PKG' not in build
     assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in build
@@ -343,18 +388,18 @@ def test_the_installer_carries_the_enforcement_switch() -> None:
 def test_the_boot_manifest_has_no_nosign_category_suffix() -> None:
     """The categories choose enforcement via kargs, not by kernel package."""
     tests = MANIFEST.parents[1] / 'tests.yml'
-    text = tests.read_text()
-    assert 'kargs: ["module.sig_enforce=1"]' in text
-    assert '-nosign' not in text
+    content = tests.read_text()
+    assert 'kargs: ["module.sig_enforce=1"]' in content
+    assert '-nosign' not in content
     assert all(
-        'unsigned-kernel' not in str(v.get('when') or {})
-        for v in _variants('linux-image-profile').values()
+        'unsigned-kernel' not in _when(variant)
+        for variant in _variants('linux-image-profile').values()
     )
 
 
 def test_unsigned_kernel_provides_the_signed_name_for_the_modules() -> None:
     """The profile kernel Provides the names the modules install by."""
-    build = _packages()['linux-image-profile']['build']
+    build = text(_packages()['linux-image-profile']['build'])
     assert 'linux-image-minimal${KERNEL_SUFFIX:-}' in build
     assert 'KERNEL_PKG="linux-image${KERNEL_SUFFIX}"' in build
     assert 'OTHER_PKG' not in build
@@ -367,17 +412,17 @@ def test_images_build_on_the_shared_base() -> None:
     assert 'FROM debian:trixie' in base
     assert 'KERNEL_SUFFIX' not in base
     for name in ('Containerfile', ):
-        text = (root / name).read_text()
-        assert 'FROM ${BASE_IMAGE}' in text, name
-        assert 'FROM debian:trixie' not in text, name
-        suffix = text.index('ARG KERNEL_SUFFIX')
-        assert text.index(
+        content = (root / name).read_text()
+        assert 'FROM ${BASE_IMAGE}' in content, name
+        assert 'FROM debian:trixie' not in content, name
+        suffix = content.index('ARG KERNEL_SUFFIX')
+        assert content.index(
             '        linux-image-${KERNEL_VARIANT}'
         ) > suffix, name
-        assert 'bootcpreinstall' not in text, name
+        assert 'bootcpreinstall' not in content, name
 
 
-def _expand(arch: str) -> list[dict[str, Any]]:
+def _expand(arch: str) -> list[dict[str, YamlValue]]:
     """Expand the manifest variants with the shared ``expand.jq`` filter.
 
     Args:
@@ -388,7 +433,7 @@ def _expand(arch: str) -> list[dict[str, Any]]:
     """
     assert shutil.which('jq'), 'jq is required to expand the manifest'
     ci_repo = Path(os.environ.get('CI_REPO', str(MANIFEST.parents[2] / '.ci')))
-    data = yaml.safe_load(MANIFEST.read_text())
+    data = load_yaml(MANIFEST.read_text())
     done = subprocess.run(
         ['jq', '-c', '-f',
          str(ci_repo / 'manifest-expand' / 'expand.jq')],
@@ -398,7 +443,8 @@ def _expand(arch: str) -> list[dict[str, Any]]:
         text=True,
         check=True,
     )
-    return cast(list[dict[str, Any]], json.loads(done.stdout)['packages'])
+    expanded = mapping(load_json(done.stdout))
+    return [mapping(entry) for entry in sequence(expanded['packages'])]
 
 
 def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
@@ -407,15 +453,17 @@ def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
     GÉNÉRIQUE = POUBELLE (owner 05/11 19:2x): no generic variant anywhere —
     the arm64 leg carries NO gpu userspace build at all.
     """
-    amd64 = {p['name']: p for p in _expand('amd64')}
-    arm64 = {p['name'] for p in _expand('arm64')}
+    amd64 = {text(p['name']): p for p in _expand('amd64')}
+    arm64 = {text(p['name']) for p in _expand('arm64')}
     for profile in ('gaming', 'ia'):
         for level in ('x64v1', 'x64v2', 'x64v3', 'x64v4'):
             entry = amd64[f'gpu-userspace-{profile}-{level}']
-            assert entry['env']['GPU_PROFILE'] == profile
-            assert entry['env']['GPU_LEVEL'] == level
-            assert entry['env']['GPU_VARIANT'] == f'{profile}-{level}'
-            assert 'gpu-userspace' in entry['sources']
+            env = mapping(entry['env'])
+            assert text(env['GPU_PROFILE']) == profile
+            assert text(env['GPU_LEVEL']) == level
+            assert text(env['GPU_VARIANT']) == f'{profile}-{level}'
+            sources = [text(src) for src in sequence(entry['sources'])]
+            assert 'gpu-userspace' in sources
         assert not any(
             name.startswith(f'gpu-userspace-{profile}') for name in arm64
         ), profile
@@ -424,7 +472,7 @@ def test_gpu_userspace_expands_to_both_profiles_at_every_level() -> None:
 
 def test_gpu_userspace_lists_no_vendor_and_no_fixed_march() -> None:
     """Drivers stay on auto and the CPU level comes from the variable."""
-    build = _packages()['gpu-userspace']['build']
+    build = text(_packages()['gpu-userspace']['build'])
     code = '\n'.join(
         ln for ln in build.splitlines() if not ln.lstrip().startswith('#')
     )
@@ -439,15 +487,15 @@ def test_gpu_userspace_lists_no_vendor_and_no_fixed_march() -> None:
 def test_gpu_module_sets_expand_to_the_full_flavour_matrix() -> None:
     """FUSION (owner 05/11 19:2x + 19:3x): one merged set per (set, flavour).
 
-    gpu-ia and gpu-gaming are fused modules-only builds over the profile
-    kernel (amdgpu per the DC pin, i915/xe — and the NVIDIA OPEN modules on
-    amd64, inside the same deb). The -nvidia variants are the loader-policy
-    debs on top of their sibling fused set. AMD64-ONLY matrix (owner 09/11):
-    no dGPU exists on ARM — the arm64 expansion carries NO gpu deb at all
-    (the rpi/rk/mt8183 device modules stay).
+    gpu-ia and gpu-gaming are fused modules-only builds over the profile kernel
+    (amdgpu per the DC pin, i915/xe — and the NVIDIA OPEN modules on amd64,
+    inside the same deb). The -nvidia variants are the loader-policy debs on top
+    of their sibling fused set. AMD64-ONLY matrix (owner 09/11): no dGPU exists
+    on ARM — the arm64 expansion carries NO gpu deb at all (the rpi/rk/mt8183
+    device modules stay).
     """
-    expanded = {p['name'] for p in _expand('amd64')}
-    arm64 = {p['name'] for p in _expand_arm64()}
+    expanded = {text(p['name']) for p in _expand('amd64')}
+    arm64 = {text(p['name']) for p in _expand_arm64()}
     flavours = ('x64v1', 'x64v2', 'x64v3', 'x64v4')
     for sett in ('ia', 'gaming'):
         for flavour in flavours:
@@ -457,22 +505,23 @@ def test_gpu_module_sets_expand_to_the_full_flavour_matrix() -> None:
     # ARM64 GPU ABSENCE (owner 09/11): not one gpu package survives the arm64
     # expansion — set, loader, NVIDIA loader all absent.
     assert not {n for n in arm64 if n.startswith('gpu-')}
-    amd64 = _packages()
-    set_entry = amd64['linux-modules-gpu']
-    assert set_entry['variant-env'] == 'GPU_VARIANT'
-    assert set_entry['sources'][1] == 'kernel-src/modules/gpu'
-    assert set_entry['sources'][2] == 'nvidia'
-    assert set_entry['deb-glob'] == 'gpu-{variant}_*'
-    variants = amd64['linux-modules-gpu']['variants']
+    set_entry = _packages()['linux-modules-gpu']
+    assert text(set_entry['variant-env']) == 'GPU_VARIANT'
+    sources = [text(src) for src in sequence(set_entry['sources'])]
+    assert sources[1] == 'kernel-src/modules/gpu'
+    assert sources[2] == 'nvidia'
+    assert text(set_entry['deb-glob']) == 'gpu-{variant}_*'
+    variants = _variants('linux-modules-gpu')
     for sett in ('ia', 'gaming'):
         for flavour in flavours:
-            assert variants[f'{sett}-{flavour}']['deps'] == [
-                f'linux-image-ia-{flavour}'
-            ], (sett, flavour)
-            assert variants[f'{sett}-{flavour}']['env']['GPU_SET'] == sett
-            assert variants[f'{sett}-{flavour}']['env']['GPU_FLAV'] == flavour
+            variant = variants[f'{sett}-{flavour}']
+            assert _deps(variant) == [f'linux-image-ia-{flavour}'
+                                      ], (sett, flavour)
+            env = mapping(variant['env'])
+            assert text(env['GPU_SET']) == sett
+            assert text(env['GPU_FLAV']) == flavour
     for flavour in flavours:
-        assert variants[f'ia-nvidia-{flavour}']['deps'] == [
+        assert _deps(variants[f'ia-nvidia-{flavour}']) == [
             f'linux-image-ia-{flavour}',
             f'gpu-ia-{flavour}',
         ]
@@ -480,13 +529,31 @@ def test_gpu_module_sets_expand_to_the_full_flavour_matrix() -> None:
         assert name not in arm64
 
 
-def _expand_arm64() -> list[dict[str, Any]]:
+def _expand_arm64() -> list[dict[str, YamlValue]]:
     """Expand the manifest for arm64 (the sibling helper is amd64-bound).
 
     Returns:
         The resolved package entry dicts.
     """
     return _expand('arm64')
+
+
+def _gpu_set_text(sub: str) -> str:
+    """The concatenated .cfg text of one GPU module-set directory.
+
+    Args:
+        sub: the set subdirectory ('ia' or 'gaming').
+
+    Returns:
+        The newline-joined text of every .cfg file, sorted by name.
+    """
+    mod = (
+        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modules' /
+        'gpu'
+    )
+    return '\n'.join(
+        p.read_text(encoding='utf-8') for p in sorted((mod / sub).glob('*.cfg'))
+    )
 
 
 def test_gpu_module_set_overlays_pin_their_profile() -> None:
@@ -498,31 +565,9 @@ def test_gpu_module_set_overlays_pin_their_profile() -> None:
     tree — amdgpu/Kconfig selects the DRM_DISPLAY_* helpers directly, and
     the FULL-SET rewrite dropped them (asserting them would re-introduce
     dead symbols the kconfig gate would reject).
-
-    Returns:
-        None. Asserts the set overlays pin their profile shape.
     """
-    mod = (
-        REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src' / 'modules' /
-        'gpu'
-    )
-
-    def _txt(sub: str) -> str:
-        """The concatenated .cfg text of one GPU module-set directory.
-
-        Args:
-            sub: the set subdirectory ('ia' or 'gaming').
-
-        Returns:
-            The newline-joined text of every .cfg file, sorted by name.
-        """
-        return '\n'.join(
-            p.read_text(encoding='utf-8')
-            for p in sorted((mod / sub).glob('*.cfg'))
-        )
-
-    ia = _txt('ia')
-    gaming = _txt('gaming')
+    ia = _gpu_set_text('ia')
+    gaming = _gpu_set_text('gaming')
     assert '# CONFIG_DRM_AMD_DC is not set' in ia
     assert 'CONFIG_HSA_AMD=y' in ia
     assert 'CONFIG_HSA_AMD_SVM=y' in ia
@@ -560,7 +605,7 @@ def test_gpu_module_sets_ship_their_loader_policy() -> None:
     gaming_nv = (conf_dir / 'dc-gpu-gaming-nvidia.conf').read_text()
     assert 'blacklist nouveau' in gaming_nv
     assert 'options nvidia-drm modeset=1' in gaming_nv
-    build = _packages()['linux-modules-gpu']['build']
+    build = text(_packages()['linux-modules-gpu']['build'])
     assert 'cp "${CONF_DIR}/dc-gpu-${GPU_SET}.conf"' in build.replace(
         "'\"", '"'
     )
@@ -584,7 +629,7 @@ def test_gpu_module_sets_own_the_kernel_paths_once() -> None:
         'Conflicts: {{ CONFLICTS }}'
     ):
         assert field in control, field
-    build = _packages()['linux-modules-gpu']['build']
+    build = text(_packages()['linux-modules-gpu']['build'])
     assert 'REPLACES="linux-image${SEED_SUFFIX} (= ${BUILT_VER})"' in build
     assert 'gpu-${OTHER}-${GPU_FLAVS}' in build
     # The profile build is proved in the build: DC pin greps the final config.
@@ -598,7 +643,8 @@ def _podman_build() -> str:
     Returns:
         The non-comment lines of the podman entry ``build`` script.
     """
-    lines = _packages()['podman']['build'].splitlines()
+    build = text(_packages()['podman']['build'])
+    lines = build.splitlines()
     return '\n'.join(ln for ln in lines if not ln.lstrip().startswith('#'))
 
 
@@ -628,12 +674,13 @@ def test_bootupd_depends_on_efibootmgr() -> None:
     """Bootupd execs ``efibootmgr``; the deb must pull it on every arch.
 
     The amd64 image installed no ``efibootmgr`` (only the arm64 branch of the
-    Containerfile did), so ``bootc install`` aborted at the bootloader step
-    with ``Clearing EFI boot entries ... No such file or directory``.  The
-    dependency belongs to the package that runs the binary.
+    Containerfile did), so ``bootc install`` aborted at the bootloader step with
+    ``Clearing EFI boot entries ... No such file or directory``.  The dependency
+    belongs to the package that runs the binary.
     """
-    lines = _packages()['bootupd']['build'].splitlines()
-    build = [ln for ln in lines if not ln.lstrip().startswith('#')]
-    deps = [ln for ln in build if ln.lstrip().startswith('DEPS=')]
+    build = text(_packages()['bootupd']['build'])
+    lines = build.splitlines()
+    kept = [ln for ln in lines if not ln.lstrip().startswith('#')]
+    deps = [ln for ln in kept if ln.lstrip().startswith('DEPS=')]
     assert len(deps) == 1
     assert 'efibootmgr' in deps[0]

@@ -89,7 +89,8 @@ admission: $(VBIN)/python
 		'pydoclint>=0.9.1' \
 		'bandit>=1.9.4' \
 		'pytest>=8' \
-		'pyyaml>=6'
+		'pyyaml>=6' \
+		'types-PyYAML>=6'
 
 # No-op once the toolchain is provisioned (fast path for every py-using target).
 py-ready:
@@ -105,12 +106,12 @@ check: check-py check-shell check-containerfile check-yaml check-shared
 
 check-py: py-ready
 	$(VBIN)/yapf --diff --recursive $(PYTHON_SRCS) $(PYTHON_TESTS)
-	$(VBIN)/docformatter --check --diff --recursive $(PYTHON_SRCS)
+	$(VBIN)/docformatter --check --diff --recursive $(PYTHON_SRCS) $(PYTHON_TESTS)
 	$(VBIN)/ruff check $(PYTHON_SRCS) $(PYTHON_TESTS)
-	$(VBIN)/mypy --explicit-package-bases $(PYTHON_SRCS)
-	$(VBIN)/basedpyright $(PYTHON_SRCS)
+	$(VBIN)/mypy --explicit-package-bases $(PYTHON_SRCS) $(PYTHON_TESTS)
+	$(VBIN)/basedpyright $(PYTHON_SRCS) $(PYTHON_TESTS)
 	$(VBIN)/pydoclint $(PYTHON_SRCS) $(PYTHON_TESTS)
-	$(VBIN)/bandit -q -r $(PYTHON_SRCS) --severity-level medium
+	$(VBIN)/bandit -q -r $(PYTHON_SRCS) $(PYTHON_TESTS) --severity-level medium
 
 check-shell:
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found — apt install shellcheck" >&2; exit 1; }
@@ -180,9 +181,9 @@ format: format-python format-shell
 # Auto-format the Python code (yapf + docformatter + ruff --fix).
 # Mirrors the reference `format` target (without the frontend half).
 format-python: py-ready
-	$(VBIN)/ruff check --fix --exit-zero $(PYTHON_SRCS)
-	$(VBIN)/yapf --in-place --recursive $(PYTHON_SRCS)
-	$(VBIN)/docformatter --in-place --recursive $(PYTHON_SRCS) || [ $$? -eq 3 ]
+	$(VBIN)/ruff check --fix --exit-zero $(PYTHON_SRCS) $(PYTHON_TESTS)
+	$(VBIN)/yapf --in-place --recursive $(PYTHON_SRCS) $(PYTHON_TESTS)
+	$(VBIN)/docformatter --in-place --recursive $(PYTHON_SRCS) $(PYTHON_TESTS) || [ $$? -eq 3 ]
 
 format-shell:
 	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not found — apt install shfmt" >&2; exit 1; }

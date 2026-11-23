@@ -6,8 +6,9 @@ the vendored GUI (no tty wizard, no dialog outside the flow), and no personal
 value may be tracked in the shipped installer recipe.
 """
 
-import json
 from pathlib import Path
+
+from tests.support.documents import load_json, mapping
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = (ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc-installer-src')
@@ -55,9 +56,10 @@ def test_first_boot_steps_are_pages_in_the_flow() -> None:
         'BootcDefaultSystem', 'BootcDefaultUsers', 'BootcDefaultGpuSecurity'
     ):
         assert default in builder
-    recipe = json.loads(RECIPE.read_text())
+    recipe = mapping(load_json(RECIPE.read_text()))
+    steps = mapping(recipe['steps'])
     for step in ('user', 'system', 'gpu_security'):
-        assert recipe['steps'][step] == {'template': step}
+        assert steps[step] == {'template': step}
     gresource = (INSTALLER / 'bootc-installer.gresource.xml.patch').read_text()
     for page in ('default-system.ui', 'default-gpu-security.ui'):
         assert page in gresource

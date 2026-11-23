@@ -1,4 +1,5 @@
 """Live ISO installer session must force the pixman renderer without a GPU."""
+
 import re
 from pathlib import Path
 

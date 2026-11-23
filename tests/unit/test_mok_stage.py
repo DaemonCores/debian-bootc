@@ -58,9 +58,8 @@ def sandbox(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def run(
-    root: Path, password: str = 'longenough\n'
-) -> subprocess.CompletedProcess:
+def run(root: Path,
+        password: str = 'longenough\n') -> subprocess.CompletedProcess[str]:
     """Run the sandboxed script with the stubs first on PATH.
 
     Args:

@@ -1,12 +1,14 @@
 """Unit tests for gen-recipe.py."""
 
-import importlib.util
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
+from typing import Protocol, runtime_checkable
+
+from tests.support.documents import YamlValue, load_json, mapping, sequence
+from tests.support.modules import load_module
 
 SCRIPT = (
     Path(__file__).resolve().parents[2] / "src" / "buildisopreinstall" / "usr" /
@@ -14,18 +16,125 @@ SCRIPT = (
 )
 
 
-def _load() -> ModuleType:
+@runtime_checkable
+class _Script(Protocol):
+    """Surface of gen-recipe.py used by the tests."""
+
+    def _build_images(
+        self,
+        root: str,
+        registry: str,
+        distro: str,
+        arch: str = ''
+    ) -> list[dict[str, YamlValue]]:
+        """List the image entries of one build context.
+
+        Args:
+            root: Directory holding the Containerfiles.
+            registry: Image registry prefix.
+            distro: Distribution display name.
+            arch: Architecture filter, empty for every architecture.
+
+        Returns:
+            One entry per Containerfile and architecture.
+        """
+        ...
+
+    def read_label(self, path: str, label: str) -> str:
+        """Read one Containerfile label.
+
+        Args:
+            path: Containerfile path.
+            label: Label key.
+
+        Returns:
+            The label value, empty when the file has no such label.
+        """
+        ...
+
+
+class _Module(_Script):
+    """Test-facing facade over the loaded script.
+
+    The builder is a private helper of the script; the facade republishes it
+    under a public name, so the tests call it like any other API and the private
+    access stays inside one subclass of the protocol.
+    """
+
+    def __init__(self, script: _Script) -> None:
+        """Store the loaded script.
+
+        Args:
+            script: The executed gen-recipe.py module.
+        """
+        self._script = script
+
+    def _build_images(
+        self,
+        root: str,
+        registry: str,
+        distro: str,
+        arch: str = ''
+    ) -> list[dict[str, YamlValue]]:
+        """Forward to the script builder.
+
+        Args:
+            root: Directory holding the Containerfiles.
+            registry: Image registry prefix.
+            distro: Distribution display name.
+            arch: Architecture filter, empty for every architecture.
+
+        Returns:
+            One entry per Containerfile and architecture.
+        """
+        return self._script._build_images(root, registry, distro, arch)
+
+    def read_label(self, path: str, label: str) -> str:
+        """Forward to the script reader.
+
+        Args:
+            path: Containerfile path.
+            label: Label key.
+
+        Returns:
+            The label value, empty when the file has no such label.
+        """
+        return self._script.read_label(path, label)
+
+    def build_images(
+        self,
+        root: str,
+        registry: str,
+        distro: str,
+        arch: str = ''
+    ) -> list[dict[str, YamlValue]]:
+        """List the image entries of one build context.
+
+        Args:
+            root: Directory holding the Containerfiles.
+            registry: Image registry prefix.
+            distro: Distribution display name.
+            arch: Architecture filter, empty for every architecture.
+
+        Returns:
+            One entry per Containerfile and architecture.
+        """
+        return self._build_images(root, registry, distro, arch)
+
+
+def _load() -> _Module:
     """Import gen-recipe.py (hyphenated name) as a module.
 
     Returns:
         The freshly executed ``gen-recipe`` module.
+
+    Raises:
+        TypeError: when the module lacks its test surface.
     """
-    spec = importlib.util.spec_from_file_location("gen_recipe", SCRIPT)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    module = load_module('gen_recipe', SCRIPT)
+    if not isinstance(module, _Script):
+        raise TypeError('gen-recipe.py lacks its test surface')
+    return _Module(module)
 
 
 def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
@@ -39,7 +148,7 @@ def test_build_images_covers_variants_and_arches(tmp_path: Path) -> None:
         "Containerfile.base"
     ):
         (tmp_path / name).write_text("FROM scratch\n", encoding="utf-8")
-    images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
+    images = _load().build_images(str(tmp_path), "reg/x", "Deb")
     assert [i["imgref"] for i in images] == [
         "reg/x:latest_amd64",
         "reg/x:latest_arm64",
@@ -61,7 +170,7 @@ def test_build_images_bootloader_is_install_time_auto(tmp_path: Path) -> None:
         tmp_path: Scratch directory holding the fake Containerfiles.
     """
     (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
-    images = _load()._build_images(str(tmp_path), "reg/x", "Deb")
+    images = _load().build_images(str(tmp_path), "reg/x", "Deb")
     assert images
     assert all(i["bootloader"] == "auto" for i in images)
 
@@ -92,10 +201,10 @@ def test_main_updates_only_images_fields(tmp_path: Path) -> None:
             **os.environ, "IMAGE_REGISTRY": "reg/x"
         },
     )
-    data = json.loads(recipe.read_text(encoding="utf-8"))
+    data = mapping(load_json(recipe.read_text(encoding="utf-8")))
     assert data["branding"] == "keep"
     assert data["imgref"] == "reg/x:latest_amd64"
-    assert len(data["images"]) == 2
+    assert len(sequence(data["images"])) == 2
 
 
 def test_main_writes_the_catalog_the_installer_reads(tmp_path: Path) -> None:
@@ -127,8 +236,10 @@ def test_main_writes_the_catalog_the_installer_reads(tmp_path: Path) -> None:
             **os.environ, "IMAGE_REGISTRY": "reg/x"
         },
     )
-    catalog = json.loads((tmp_path / "images.json").read_text(encoding="utf-8"))
-    assert catalog == json.loads(recipe.read_text(encoding="utf-8"))
+    catalog = mapping(
+        load_json((tmp_path / "images.json").read_text(encoding="utf-8"))
+    )
+    assert catalog == mapping(load_json(recipe.read_text(encoding="utf-8")))
     assert catalog["fallback_flatpaks"] == []
     assert catalog["images"]
 
@@ -146,7 +257,7 @@ def test_tracked_recipe_is_a_static_template_only() -> None:
         Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' /
         'etc' / 'bootc-installer' / 'recipe.json'
     )
-    data = json.loads(tracked.read_text(encoding='utf-8'))
+    data = mapping(load_json(tracked.read_text(encoding='utf-8')))
     assert data['images'] == [], data['images']
     assert 'imgref' not in data
     assert data.get('distro_name'), 'static template fields must stay'
@@ -169,7 +280,7 @@ def test_build_images_lists_no_gpu_twins(tmp_path: Path) -> None:
     (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
     (tmp_path /
      "Containerfile.vendor").write_text("FROM scratch\n", encoding="utf-8")
-    images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "amd64")
+    images = _load().build_images(str(tmp_path), "reg/x", "Deb", "amd64")
     assert [i["imgref"] for i in images] == [
         "reg/x:latest_amd64",
         "reg/x:vendor_amd64",
@@ -184,7 +295,7 @@ def test_build_images_filters_on_arch(tmp_path: Path) -> None:
         tmp_path: Scratch directory holding the fake Containerfile.
     """
     (tmp_path / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
-    images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "arm64")
+    images = _load().build_images(str(tmp_path), "reg/x", "Deb", "arm64")
     assert [i["imgref"] for i in images] == ["reg/x:latest_arm64"]
 
 
@@ -200,13 +311,13 @@ def test_arches_label_limits_the_image(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     module = _load()
-    both = module._build_images(str(tmp_path), "reg/x", "Deb")
+    both = module.build_images(str(tmp_path), "reg/x", "Deb")
     assert [i["imgref"] for i in both] == [
         "reg/x:latest_amd64",
         "reg/x:latest_arm64",
         "reg/x:vendor_amd64",
     ]
-    arm = module._build_images(str(tmp_path), "reg/x", "Deb", "arm64")
+    arm = module.build_images(str(tmp_path), "reg/x", "Deb", "arm64")
     assert [i["imgref"] for i in arm] == ["reg/x:latest_arm64"]
 
 
@@ -221,7 +332,7 @@ def test_eula_label_marks_only_that_image(tmp_path: Path) -> None:
         'FROM scratch\nLABEL org.daemoncores.requires-eula="vendor"\n',
         encoding="utf-8",
     )
-    images = _load()._build_images(str(tmp_path), "reg/x", "Deb", "amd64")
+    images = _load().build_images(str(tmp_path), "reg/x", "Deb", "amd64")
     by_ref = {str(i["imgref"]): i for i in images}
     assert by_ref["reg/x:vendor_amd64"]["eula"] == "vendor"
     assert "eula" not in by_ref["reg/x:latest_amd64"]

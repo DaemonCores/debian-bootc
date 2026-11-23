@@ -4,10 +4,11 @@ The script writes under ``$INSTALL_ROOT`` so it can run outside an image.
 """
 
 import base64
-import json
 import os
 import subprocess
 from pathlib import Path
+
+from tests.support.documents import load_json, mapping, sequence
 
 SCRIPT = (
     Path(__file__).resolve().parents[2] / 'src' / 'basepostinstall' / 'usr' /
@@ -49,9 +50,14 @@ def test_policy_requires_the_signature_for_the_image(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     key = tmp_path / 'etc/pki/containers/image-signing.pub'
     assert key.read_text() == PEM
-    policy = json.loads((tmp_path / 'etc/containers/policy.json').read_text())
+    policy = mapping(
+        load_json((tmp_path / 'etc/containers/policy.json').read_text())
+    )
     assert policy['default'] == [{'type': 'insecureAcceptAnything'}]
-    rule, = policy['transports']['docker'][IMAGE]
+    docker = mapping(mapping(policy['transports'])['docker'])
+    rules = sequence(docker[IMAGE])
+    assert len(rules) == 1
+    rule = mapping(rules[0])
     assert rule['type'] == 'sigstoreSigned'
     assert rule['keyPath'] == '/etc/pki/containers/image-signing.pub'
     assert rule['signedIdentity'] == {'type': 'matchRepository'}

@@ -34,7 +34,7 @@ def run(
     payload: bool = True,
     derive_cmd: str = '',
     extra_env: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     """Run the real script in a sandbox.
 
     Args:
@@ -368,6 +368,56 @@ def a2o_env(tmp_path: Path) -> dict[str, str]:
     }
 
 
+STUB_DEB_PACKAGES = (
+    'libcuda1',
+    'nvidia-driver-libs',
+    'nvidia-smi',
+    'nvidia-persistenced',
+    'nvidia-opencl-icd',
+    'nvidia-vulkan-icd',
+    'firmware-nvidia-gsp',
+    'gpu-gaming-nvidia-x64v2',
+)
+STUB_DEB_VERSION = '580.95.05-1'
+
+
+def _build_stub_deb(root: Path, cache: Path, pkg: str) -> None:
+    """Build one stub amd64 .deb carrying a single shared library.
+
+    Args:
+        root: Scratch directory holding the package trees.
+        cache: Directory receiving the built .deb.
+        pkg: Package name.
+
+    Raises:
+        RuntimeError: when dpkg-deb fails to build the package.
+    """
+    tree = root / pkg
+    libdir = tree / 'usr' / 'lib' / 'x86_64-linux-gnu'
+    libdir.mkdir(parents=True)
+    (tree / 'DEBIAN').mkdir()
+    control = '\n'.join([
+        f'Package: {pkg}',
+        f'Version: {STUB_DEB_VERSION}',
+        'Architecture: amd64',
+        'Maintainer: t <t@t>',
+        f'Description: chain proof {pkg}',
+        '',
+    ])
+    stub_files = {
+        tree / 'DEBIAN' / 'control': control,
+        libdir / f'{pkg}.so.1': 'bin',
+    }
+    for path, text in stub_files.items():
+        with path.open('w', encoding='utf-8') as handle:
+            _ = handle.write(text)
+    deb = cache / f'{pkg}_{STUB_DEB_VERSION}_amd64.deb'
+    argv = ['dpkg-deb', '--build', '-Zxz', '--root-owner-group']
+    built = subprocess.run([*argv, str(tree), str(deb)], capture_output=True)
+    if built.returncode != 0:
+        raise RuntimeError(built.stderr.decode(errors='replace'))
+
+
 def a2o_debs(tmp_path: Path) -> Path:
     """Build the NVIDIA user-space and set debs of the sandbox.
 
@@ -379,34 +429,8 @@ def a2o_debs(tmp_path: Path) -> Path:
     """
     cache = tmp_path / 'apt' / 'apt'
     cache.mkdir(parents=True, exist_ok=True)
-    root = tmp_path / 'debroot'
-    for pkg in (
-        'libcuda1',
-        'nvidia-driver-libs',
-        'nvidia-smi',
-        'nvidia-persistenced',
-        'nvidia-opencl-icd',
-        'nvidia-vulkan-icd',
-        'firmware-nvidia-gsp',
-        'gpu-gaming-nvidia-x64v2',
-    ):
-        (root / pkg / 'DEBIAN').mkdir(parents=True)
-        (root / pkg / 'DEBIAN' / 'control').write_text(
-            f'Package: {pkg}\nVersion: 580.95.05-1\n'
-            'Architecture: amd64\nMaintainer: t <t@t>\n'
-            f'Description: chain proof {pkg}\n',
-            encoding='utf-8'
-        )
-        libdir = root / pkg / 'usr' / 'lib' / 'x86_64-linux-gnu'
-        libdir.mkdir(parents=True)
-        (libdir / (pkg + '.so.1')).write_text('bin', encoding='utf-8')
-        subprocess.run([
-            'dpkg-deb', '--build', '-Zxz', '--root-owner-group',
-            str(root / pkg),
-            str(cache / (pkg + '_580.95.05-1_amd64.deb'))
-        ],
-                       check=True,
-                       capture_output=True)
+    for pkg in STUB_DEB_PACKAGES:
+        _build_stub_deb(tmp_path / 'debroot', cache, pkg)
     return cache
 
 

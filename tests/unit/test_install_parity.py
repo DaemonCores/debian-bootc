@@ -7,12 +7,17 @@ helper that applies it on the installed system. One assertion per step; the
 wizard itself must be gone.
 """
 
-import json
-import types
 from pathlib import Path
-from typing import Any, cast
+from typing import Protocol, runtime_checkable
 
-import yaml
+from tests.support.documents import (
+    load_json,
+    load_yaml,
+    mapping,
+    sequence,
+    text,
+)
+from tests.support.modules import load_module
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER = ROOT / "workflows" / "bootc-debs-builder"
@@ -30,6 +35,65 @@ WIZARD_SCRIPT = (
 )
 
 
+@runtime_checkable
+class _SystemScript(Protocol):
+    """Surface of ``system_config.py`` used by the tests."""
+
+    def valid_hostname(self, hostname: str) -> bool:
+        """Tell whether a hostname is a valid RFC 1123 label.
+
+        Args:
+            hostname: Candidate hostname.
+
+        Returns:
+            True when letters, digits and inner hyphens only.
+        """
+        ...
+
+    def user_groups(self, base: list[str], sudo: bool) -> list[str]:
+        """Compute the supplementary groups of the created user.
+
+        Args:
+            base: Groups the installer already assigns.
+            sudo: Whether the user keeps the admin group.
+
+        Returns:
+            The groups to assign, without duplicates.
+        """
+        ...
+
+
+@runtime_checkable
+class _LocaleScript(Protocol):
+    """Surface of ``locale_config.py`` used by the tests."""
+
+    def valid_locale(self, locale: str) -> bool:
+        """Tell whether a string is a glibc locale name.
+
+        Args:
+            locale: Candidate locale.
+
+        Returns:
+            True for the ``language[_TERRITORY].charset`` shape.
+        """
+        ...
+
+    def valid_keyboard(
+        self, layout: str, variant: str, model: str = ...
+    ) -> bool:
+        """Tell whether the three XKB names are acceptable.
+
+        Args:
+            layout: XKB layout.
+            variant: XKB variant, empty for the layout default.
+            model: XKB model.
+
+        Returns:
+            True when every name is an XKB token.
+        """
+        ...
+
+
 def _overlay_text(overlay: Path) -> str:
     """Return the concatenated text of one source overlay.
 
@@ -45,59 +109,44 @@ def _overlay_text(overlay: Path) -> str:
     )
 
 
-def _system_config() -> types.ModuleType:
+def _system_config() -> _SystemScript:
     """Load ``system_config.py`` from the installer overlay, without GTK.
 
     Returns:
-        The module, executed without any GTK dependency.
+        The executed module, imported without any GTK dependency.
+
+    Raises:
+        TypeError: when the module lacks its test surface.
     """
-    module = types.ModuleType("system_config")
-    exec(
-        compile(
-            (INSTALLER / "utils" / "system_config.py").read_text(),
-            "system_config.py",
-            "exec",
-        ),
-        module.__dict__,
+    module = load_module(
+        "system_config", INSTALLER / "utils" / "system_config.py"
     )
+    if not isinstance(module, _SystemScript):
+        raise TypeError("system_config.py lacks its test surface")
     return module
 
 
-def _locale_config() -> types.ModuleType:
+def _locale_config() -> _LocaleScript:
     """Load ``locale_config.py`` from the installer overlay, without GTK.
 
     Returns:
-        The module, executed without any GTK dependency.
+        The executed module, imported without any GTK dependency.
+
+    Raises:
+        TypeError: when the module lacks its test surface.
     """
-    module = types.ModuleType("locale_config")
-    exec(
-        compile(
-            (INSTALLER / "utils" / "locale_config.py").read_text(),
-            "locale_config.py",
-            "exec",
-        ),
-        module.__dict__,
+    module = load_module(
+        "locale_config", INSTALLER / "utils" / "locale_config.py"
     )
+    if not isinstance(module, _LocaleScript):
+        raise TypeError("locale_config.py lacks its test surface")
     return module
-
-
-def _entry(name: str) -> dict[str, Any]:
-    """Return one ``packages.yml`` entry.
-
-    Args:
-        name: Package name.
-
-    Returns:
-        The manifest entry.
-    """
-    data = cast(dict[str, Any], yaml.safe_load(MANIFEST.read_text()))
-    return next(p for p in data["packages"] if p["name"] == name)
 
 
 def test_user_account_created_by_the_recipe() -> None:
     """The user step writes the account; fisherman keeps the creation call."""
-    recipe = json.loads(RECIPE.read_text())
-    assert recipe["steps"]["user"] == {"template": "user"}
+    recipe = mapping(load_json(RECIPE.read_text()))
+    assert mapping(recipe["steps"])["user"] == {"template": "user"}
     fisherman = _overlay_text(FISHERMAN)
     assert 'r.User.Username != ""' in fisherman
 
@@ -107,7 +156,7 @@ def test_root_password_set_by_the_installer() -> None:
     installer = _overlay_text(INSTALLER)
     assert 'recipe["rootPassword"]' in installer
     assert (
-        "8 characters" in installer or "len >= 8" in installer or (
+        "8 characters" in installer or "len &gt;= 8" in installer or (
             # valid_root_password is the concrete gate of the step
             "valid_root_password" in installer
         )
@@ -180,8 +229,11 @@ def test_keyboard_written_to_the_deployment() -> None:
 
 def test_no_wizard_remnant_is_shipped() -> None:
     """The deb entry and its sources are gone from every build file."""
-    data = cast(dict[str, Any], yaml.safe_load(MANIFEST.read_text()))
-    assert all(p["name"] != "firstboot-user-setup" for p in data["packages"])
+    data = mapping(load_yaml(MANIFEST.read_text()))
+    assert all(
+        text(mapping(entry)["name"]) != "firstboot-user-setup"
+        for entry in sequence(data["packages"])
+    )
     assert not WIZARD_DIR.exists()
     assert not WIZARD_SCRIPT.is_file()
     assert (ROOT / "Makefile").read_text().find("firstboot-user-setup") == -1

@@ -1,9 +1,12 @@
 """Language and keyboard choices of the installer ``system`` step."""
 
 import re
-import types
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Protocol, runtime_checkable
+
+from tests.support.documents import YamlValue
+from tests.support.modules import load_module
 
 BUILDER = Path(__file__
                ).resolve().parents[2] / 'workflows' / 'bootc-debs-builder'
@@ -39,21 +42,90 @@ BASE_LST = """\
 """
 
 
-def _module() -> types.ModuleType:
+@runtime_checkable
+class _Script(Protocol):
+    """Surface of ``locale_config.py`` used by the tests."""
+
+    def valid_locale(self, locale: str) -> bool:
+        """Tell whether a string is a glibc locale name.
+
+        Args:
+            locale: Candidate locale.
+
+        Returns:
+            True for the ``language[_TERRITORY].charset`` shape.
+        """
+        ...
+
+    def valid_keyboard(
+        self, layout: str, variant: str, model: str = ...
+    ) -> bool:
+        """Tell whether the three XKB names are acceptable.
+
+        Args:
+            layout: XKB layout.
+            variant: XKB variant, empty for the layout default.
+            model: XKB model.
+
+        Returns:
+            True when every name is an XKB token.
+        """
+        ...
+
+    def supported_locales(self, path: str) -> list[str]:
+        """List the UTF-8 locales the live system can generate.
+
+        Args:
+            path: glibc ``SUPPORTED`` file.
+
+        Returns:
+            The locale names, sorted.
+        """
+        ...
+
+    def keyboard_layouts(self, path: str) -> list[tuple[str, str, str]]:
+        """List the keyboard layouts and their variants.
+
+        Args:
+            path: XKB rules list.
+
+        Returns:
+            ``(layout, variant, description)`` triples, sorted.
+        """
+        ...
+
+    def apply_locale(
+        self, recipe: dict[str, YamlValue],
+        system: Mapping[str, YamlValue] | None
+    ) -> None:
+        """Merge the language and keyboard of the step into a recipe.
+
+        Args:
+            recipe: Fisherman recipe being built.
+            system: The ``system`` entry of the merged finals, or None.
+        """
+        ...
+
+
+def _load() -> _Script:
     """Load ``locale_config.py`` straight from the installer overlay.
 
     Returns:
-        The module, executed without any GTK dependency.
+        The executed module, imported without any GTK dependency.
+
+    Raises:
+        TypeError: when the module lacks its test surface.
     """
     path = INSTALLER / 'utils' / 'locale_config.py'
-    module = types.ModuleType('locale_config')
-    exec(compile(path.read_text(), path.name, 'exec'), module.__dict__)
+    module = load_module('locale_config', path)
+    if not isinstance(module, _Script):
+        raise TypeError('locale_config.py lacks its test surface')
     return module
 
 
 def test_locale_validation() -> None:
     """Only a glibc name with a charset passes."""
-    m = _module()
+    m = _load()
     for good in ('fr_FR.UTF-8', 'eo.UTF-8', 'sr_RS.UTF-8@latin', 'C.UTF-8'):
         assert m.valid_locale(good), good
     for bad in (
@@ -64,7 +136,7 @@ def test_locale_validation() -> None:
 
 def test_keyboard_validation() -> None:
     """Layout and model are XKB names, the variant may be empty."""
-    m = _module()
+    m = _load()
     assert m.valid_keyboard('fr', 'oss')
     assert m.valid_keyboard('us,fr', '')
     assert not m.valid_keyboard('', '')
@@ -79,7 +151,7 @@ def test_supported_locales_keeps_valid_utf8_entries(tmp_path: Path) -> None:
     Args:
         tmp_path: Pytest scratch directory.
     """
-    m = _module()
+    m = _load()
     listing = tmp_path / 'SUPPORTED'
     listing.write_text(SUPPORTED)
     assert m.supported_locales(str(listing)) == [
@@ -93,7 +165,7 @@ def test_missing_lists_give_no_choice(tmp_path: Path) -> None:
     Args:
         tmp_path: Pytest scratch directory.
     """
-    m = _module()
+    m = _load()
     assert m.supported_locales(str(tmp_path / 'none')) == []
     assert m.keyboard_layouts(str(tmp_path / 'none')) == []
 
@@ -104,7 +176,7 @@ def test_keyboard_layouts_join_variants_to_their_layout(tmp_path: Path) -> None:
     Args:
         tmp_path: Pytest scratch directory.
     """
-    m = _module()
+    m = _load()
     listing = tmp_path / 'base.lst'
     listing.write_text(BASE_LST)
     assert m.keyboard_layouts(str(listing)) == [
@@ -118,8 +190,8 @@ def test_keyboard_layouts_join_variants_to_their_layout(tmp_path: Path) -> None:
 
 def test_apply_locale_fills_the_recipe() -> None:
     """Locale and keyboard reach the fisherman recipe."""
-    m = _module()
-    recipe: dict[str, Any] = {}
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
     m.apply_locale(
         recipe, {
             'locale': 'fr_FR.UTF-8',
@@ -141,8 +213,8 @@ def test_apply_locale_fills_the_recipe() -> None:
 
 def test_apply_locale_ignores_missing_or_invalid_choices() -> None:
     """A skipped step or an invalid value leaves the image default."""
-    m = _module()
-    for system in (
+    m = _load()
+    choices: list[Mapping[str, YamlValue] | None] = [
         None, {}, {
             'locale': ''
         }, {
@@ -154,8 +226,9 @@ def test_apply_locale_ignores_missing_or_invalid_choices() -> None:
         }, {
             'keyboard': None
         }
-    ):
-        recipe: dict[str, Any] = {}
+    ]
+    for system in choices:
+        recipe: dict[str, YamlValue] = {}
         m.apply_locale(recipe, system)
         assert recipe == {}, system
 
@@ -192,7 +265,7 @@ def test_step_widgets_exist_in_the_template() -> None:
     """Every widget the step reads is declared in the blueprint."""
     blp = (INSTALLER / 'gtk' / 'default-system.blp').read_text()
     code = (INSTALLER / 'defaults' / 'system.py').read_text()
-    children = re.findall(r'(\w+) = Gtk\.Template\.Child\(\)', code)
+    children: list[str] = re.findall(r'(\w+) = Gtk\.Template\.Child\(\)', code)
     assert {'locale_group', 'locale_row', 'keyboard_row'} <= set(children)
     for name in children:
         assert re.search(rf'\b{name}\b', blp), name

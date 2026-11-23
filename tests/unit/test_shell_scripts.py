@@ -20,21 +20,26 @@ SBIN = (
 )
 
 STUBS = {
-    'ip':
-    """#!/bin/bash
-case "$*" in
-  "-4 addr show scope global")
-    [[ -n "${STUB_IP:-}" ]] && echo "    inet ${STUB_IP}/24 scope global eth0"
-    exit 0 ;;
-  "-o link show")
-    name=eth0
-    # STUB_RENAME_FLAG: udev renames the NIC only once "udevadm settle" ran.
-    [[ -n "${STUB_RENAME_FLAG:-}" && -e "$STUB_RENAME_FLAG" ]] && name=enp0s2
-    echo "2: $name: <BROADCAST> mtu 1500 link/ether 52:54:00:00:00:01"
-    exit 0 ;;
-esac
-exit 0
-""",
+    'ip': (
+        '#!/bin/bash\n'
+        'case "$*" in\n'
+        '  "-4 addr show scope global")\n'
+        '    [[ -n "${STUB_IP:-}" ]] && echo "  '
+        '  inet ${STUB_IP}/24 scope global eth0"\n'
+        '    exit 0 ;;\n'
+        '  "-o link show")\n'
+        '    name=eth0\n'
+        '    # STUB_RENAME_FLAG: udev renames'
+        ' the NIC only once "udevadm settle"'
+        ' ran.\n'
+        '    [[ -n "${STUB_RENAME_FLAG:-}" && -e'
+        ' "$STUB_RENAME_FLAG" ]] && name=enp0s2\n'
+        '    echo "2: $name: <BROADCAST> mtu'
+        ' 1500 link/ether 52:54:00:00:00:01"\n'
+        '    exit 0 ;;\n'
+        'esac\n'
+        'exit 0\n'
+    ),
     'udevadm':
     '#!/bin/bash\n[[ "$1" == settle && -n "${STUB_RENAME_FLAG:-}" ]] && '
     'touch "$STUB_RENAME_FLAG"\nexit 0\n',
@@ -42,22 +47,26 @@ exit 0
     '#!/bin/bash\necho node1\n',
     'timeout':
     '#!/bin/bash\nshift\nexec "$@"\n',
-    'dhclient':
-    """#!/bin/bash
-# -4 probe: write a lease when STUB_DHCP4=1; -6 probe: succeed on STUB_DHCP6=1.
-v6=0; lf=""
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -6) v6=1 ;;
-    -x) exit 0 ;;
-    -lf) lf="$2"; shift ;;
-  esac
-  shift
-done
-if [[ $v6 == 1 ]]; then [[ "${STUB_DHCP6:-0}" == 1 ]]; exit; fi
-[[ "${STUB_DHCP4:-0}" == 1 ]] || exit 1
-echo '  option domain-name "lab.example";' >"$lf"
-""",
+    'dhclient': (
+        '#!/bin/bash\n'
+        '# -4 probe: write a lease when'
+        ' STUB_DHCP4=1; -6 probe: succeed on'
+        ' STUB_DHCP6=1.\n'
+        'v6=0; lf=""\n'
+        'while [[ $# -gt 0 ]]; do\n'
+        '  case "$1" in\n'
+        '    -6) v6=1 ;;\n'
+        '    -x) exit 0 ;;\n'
+        '    -lf) lf="$2"; shift ;;\n'
+        '  esac\n'
+        '  shift\n'
+        'done\n'
+        'if [[ $v6 == 1 ]]; then [['
+        ' "${STUB_DHCP6:-0}" == 1 ]]; exit; fi\n'
+        '[[ "${STUB_DHCP4:-0}" == 1 ]] || exit 1\n'
+        "echo '  option domain-name"
+        ' "lab.example";\' >"$lf"\n'
+    ),
 }
 
 

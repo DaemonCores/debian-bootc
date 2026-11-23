@@ -15,7 +15,7 @@ SCRIPT = (
 
 def run(
     tmp_path: Path, *args: str, vendors: tuple[str, ...] = ()
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     """Run the real script with a sandbox root and fake DRM devices.
 
     Args:

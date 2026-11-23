@@ -15,9 +15,11 @@ import glob
 import runpy
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Protocol, runtime_checkable
 
 import pytest
+
+from tests.support.modules import load_module
 
 SCRIPT = (
     Path(__file__).resolve().parents[2] / 'workflows' / 'bootc-debs-builder' /
@@ -32,7 +34,19 @@ STUB_STAGE = '''def main(tree, options):
     return add_modules, modules
 '''
 
-Main = Callable[[str, dict[str, Any]], tuple[list[str], list[str]]]
+Main = Callable[[str, dict[str, list[str]]], tuple[list[str], list[str]]]
+
+
+@runtime_checkable
+class _Stage(Protocol):
+    """Surface of the patched osbuild dracut stage.
+
+    Attributes:
+        main: The stage entry point under test.
+    """
+
+    main: Main
+
 
 CI_ADD_MODULES = [
     'pollcdrom',
@@ -55,18 +69,33 @@ def patched_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Main:
 
     Returns:
         The ``main`` function of the patched stub stage.
+
+    Raises:
+        TypeError: when the patched stage exposes no ``main``.
     """
     stage = tmp_path / 'org.osbuild.dracut'
     stage.write_text(STUB_STAGE)
     real_glob = glob.glob
-    monkeypatch.setattr(
-        glob, 'glob', lambda pattern, *a, **k: [str(stage)]
-        if 'org.osbuild.dracut' in pattern else real_glob(pattern, *a, **k)
-    )
+
+    def fake_glob(pattern: str) -> list[str]:
+        """Serve the stub stage for the dracut pattern, else the real glob.
+
+        Args:
+            pattern: the glob pattern requested.
+
+        Returns:
+            The matching paths.
+        """
+        if 'org.osbuild.dracut' in pattern:
+            return [str(stage)]
+        return real_glob(pattern)
+
+    monkeypatch.setattr(glob, 'glob', fake_glob)
     runpy.run_path(str(SCRIPT))
-    namespace: dict[str, Any] = {}
-    exec(compile(stage.read_text(), str(stage), 'exec'), namespace)
-    return namespace['main']
+    module = load_module('patched_stage', stage)
+    if not isinstance(module, _Stage):
+        raise TypeError('patched stage has no main')
+    return module.main
 
 
 def _tree(root: Path, *modules: str) -> Path:

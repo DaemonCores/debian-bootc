@@ -1,10 +1,15 @@
 """Wiring of the automatic-update switch of the installer."""
 
-import json
 from pathlib import Path
-from typing import Any, cast
 
-import yaml
+from tests.support.documents import (
+    YamlValue,
+    load_json,
+    load_yaml,
+    mapping,
+    sequence,
+    text,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER = ROOT / 'workflows' / 'bootc-debs-builder'
@@ -15,7 +20,7 @@ RECIPE = (
 )
 
 
-def _entry(name: str) -> dict[str, Any]:
+def _entry(name: str) -> dict[str, YamlValue]:
     """Return one ``packages.yml`` entry.
 
     Args:
@@ -23,14 +28,21 @@ def _entry(name: str) -> dict[str, Any]:
 
     Returns:
         The manifest entry.
+
+    Raises:
+        KeyError: when no entry carries that name.
     """
-    data = cast(dict[str, Any], yaml.safe_load(MANIFEST.read_text()))
-    return next(p for p in data['packages'] if p['name'] == name)
+    data = mapping(load_yaml(MANIFEST.read_text()))
+    for entry in sequence(data['packages']):
+        item = mapping(entry)
+        if item['name'] == name:
+            return item
+    raise KeyError(name)
 
 
 def test_installer_step_is_in_the_recipe() -> None:
     """The recipe offers the autoupdate step after the encryption one."""
-    steps = json.loads(RECIPE.read_text())['steps']
+    steps = mapping(mapping(load_json(RECIPE.read_text()))['steps'])
     assert steps['autoupdate'] == {'template': 'autoupdate'}
     keys = list(steps)
     assert keys.index('autoupdate') == keys.index('encryption') + 1
@@ -55,7 +67,8 @@ def test_overlays_are_built_in_and_hashed() -> None:
     """Both source overlays are in ``sources`` and applied by the build."""
     for name in ('fisherman', 'bootc-installer'):
         entry = _entry(name)
-        assert f'{name}-src' in entry['sources']
+        sources = [text(item) for item in sequence(entry['sources'])]
+        assert f'{name}-src' in sources
         # The overlay carries ONLY source: the .patch files. No
         # patches.lock.json in git (owner 2026-11-03): the sha256 reference is
         # computed and retained by patch_guard at build, build-local.
@@ -66,7 +79,7 @@ def test_overlays_are_built_in_and_hashed() -> None:
             'deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/'
             f'{name}-src"'
         )
-        assert call in entry['build']
+        assert call in text(entry['build'])
 
 
 def test_installer_choice_reaches_the_recipe_field() -> None:

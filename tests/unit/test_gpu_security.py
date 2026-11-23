@@ -1,10 +1,12 @@
 """GPU / module-signature step of the installer."""
 
-import json
 import subprocess
-import types
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Protocol, runtime_checkable
+
+from tests.support.documents import YamlValue, load_json, mapping
+from tests.support.modules import load_module
 
 BUILDER = Path(__file__
                ).resolve().parents[2] / 'workflows' / 'bootc-debs-builder'
@@ -14,6 +16,108 @@ RECIPE = (
     Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' / 'etc' /
     'bootc-installer' / 'recipe.json'
 )
+
+
+@runtime_checkable
+class _Script(Protocol):
+    """Surface of ``gpu_config.py`` used by the tests.
+
+    Attributes:
+        HELPER: Privileged helper recording consent and usage.
+        GPU_SET_HELPER: Privileged helper staging the module set.
+    """
+
+    HELPER: str
+    GPU_SET_HELPER: str
+
+    def eula_required(
+        self, recipe: Mapping[str, YamlValue] | None, imgref: str
+    ) -> bool:
+        """Tell whether an image requires the license.
+
+        Args:
+            recipe: Installer recipe holding the catalog, or None.
+            imgref: Image reference under test.
+
+        Returns:
+            True when the catalog entry of the image carries ``eula``.
+        """
+        ...
+
+    def selected_imgref(
+        self,
+        finals: Mapping[str, YamlValue] | None,
+        recipe: Mapping[str, YamlValue] | None,
+    ) -> str:
+        """Resolve the image the installation will deploy.
+
+        Args:
+            finals: Finals of the image selection step, or None.
+            recipe: Installer recipe, or None.
+
+        Returns:
+            The selected image reference.
+        """
+        ...
+
+    def eula_accepted(self, typed: str) -> bool:
+        """Tell whether an answer accepts the license.
+
+        Args:
+            typed: Text typed by the user.
+
+        Returns:
+            True for the exact acceptance word.
+        """
+        ...
+
+    def stage_choice(
+        self,
+        usage: str,
+        accepted: bool,
+        imgref: str = '',
+        nvidia: bool = False,
+        run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    ) -> bool:
+        """Record the choice through the privileged helpers.
+
+        Args:
+            usage: Chosen GPU usage profile.
+            accepted: Whether the license was accepted.
+            imgref: Image the installation will deploy.
+            nvidia: Whether the NVIDIA modules were selected.
+            run: ``subprocess.run`` compatible callable.
+
+        Returns:
+            True when the helpers accepted the choice.
+        """
+        ...
+
+    def apply_gpu(
+        self, recipe: dict[str, YamlValue], gpu: Mapping[str, YamlValue] | None
+    ) -> None:
+        """Merge the ``gpu`` step result into a recipe.
+
+        Args:
+            recipe: Fisherman recipe being built.
+            gpu: The ``gpu`` entry of the merged finals, or None.
+        """
+        ...
+
+
+def _load() -> _Script:
+    """Load ``gpu_config.py`` straight from the installer overlay.
+
+    Returns:
+        The executed module, imported without any GTK dependency.
+
+    Raises:
+        TypeError: when the module lacks its test surface.
+    """
+    module = load_module('gpu_config', INSTALLER / 'utils' / 'gpu_config.py')
+    if not isinstance(module, _Script):
+        raise TypeError('gpu_config.py lacks its test surface')
+    return module
 
 
 def _overlay_text(overlay: Path) -> str:
@@ -29,20 +133,6 @@ def _overlay_text(overlay: Path) -> str:
         f.read_text() for f in sorted(overlay.rglob('*'))
         if f.is_file() and '__pycache__' not in f.parts
     )
-
-
-def _module() -> types.ModuleType:
-    """Load ``gpu_config.py`` straight from the installer overlay.
-
-    Returns:
-        The module, executed without any GTK dependency.
-    """
-    module = types.ModuleType('gpu_config')
-    exec(
-        compile((INSTALLER / 'utils' / 'gpu_config.py').read_text(),
-                'gpu_config.py', 'exec'), module.__dict__
-    )
-    return module
 
 
 class _Runner:
@@ -76,7 +166,7 @@ class _Runner:
         )
 
 
-CATALOG = {
+CATALOG: dict[str, YamlValue] = {
     'imgref':
     'reg/x:latest_amd64',
     'images': [
@@ -93,7 +183,7 @@ CATALOG = {
 
 def test_eula_follows_the_selected_image() -> None:
     """Only the catalog entry carrying ``eula`` asks for the license."""
-    m = _module()
+    m = _load()
     assert m.eula_required(CATALOG, 'reg/x:nvidia_amd64')
     for imgref in ('reg/x:latest_amd64', 'custom/y:1', ''):
         assert not m.eula_required(CATALOG, imgref), imgref
@@ -102,7 +192,7 @@ def test_eula_follows_the_selected_image() -> None:
 
 def test_selected_imgref_priority() -> None:
     """Custom image, then catalog selection, then the recipe default."""
-    m = _module()
+    m = _load()
     both = {'custom_image': 'c', 'selected_image': 's'}
     assert m.selected_imgref(both, CATALOG) == 'c'
     assert m.selected_imgref({'selected_image': 's'}, CATALOG) == 's'
@@ -112,7 +202,7 @@ def test_selected_imgref_priority() -> None:
 
 def test_acceptance_is_the_exact_word() -> None:
     """Anything but ACCEPT is a refusal."""
-    m = _module()
+    m = _load()
     assert m.eula_accepted('ACCEPT')
     for typed in ('', 'accept', 'ACCEPT ', 'yes'):
         assert not m.eula_accepted(typed), typed
@@ -121,11 +211,11 @@ def test_acceptance_is_the_exact_word() -> None:
 def test_stage_choice_goes_through_the_helper() -> None:
     """Consent, usage, image gate and set, all via pkexec, in order.
 
-    GPU FINAL (owner 2026-11-03): the module set rides the same step —
-    the usage resolves the open set, the nvidia toggle the -nvidia
-    variant, auto resolves to gaming (an install-time choice).
+    GPU FINAL (owner 2026-11-03): the module set rides the same step — the usage
+    resolves the open set, the nvidia toggle the -nvidia variant, auto resolves
+    to gaming (an install-time choice).
     """
-    m = _module()
+    m = _load()
     run = _Runner()
     assert m.stage_choice(
         'ia', True, 'reg/x:nvidia_amd64', nvidia=True, run=run
@@ -148,14 +238,14 @@ def test_stage_choice_goes_through_the_helper() -> None:
 
 def test_image_gate_refusal_is_reported() -> None:
     """The helper refusing the image fails the step."""
-    m = _module()
+    m = _load()
     run = _Runner(fail_on='image')
-    assert not m.stage_choice('ia', False, 'reg/x:nvidia_amd64', run)
+    assert not m.stage_choice('ia', False, 'reg/x:nvidia_amd64', run=run)
 
 
 def test_stage_choice_refusals_are_reported() -> None:
     """The helper refusing the profile, or an unknown profile, is a failure."""
-    m = _module()
+    m = _load()
     assert not m.stage_choice('ia', False, run=_Runner(fail_on='usage'))
     run = _Runner()
     assert not m.stage_choice('evil', True, run=run)
@@ -169,8 +259,8 @@ def test_apply_gpu_fills_the_recipe() -> None:
     a plain ia without consent stays gpu-ia, auto resolves to gaming and
     consent adds the -nvidia variant.
     """
-    m = _module()
-    recipe: dict[str, Any] = {}
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
     m.apply_gpu(
         recipe, {
             'usage': 'ia',
@@ -194,14 +284,14 @@ def test_apply_gpu_fills_the_recipe() -> None:
 
 
 def test_apply_gpu_nvidia_deploys_the_derived_image() -> None:
-    """With consent the install deploys <base>-nvidia, the derived ref.
+    """With consent the install deploys &lt;base&gt;-nvidia, the derived ref.
 
-    Owner 03/11: the derived-image lane — the installer deploys the image
-    the derive compose built (tags <base>-nvidia), never the clean base
-    with the proprietary user-space baked by us.
+    Owner 03/11: the derived-image lane — the installer deploys the image the
+    derive compose built (tags &lt;base&gt;-nvidia), never the clean base with
+    the proprietary user-space baked by us.
     """
-    m = _module()
-    recipe: dict[str, Any] = {}
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
     m.apply_gpu(
         recipe, {
             'usage': 'ia',
@@ -215,8 +305,8 @@ def test_apply_gpu_nvidia_deploys_the_derived_image() -> None:
 
 def test_apply_gpu_disabled_enforcement_is_written() -> None:
     """Turning enforcement off is an explicit False, not an absence."""
-    m = _module()
-    recipe: dict[str, Any] = {}
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
     m.apply_gpu(recipe, {'usage': 'auto', 'sigEnforce': False})
     assert recipe['sigEnforce'] is False
     assert recipe['nvidiaConsent'] is False
@@ -224,8 +314,8 @@ def test_apply_gpu_disabled_enforcement_is_written() -> None:
 
 def test_apply_gpu_without_step_changes_nothing() -> None:
     """A skipped step and an unknown usage leave the recipe untouched."""
-    m = _module()
-    recipe: dict[str, Any] = {}
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
     m.apply_gpu(recipe, None)
     m.apply_gpu(recipe, {'usage': 'evil'})
     assert recipe == {}
@@ -233,7 +323,7 @@ def test_apply_gpu_without_step_changes_nothing() -> None:
 
 def test_step_is_in_the_recipe() -> None:
     """The ISO recipe offers the step before the user one."""
-    steps = json.loads(RECIPE.read_text())['steps']
+    steps = mapping(mapping(load_json(RECIPE.read_text()))['steps'])
     keys = list(steps)
     assert steps['gpu_security'] == {'template': 'gpu_security'}
     assert keys.index('gpu_security') < keys.index('user')

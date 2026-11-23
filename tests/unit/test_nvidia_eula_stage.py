@@ -61,7 +61,7 @@ def run(
     *args: str,
     stdin: str = '',
     lspci: str = LSPCI_NVIDIA,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     """Run the real script against a sandbox environment.
 
     Args:

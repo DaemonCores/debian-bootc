@@ -11,22 +11,28 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, cast
 
-import yaml
+from tests.support.documents import (
+    YamlValue,
+    load_json,
+    load_yaml,
+    mapping,
+    sequence,
+    text,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ROOT / 'workflows' / 'bootc-debs-builder'
 
 
-def _packages() -> list[dict[str, Any]]:
+def _packages() -> list[dict[str, YamlValue]]:
     """Load the package entries of ``packages.yml``.
 
     Returns:
         One mapping per package of the manifest.
     """
-    data = yaml.safe_load((PACKAGES / 'packages.yml').read_text())
-    return cast(list[dict[str, Any]], data['packages'])
+    data = mapping(load_yaml((PACKAGES / 'packages.yml').read_text()))
+    return [mapping(entry) for entry in sequence(data['packages'])]
 
 
 def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
@@ -51,7 +57,7 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
         capture_output=True,
         env={'IMAGE_REGISTRY': 'ghcr.io/example/repo'},
     )
-    result = json.loads(recipe.read_text())
+    result = mapping(load_json(recipe.read_text()))
     assert result['keep'] == 1
     assert result['images']
 
@@ -67,7 +73,7 @@ def test_dockerignore_excludes_local_state() -> None:
 def test_kernel_prepare_users() -> None:
     """The module entries bootstrap through the shared kernel_prepare."""
     users = {
-        entry['name']
+        text(entry['name'])
         for entry in _packages()
         if 'kernel_prepare' in str(entry.get('build', ''))
     }
@@ -79,7 +85,7 @@ def test_kernel_prepare_users() -> None:
 def test_kernel_signing_users() -> None:
     """The kernel and the module entries sign with the same key helper."""
     users = {
-        entry['name']
+        text(entry['name'])
         for entry in _packages()
         if 'kernel_signing_setup' in str(entry.get('build', ''))
     }
@@ -91,4 +97,4 @@ def test_kernel_signing_users() -> None:
 def test_kernel_image_verifies_signing() -> None:
     """The kernel entry checks the signing options after olddefconfig."""
     kernel = next(e for e in _packages() if e['name'] == 'linux-image-profile')
-    assert 'kernel_signing_verify' in kernel['build']
+    assert 'kernel_signing_verify' in text(kernel['build'])

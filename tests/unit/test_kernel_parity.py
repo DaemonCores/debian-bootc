@@ -4,11 +4,10 @@ PATCH PARITY (owner, 2026-11-03, re-arbitrated 12:55): the canonical shared
 kernel build data (patches-shared.yml + kconfig fragments) lives in the build
 engine — DaemonCores-CI build-deb/kernel-shared — and is exported to every build
 as CI_KERNEL_SHARED. This repository carries NO copy of that data: the debian
-linux-image build (packages.yml) consumes the export, and the vanilla
-proxmox-ve-bootc kernel-pve entry consumes the same export in its own engine
-checkout (the DaemonCores-VE fork consumes the PUBLISHED proxmox-ve-bootc
-image instead — no kernel build, no engine reference in the fork).
-These tests pin the
+linux-image build (packages.yml) consumes the export, and the vanilla proxmox-
+ve-bootc kernel-pve entry consumes the same export in its own engine checkout
+(the DaemonCores-VE fork consumes the PUBLISHED proxmox-ve-bootc image instead —
+no kernel build, no engine reference in the fork). These tests pin the
 arbitrated functional set (owner 2026-11-03 12:14 revised) so a lane cannot
 silently lose it, plus the consumer contract of THIS repository.
 """
@@ -16,7 +15,7 @@ silently lose it, plus the consumer contract of THIS repository.
 import re
 from pathlib import Path
 
-import yaml
+from tests.support.documents import load_yaml, mapping, sequence, text
 
 REPO = Path(__file__).resolve().parents[2]
 KERNEL_SRC = REPO / 'workflows' / 'bootc-debs-builder' / 'kernel-src'
@@ -140,14 +139,14 @@ def test_no_carbon_copy_of_the_engine_data() -> None:
 
 
 def test_no_arch_overlay_merge() -> None:
-    """linux-image merges ONLY the base config + the arm64 page-size overlay.
+    """Linux-image merges ONLY the base config + the arm64 page-size overlay.
 
-    The fold (owner 2026-11-03): the former architecture overlays
-    (kernel-shared/modules/arm and x86_64) are merged into the base config
-    ('# arm64 built-in' / '# amd64 built-in' sections, =m options promoted =y)
-    and deleted from the engine store. packages.yml must reference neither a
-    modules/<arch> overlay nor an ARCH_OVERLAY variable anymore, and the
-    engine's base config must carry the folded sections.
+    The fold (owner 2026-11-03): the former architecture overlays (kernel-
+    shared/modules/arm and x86_64) are merged into the base config ('# arm64
+    built-in' / '# amd64 built-in' sections, =m options promoted =y) and deleted
+    from the engine store. packages.yml must reference neither a modules/<arch>
+    overlay nor an ARCH_OVERLAY variable anymore, and the engine's base config
+    must carry the folded sections.
     """
     text = PACKAGES_YML.read_text(encoding='utf-8')
     assert 'ARCH_OVERLAY' not in text
@@ -239,12 +238,12 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     """
     if not VE_MANIFEST.is_file():
         return
-    text = VE_MANIFEST.read_text(encoding='utf-8')
+    ve_text = VE_MANIFEST.read_text(encoding='utf-8')
     # The fork references NO engine export and builds NO kernel any more.
-    assert 'DC_DATA_REF=' not in text
-    assert 'dc_data_fetch' not in text
-    assert 'CI_KERNEL_SHARED' not in text
-    assert '- name: kernel-pve' not in text
+    assert 'DC_DATA_REF=' not in ve_text
+    assert 'dc_data_fetch' not in ve_text
+    assert 'CI_KERNEL_SHARED' not in ve_text
+    assert '- name: kernel-pve' not in ve_text
     # The fork consumes the vanilla base image: the base manifest FROM is
     # the published proxmox-ve-bootc image, not debian-bootc, and the fork
     # keeps deriving FROM that published image (thin twins only).
@@ -270,10 +269,11 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     # (ia compute DC off, gaming display DC on module set) — VM is kconfig
     # only (kernel-src/kconfig/thp/never.cfg THP-never fragment; VM ≭ GPU,
     # owner correction 05/11 15:1x).
-    prof = yaml.safe_load(PACKAGES_YML.read_text(encoding='utf-8'))
-    entries = {e['name']: e for e in prof['packages']}
+    prof = mapping(load_yaml(PACKAGES_YML.read_text(encoding='utf-8')))
+    packages = [mapping(item) for item in sequence(prof['packages'])]
+    entries = {text(entry['name']): entry for entry in packages}
     profile_entry = entries['linux-image-profile']
-    keys = set(profile_entry['variants'])
+    keys = set(mapping(profile_entry['variants']))
     assert len(keys) == 14
     assert {k.split('-', 1)[0] for k in keys} == {'ia', 'vm'}
     assert {k.split('-', 1)[1]
@@ -303,7 +303,7 @@ def test_ve_consumer_uses_the_engine_export() -> None:
         'thp' / 'never.cfg'
     ).read_text(encoding='utf-8')
     assert '# CONFIG_TRANSPARENT_HUGEPAGE is not set' in never
-    profile_build = profile_entry['build']
+    profile_build = text(profile_entry['build'])
     assert 'kernel-src/kconfig/thp/never.cfg' in profile_build
     assert 'gpu/vm' not in '\n'.join(
         (str(profile_entry['sources']), profile_build)
