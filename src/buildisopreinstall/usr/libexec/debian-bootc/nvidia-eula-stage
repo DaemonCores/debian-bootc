@@ -124,7 +124,7 @@ def cmd_text() -> int:
         0 on success, 1 when the text is missing.
     """
     try:
-        sys.stdout.write(eula_text())
+        _ = sys.stdout.write(eula_text())
     except OSError as err:
         fail(f"EULA text missing: {err}")
     return 0
@@ -142,20 +142,22 @@ def cmd_consent(accept: bool) -> int:
     """
     if not accept:
         try:
-            sys.stdout.write(eula_text())
+            _ = sys.stdout.write(eula_text())
         except OSError as err:
             fail(f"EULA text missing: {err}")
-        sys.stdout.write("\nType ACCEPT exactly (nothing else will do): ")
-        sys.stdout.flush()
+        _ = sys.stdout.write("\nType ACCEPT exactly (nothing else will do): ")
+        _ = sys.stdout.flush()
         if sys.stdin.readline().rstrip("\n") != ACCEPT_WORD:
             print(
-                "nvidia-eula-stage: EULA not accepted; "
-                "NVIDIA userspace stays inactive.",
+                "".join((
+                    "nvidia-eula-stage: EULA not accepted; ",
+                    "NVIDIA userspace stays inactive.",
+                )),
                 file=sys.stderr,
             )
             return 1
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text("accepted-at-install\n", encoding="utf-8")
+    _ = STATE_FILE.write_text("accepted-at-install\n", encoding="utf-8")
     return 0
 
 
@@ -171,7 +173,7 @@ def cmd_usage(usage: str) -> int:
     if usage not in USAGES:
         fail(f"{usage}: unknown usage, expected one of {', '.join(USAGES)}")
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    USAGE_FILE.write_text(f"{usage}\n", encoding="utf-8")
+    _ = USAGE_FILE.write_text(f"{usage}\n", encoding="utf-8")
     return 0
 
 
@@ -238,8 +240,10 @@ def main() -> NoReturn:
     if command == "image" and len(rest) == 1:
         sys.exit(cmd_image(rest[0]))
     fail(
-        "usage: nvidia-eula-stage {probe|text|consent [--accept]|"
-        "usage <gaming|ia|auto>|image <imgref>}"
+        "".join((
+            "usage: nvidia-eula-stage {probe|text|consent [--accept]|",
+            "usage <gaming|ia|auto>|image <imgref>}",
+        ))
     )
 
 

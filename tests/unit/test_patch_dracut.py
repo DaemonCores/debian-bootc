@@ -74,7 +74,7 @@ def patched_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Main:
         TypeError: when the patched stage exposes no ``main``.
     """
     stage = tmp_path / 'org.osbuild.dracut'
-    stage.write_text(STUB_STAGE)
+    _ = stage.write_text(STUB_STAGE)
     real_glob = glob.glob
 
     def fake_glob(pattern: str) -> list[str]:
@@ -91,7 +91,7 @@ def patched_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Main:
         return real_glob(pattern)
 
     monkeypatch.setattr(glob, 'glob', fake_glob)
-    runpy.run_path(str(SCRIPT))
+    _ = runpy.run_path(str(SCRIPT))
     module = load_module('patched_stage', stage)
     if not isinstance(module, _Stage):
         raise TypeError('patched stage has no main')
@@ -148,7 +148,7 @@ def test_live_module_missing_fails_the_build(
     """
     tree = _tree(tmp_path / 'tree', '90dmsquash-live', '90qemu')
     with pytest.raises(RuntimeError, match='debian-bootc-live missing'):
-        patched_main(
+        _ = patched_main(
             str(tree), {
                 'kernel': ['k'],
                 'add_modules': list(CI_ADD_MODULES)

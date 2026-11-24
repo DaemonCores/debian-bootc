@@ -111,8 +111,7 @@ def test_image_installs_the_project_kernel() -> None:
     # The estate rename made every name profile-aware: the deb is installed
     # through the virtual name linux-image-minimal-<profile>-<flavour>
     # (flavour resolved in the RUN shell; suffix -16k selects armv8.2-lse).
-    kernel = 'linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}' \
-             '-${_flavour}'
+    kernel = 'linux-image-${KERNEL_VARIANT}-${KERNEL_PROFILE}-${_flavour}'
     for name in ('Containerfile', ):
         content = (root / name).read_text()
         install = [
@@ -172,10 +171,8 @@ def test_nvidia_stack_is_not_a_hosted_image() -> None:
     # The derived build carries the stack instead: the userspace list of
     # gpu-set-stage.py plus the FUSED set deb pinning (the NVIDIA release
     # rides the sibling set version's +r1nv suffix), behind the EULA label.
-    stage = (
-        root / 'src/buildisopreinstall/usr/libexec/debian-bootc/'
-        'gpu-set-stage.py'
-    ).read_text()
+    script = 'src/buildisopreinstall/usr/libexec/debian-bootc/gpu-set-stage.py'
+    stage = (root / script).read_text()
     assert 'nvidia-driver-libs' in stage
     assert 'libcuda1' in stage
     assert '+r1nv' in stage

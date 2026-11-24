@@ -229,8 +229,10 @@ def download_deb(name: str, kver: str) -> Path | None:
     """
     if not kver:
         print(
-            "gpu-set-stage: no kernel version in the target, "
-            "the set deb pin is unknown",
+            "".join((
+                "gpu-set-stage: no kernel version in the target, ",
+                "the set deb pin is unknown",
+            )),
             file=sys.stderr,
         )
         return None
@@ -249,14 +251,18 @@ def download_deb(name: str, kver: str) -> Path | None:
         if got:
             if not report:
                 print(
-                    f"gpu-set-stage: WARNING unpinned candidate for {name} "
-                    f"(kernel {kver})",
+                    "".join((
+                        "gpu-set-stage: WARNING unpinned candidate for ",
+                        f"{name} (kernel {kver})",
+                    )),
                     file=sys.stderr,
                 )
             return got[-1]
     print(
-        f"gpu-set-stage: no repo candidate for {name} (kernel {kver}): "
-        f"{done.stderr.strip().splitlines()[-1:] if done.stderr else ''}",
+        "".join((
+            f"gpu-set-stage: no repo candidate for {name} (kernel {kver}): ",
+            f"{done.stderr.strip().splitlines()[-1:] if done.stderr else ''}",
+        )),
         file=sys.stderr,
     )
     return None
@@ -275,7 +281,7 @@ def copy_conf(name: str, root: Path) -> Path:
     modprobe = root / "etc" / "modprobe.d"
     modprobe.mkdir(parents=True, exist_ok=True)
     target = modprobe / CONF_OF[name]
-    shutil.copyfile(conf_path(name), target)
+    _ = shutil.copyfile(conf_path(name), target)
     return target
 
 
@@ -344,7 +350,7 @@ class State:
             value: The content to record (one line).
         """
         self.file.parent.mkdir(parents=True, exist_ok=True)
-        self.file.write_text(f"{value}\n", encoding="utf-8")
+        _ = self.file.write_text(f"{value}\n", encoding="utf-8")
 
 
 def _nvidia_containerfile(set_name: str, base: str) -> str:
@@ -479,8 +485,10 @@ def cmd_derive(set_name: str, base: str | None) -> int:
         fail(f"{set_name}: unknown GPU set")
     if not set_name.endswith("-nvidia"):
         fail(
-            f"{set_name}: only the -nvidia sets are derived images "
-            "(the open sets are debs pulled from the APT repo)"
+            "".join((
+                f"{set_name}: only the -nvidia sets are derived images ",
+                "(the open sets are debs pulled from the APT repo)",
+            ))
         )
     if DERIVE_ENGINE == "apt2ostree":
         return cmd_derive_apt2ostree(set_name, base or "")
@@ -505,8 +513,10 @@ def _parse_ostree_base(base: str) -> tuple[Path, str]:
     repo, sep, ref = rest.rpartition("#")
     if label != "ostree" or not sep or not repo or not ref:
         raise ValueError(
-            "the apt2ostree engine composes on an ostree deployment: "
-            "base = ostree:<repo>#<ref>, got " + repr(base)
+            "".join((
+                "the apt2ostree engine composes on an ostree deployment: ",
+                f"base = ostree:<repo>#<ref>, got {base!r}",
+            ))
         )
     return Path(repo), ref
 
@@ -571,7 +581,7 @@ def collected_debs(set_name: str, flavour: str | None = None) -> list[Path]:
         name = deb.name.split("_")[0]
         # A flavour-suffixed package shadows its unsuffixed cached twin (the
         # estate names carry the flavour; the cache may hold both).
-        debs.setdefault(name, deb)
+        _ = debs.setdefault(name, deb)
         if name == suffixed:
             debs[suffixed] = deb
     missing: list[str] = []
@@ -593,8 +603,10 @@ def collected_debs(set_name: str, flavour: str | None = None) -> list[Path]:
             missing.append(pkg)
     if missing:
         fail(
-            "apt2ostree derive needs the NVIDIA user-space, "
-            f"no deb for: {', '.join(missing)}"
+            "".join((
+                "apt2ostree derive needs the NVIDIA user-space, ",
+                f"no deb for: {', '.join(missing)}",
+            ))
         )
     return [debs[p] for p in (*NVIDIA_PKGS, suffixed)]
 
@@ -676,9 +688,12 @@ def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
     """
     if not APT2OSTREE_TOOL_DIR.joinpath("apt2ostree").is_dir():
         fail(
-            f"apt2ostree tool missing at {APT2OSTREE_TOOL_DIR}: it is "
-            f"fetched at live-build from {APT2OSTREE_UPSTREAM} (pin "
-            f"{APT2OSTREE_PIN[:7]}) by apt2ostree-fetch, never hosted by us"
+            "".join((
+                f"apt2ostree tool missing at {APT2OSTREE_TOOL_DIR}: it is ",
+                f"fetched at live-build from {APT2OSTREE_UPSTREAM} (pin ",
+                f"{APT2OSTREE_PIN[:7]}) by apt2ostree-fetch, ",
+                "never hosted by us",
+            ))
         )
     try:
         where, ref = _parse_ostree_base(base or State("derived-base").read())
@@ -696,7 +711,7 @@ def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
         debs[name] = deb
         target = mirror / deb.name
         if target != deb.resolve():
-            shutil.copyfile(deb, target)
+            _ = shutil.copyfile(deb, target)
     lockfile = workdir / "nvidia.lock"
     with lockfile.open("w", encoding="utf-8") as handle:
         for name, deb in sorted(debs.items()):
@@ -714,12 +729,14 @@ def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
                 for line in fields if ": " in line
             }
             digest = hashlib.sha256(deb.read_bytes()).hexdigest()
-            handle.write(
-                f"Package: {got.get('Package', name)}\n"
-                f"Version: {got.get('Version', '')}\n"
-                f"Architecture: {got.get('Architecture', '')}\n"
-                f"Filename: {deb.name}\n"
-                f"SHA256: {digest}\n\n"
+            _ = handle.write(
+                "".join((
+                    f"Package: {got.get('Package', name)}\n",
+                    f"Version: {got.get('Version', '')}\n",
+                    f"Architecture: {got.get('Architecture', '')}\n",
+                    f"Filename: {deb.name}\n",
+                    f"SHA256: {digest}\n\n",
+                ))
             )
     arch = subprocess.run(
         ["dpkg", "--print-architecture"],
@@ -731,7 +748,7 @@ def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
         "aarch64": "arm64",
     }.get(platform.uname().machine, "")
     driver = workdir / "configure.py"
-    driver.write_text(
+    _ = driver.write_text(
         _apt2ostree_driver(
             APT2OSTREE_TOOL_DIR, debs, arch, (where, ref), mirror, set_name
         ),
@@ -756,8 +773,10 @@ def cmd_derive_apt2ostree(set_name: str, base: str) -> int:
         if done.returncode != 0:
             print(done.stderr[-800:], file=sys.stderr)
             print(
-                f"gpu-set-stage: base deployment {ref} not pulled: "
-                f"{step2[0]} failed",
+                "".join((
+                    f"gpu-set-stage: base deployment {ref} not pulled: ",
+                    f"{step2[0]} failed",
+                )),
                 file=sys.stderr,
             )
             return 1
@@ -819,8 +838,10 @@ def cmd_derive_podman(set_name: str, base: str | None) -> int:
         fail(f"{set_name}: unknown GPU set")
     if not set_name.endswith("-nvidia"):
         fail(
-            f"{set_name}: only the -nvidia sets are derived images "
-            "(the open sets are debs pulled from the APT repo)"
+            "".join((
+                f"{set_name}: only the -nvidia sets are derived images ",
+                "(the open sets are debs pulled from the APT repo)",
+            ))
         )
     where = base or State("derived-base").read()
     if not where:
@@ -828,7 +849,7 @@ def cmd_derive_podman(set_name: str, base: str | None) -> int:
     context = apt_cache_dir().parent / "derive" / set_name
     context.mkdir(parents=True, exist_ok=True)
     containerfile = context / "Containerfile"
-    containerfile.write_text(
+    _ = containerfile.write_text(
         _nvidia_containerfile(set_name, where), encoding="utf-8"
     )
     derived = f"{where}-nvidia"
@@ -876,17 +897,21 @@ def cmd_install(name: str, root: str | None) -> int:
         )
         if done.returncode != 0:
             print(
-                f"gpu-set-stage: dpkg refused {deb.name}: "
-                f"{done.stderr.strip().splitlines()[-1:]} — "
-                "the conf-only delivery stands",
+                "".join((
+                    f"gpu-set-stage: dpkg refused {deb.name}: ",
+                    f"{done.stderr.strip().splitlines()[-1:]} — ",
+                    "the conf-only delivery stands",
+                )),
                 file=sys.stderr,
             )
             return 0
         print(f"gpu-set-stage: {name} installed from repo with {conf}")
         return 0
     print(
-        f"gpu-set-stage: {name} delivered conf-only ({conf}), "
-        "deb left to the APT repo on first update"
+        "".join((
+            f"gpu-set-stage: {name} delivered conf-only ({conf}), ",
+            "deb left to the APT repo on first update",
+        ))
     )
     return 0
 
@@ -970,9 +995,11 @@ def main() -> NoReturn:
     if command == "install" and len(rest) in (1, 2):
         sys.exit(cmd_install(rest[0], rest[1] if len(rest) == 2 else None))
     fail(
-        "usage: gpu-set-stage {sets|set <name>|status|base <ref>|"
-        "derive <name> [base_ref]|derived|install <name> [root]|"
-        "fetch-tool <dir>}"
+        "".join((
+            "usage: gpu-set-stage {sets|set <name>|status|base <ref>|",
+            "derive <name> [base_ref]|derived|install <name> [root]|",
+            "fetch-tool <dir>}",
+        ))
     )
 
 

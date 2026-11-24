@@ -43,17 +43,17 @@ def sandbox(tmp_path: Path) -> Path:
     share = tmp_path / 'usr' / 'share' / 'debian-bootc'
     (share / 'mok.d').mkdir(parents=True)
     (tmp_path / 'efi').mkdir()
-    (share / 'sb_signing.crt').write_text('CERT\n')
+    _ = (share / 'sb_signing.crt').write_text('CERT\n')
     bindir = tmp_path / 'bin'
     bindir.mkdir()
     for name, body in (('mokutil', MOKUTIL), ('openssl', OPENSSL)):
-        (bindir / name).write_text(body)
+        _ = (bindir / name).write_text(body)
         (bindir / name).chmod(0o755)
     text = SCRIPT.read_text()
     text = text.replace('/usr/share/debian-bootc', str(share)
                         ).replace('/sys/firmware/efi', str(tmp_path / 'efi'))
     script = tmp_path / 'mok-stage'
-    script.write_text(text)
+    _ = script.write_text(text)
     script.chmod(0o755)
     return tmp_path
 
@@ -107,8 +107,8 @@ def test_all_certificates_in_one_import(sandbox: Path) -> None:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
     """
     mok = sandbox / 'usr' / 'share' / 'debian-bootc' / 'mok.d'
-    (mok / 'fork-a.crt').write_text('A\n')
-    (mok / 'fork-b.pem').write_text('B\n')
+    _ = (mok / 'fork-a.crt').write_text('A\n')
+    _ = (mok / 'fork-b.pem').write_text('B\n')
     result = run(sandbox)
     assert result.returncode == 0, result.stderr
     lines = imports(sandbox)
@@ -124,7 +124,7 @@ def test_private_key_is_refused(sandbox: Path) -> None:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
     """
     mok = sandbox / 'usr' / 'share' / 'debian-bootc' / 'mok.d'
-    (
+    _ = (
         mok / 'leak.pem'
     ).write_text('-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n')
     result = run(sandbox)
@@ -140,10 +140,10 @@ def test_enrolled_certificates_are_skipped(sandbox: Path) -> None:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
     """
     share = sandbox / 'usr' / 'share' / 'debian-bootc'
-    (share / 'sb_signing.crt').rename(share / 'enrolled-sb.crt')
+    _ = (share / 'sb_signing.crt').rename(share / 'enrolled-sb.crt')
     text = (sandbox / 'mok-stage'
             ).read_text().replace('sb_signing.crt', 'enrolled-sb.crt')
-    (sandbox / 'mok-stage').write_text(text)
+    _ = (sandbox / 'mok-stage').write_text(text)
     result = run(sandbox)
     assert result.returncode == 2
     assert not imports(sandbox)

@@ -42,8 +42,13 @@ def test_gen_recipe_runs_on_real_containerfiles(tmp_path: Path) -> None:
         tmp_path: Scratch directory holding the recipe file.
     """
     recipe = tmp_path / 'recipe.json'
-    recipe.write_text(json.dumps({'distro_name': 'debian bootc', 'keep': 1}))
-    subprocess.run(
+    _ = recipe.write_text(
+        json.dumps({
+            'distro_name': 'debian bootc',
+            'keep': 1
+        })
+    )
+    _ = subprocess.run(
         [
             sys.executable, '-I',
             str(

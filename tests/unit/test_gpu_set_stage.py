@@ -6,6 +6,7 @@ environment-injected state/payload directories so no privileged path is touched.
 
 import os
 import subprocess
+import textwrap
 from pathlib import Path
 
 SCRIPT = (
@@ -54,7 +55,7 @@ def run(
         payload_dir.mkdir(parents=True, exist_ok=True)
         for conf in PAYLOAD_SRC.iterdir():
             target = payload_dir / conf.name
-            target.write_text(
+            _ = target.write_text(
                 conf.read_text(encoding='utf-8'), encoding='utf-8'
             )
     env = dict(
@@ -301,11 +302,12 @@ def a2o_tool(tmp_path: Path) -> Path:
     """
     tool = tmp_path / 'tool'
     (tool / 'apt2ostree').mkdir(parents=True, exist_ok=True)
-    (tool / 'apt2ostree' /
-     '__init__.py').write_text(A2O_INIT_STUB, encoding='utf-8')
-    (tool / 'apt2ostree' /
-     'ostree.py').write_text(A2O_OSTREE_STUB, encoding='utf-8')
-    (tool / 'apt2ostree' / 'apt.py').write_text(A2O_APT_STUB, encoding='utf-8')
+    _ = (tool / 'apt2ostree' /
+         '__init__.py').write_text(A2O_INIT_STUB, encoding='utf-8')
+    _ = (tool / 'apt2ostree' /
+         'ostree.py').write_text(A2O_OSTREE_STUB, encoding='utf-8')
+    _ = (tool / 'apt2ostree' /
+         'apt.py').write_text(A2O_APT_STUB, encoding='utf-8')
     return tool
 
 
@@ -321,29 +323,33 @@ def a2o_path(tmp_path: Path) -> str:
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir(exist_ok=True)
     ninja = bin_dir / 'ninja'
-    ninja.write_text(
-        '\n'.join([
-            '#!/bin/sh',
-            'echo ninja "$@" >> "' + str(tmp_path) + '/state/ninja.log"',
-        ]) + '\n',
+    _ = ninja.write_text(
+        textwrap.dedent(
+            f'''\
+            #!/bin/sh
+            echo ninja "$@" >> "{tmp_path}/state/ninja.log"
+            '''
+        ),
         encoding='utf-8'
     )
     ostree = bin_dir / 'ostree'
-    ostree.write_text(
-        '\n'.join([
-            '#!/bin/sh',
-            'echo "ostree $@" >> "' + str(tmp_path) + '/state/ostree.log"',
-            'for arg in "$@"; do',
-            '    case "$arg" in */refs/heads*) mkdir -p "$arg" ;; esac',
-            'done',
-            # ls of /usr/lib/modules: the base deployment of the fixture
-            # carries one kernel of a flavour-suffixed release.
-            'for arg in "$@"; do',
-            '    case "$arg" in */usr/lib/modules) '
-            'echo "d00755 0 0 0 /usr/lib/modules/7.2.15-x64v2-xanmod1" ;; esac',
-            'done',
-            'exit 0',
-        ]) + '\n',
+    # ls of /usr/lib/modules: the base deployment of the fixture
+    # carries one kernel of a flavour-suffixed release.
+    modules_ls = 'd00755 0 0 0 /usr/lib/modules/7.2.15-x64v2-xanmod1'
+    _ = ostree.write_text(
+        textwrap.dedent(
+            f'''\
+            #!/bin/sh
+            echo "ostree $@" >> "{tmp_path}/state/ostree.log"
+            for arg in "$@"; do
+                case "$arg" in */refs/heads*) mkdir -p "$arg" ;; esac
+            done
+            for arg in "$@"; do
+                case "$arg" in */usr/lib/modules) echo "{modules_ls}" ;; esac
+            done
+            exit 0
+            '''
+        ),
         encoding='utf-8'
     )
     ninja.chmod(0o755)
@@ -396,14 +402,15 @@ def _build_stub_deb(root: Path, cache: Path, pkg: str) -> None:
     libdir = tree / 'usr' / 'lib' / 'x86_64-linux-gnu'
     libdir.mkdir(parents=True)
     (tree / 'DEBIAN').mkdir()
-    control = '\n'.join([
-        f'Package: {pkg}',
-        f'Version: {STUB_DEB_VERSION}',
-        'Architecture: amd64',
-        'Maintainer: t <t@t>',
-        f'Description: chain proof {pkg}',
-        '',
-    ])
+    control = textwrap.dedent(
+        f'''\
+        Package: {pkg}
+        Version: {STUB_DEB_VERSION}
+        Architecture: amd64
+        Maintainer: t <t@t>
+        Description: chain proof {pkg}
+        '''
+    )
     stub_files = {
         tree / 'DEBIAN' / 'control': control,
         libdir / f'{pkg}.so.1': 'bin',

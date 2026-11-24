@@ -53,10 +53,10 @@ categories:
     secure_boot: 1
     reference: true
     kargs: ["module.sig_enforce=1"]
-  # U-Boot devices have no secure boot (see packages.yml, kernel -4k).
-  - name: uboot
+  # Opt-in 16 KB-page arm64 image (the plain arm64 tag is 4 KB): short run, no Secure Boot.
+  - name: page-16k
     arch: arm64
-    suffix: "-4k"
+    suffix: "-16k"
     secure_boot: 0
   - name: unsigned-kernel
     arch: arm64
@@ -322,7 +322,7 @@ tests:
     arch: arm64
     category:
       - signed
-      - uboot
+      - page-16k
     run: |
       out=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' \
             grub-efi-arm64-signed bootupd u-boot-tools 2>&1)

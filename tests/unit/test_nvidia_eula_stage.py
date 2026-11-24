@@ -76,7 +76,7 @@ def run(
     bindir = tmp_path / 'bin'
     bindir.mkdir(exist_ok=True)
     stub = bindir / 'lspci'
-    stub.write_text(lspci)
+    _ = stub.write_text(lspci)
     stub.chmod(0o755)
     env = dict(
         os.environ,
@@ -117,8 +117,8 @@ def eula_sandbox(tmp_path: Path) -> Path:
     Returns:
         The sandbox root.
     """
-    (tmp_path /
-     'nvidia-eula.txt').write_text('EULA-TEXT-VERBATIM\n', encoding='utf-8')
+    _ = (tmp_path / 'nvidia-eula.txt'
+         ).write_text('EULA-TEXT-VERBATIM\n', encoding='utf-8')
     return tmp_path
 
 
@@ -256,7 +256,7 @@ def test_select_bad_recipe(tmp_path: Path) -> None:
         tmp_path: Scratch directory.
     """
     target = tmp_path / 'recipe.json'
-    target.write_text('{"imgref": "x"}', encoding='utf-8')
+    _ = target.write_text('{"imgref": "x"}', encoding='utf-8')
     result = run(tmp_path, 'select', str(target), 'reg/x:latest_amd64')
     assert result.returncode == 1
 
@@ -301,7 +301,7 @@ def write_recipe(root: Path, data: object = RECIPE) -> None:
         root: Sandbox root.
         data: JSON-serialisable recipe content.
     """
-    (root / 'recipe.json').write_text(json.dumps(data), encoding='utf-8')
+    _ = (root / 'recipe.json').write_text(json.dumps(data), encoding='utf-8')
 
 
 def test_image_with_eula_is_refused_before_consent(tmp_path: Path) -> None:

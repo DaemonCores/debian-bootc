@@ -41,8 +41,11 @@ STUBS = {
         'exit 0\n'
     ),
     'udevadm':
-    '#!/bin/bash\n[[ "$1" == settle && -n "${STUB_RENAME_FLAG:-}" ]] && '
-    'touch "$STUB_RENAME_FLAG"\nexit 0\n',
+    ''.join((
+        '#!/bin/bash\n',
+        '[[ "$1" == settle && -n "${STUB_RENAME_FLAG:-}" ]] && ',
+        'touch "$STUB_RENAME_FLAG"\nexit 0\n',
+    )),
     'hostname':
     '#!/bin/bash\necho node1\n',
     'timeout':
@@ -84,7 +87,7 @@ def fixture_sandbox(tmp_path: Path) -> Path:
     bindir.mkdir()
     for name, body in STUBS.items():
         path = bindir / name
-        path.write_text(body)
+        _ = path.write_text(body)
         path.chmod(path.stat().st_mode | stat.S_IXUSR)
     (tmp_path / 'etc' / 'network').mkdir(parents=True)
     (tmp_path / 'run').mkdir()
@@ -106,7 +109,7 @@ def run_script(sandbox: Path, name: str,
     text = (SBIN / name).read_text()
     text = re.sub(r'(?<![\w.])/(etc|run)/', rf'{sandbox}/\1/', text)
     script = sandbox / name
-    script.write_text(text)
+    _ = script.write_text(text)
     full_env = {
         'PATH': f'{sandbox / "bin"}:{os.environ["PATH"]}',
         **env,
@@ -135,10 +138,10 @@ def test_domain_set_renders_templates(sandbox: Path) -> None:
     Args:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
     """
-    (sandbox / 'etc' /
-     'hosts.tpl').write_text('{{ IP }} {{ HOST }}.{{ FQDN }}\n')
-    (sandbox / 'etc' / 'issue.tpl').write_text('ip={{ IP }}\n')
-    (sandbox / 'run' / 'ifupdown2-dhcp-domain').write_text('lab.example\n')
+    _ = (sandbox / 'etc' /
+         'hosts.tpl').write_text('{{ IP }} {{ HOST }}.{{ FQDN }}\n')
+    _ = (sandbox / 'etc' / 'issue.tpl').write_text('ip={{ IP }}\n')
+    _ = (sandbox / 'run' / 'ifupdown2-dhcp-domain').write_text('lab.example\n')
     result = run_script(sandbox, 'domain-set', STUB_IP='192.0.2.5')
     assert result.returncode == 0, result.stderr
     assert (sandbox / 'etc' /
@@ -154,9 +157,9 @@ def test_domain_set_falls_back_to_local(sandbox: Path, domain: str) -> None:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
         domain: Content of the DHCP domain file.
     """
-    (sandbox / 'etc' / 'hosts.tpl').write_text('{{ HOST }}.{{ FQDN }}\n')
-    (sandbox / 'etc' / 'issue.tpl').write_text('x\n')
-    (sandbox / 'run' / 'ifupdown2-dhcp-domain').write_text(domain)
+    _ = (sandbox / 'etc' / 'hosts.tpl').write_text('{{ HOST }}.{{ FQDN }}\n')
+    _ = (sandbox / 'etc' / 'issue.tpl').write_text('x\n')
+    _ = (sandbox / 'run' / 'ifupdown2-dhcp-domain').write_text(domain)
     result = run_script(sandbox, 'domain-set', STUB_IP='192.0.2.5')
     assert result.returncode == 0, result.stderr
     assert (sandbox / 'etc' / 'hosts').read_text() == 'node1.local\n'
@@ -169,7 +172,7 @@ def test_autoconf_skips_without_marker(sandbox: Path) -> None:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
     """
     interfaces = sandbox / 'etc' / 'network' / 'interfaces'
-    interfaces.write_text('custom\n')
+    _ = interfaces.write_text('custom\n')
     result = run_script(sandbox, 'ifupdown2-autoconf')
     assert result.returncode == 0
     assert interfaces.read_text() == 'custom\n'
@@ -193,7 +196,7 @@ def test_autoconf_stanzas(
         expect_v6: Stanza expected for IPv6, or ``None`` when absent.
     """
     interfaces = sandbox / 'etc' / 'network' / 'interfaces'
-    interfaces.write_text('# ifupdown2-autoconf\n')
+    _ = interfaces.write_text('# ifupdown2-autoconf\n')
     result = run_script(
         sandbox, 'ifupdown2-autoconf', STUB_DHCP4=dhcp4, STUB_DHCP6=dhcp6
     )
@@ -217,7 +220,7 @@ def test_autoconf_waits_for_udev_to_rename_the_nic(sandbox: Path) -> None:
         sandbox: Sandbox root built by the ``sandbox`` fixture.
     """
     interfaces = sandbox / 'etc' / 'network' / 'interfaces'
-    interfaces.write_text('# ifupdown2-autoconf\n')
+    _ = interfaces.write_text('# ifupdown2-autoconf\n')
     result = run_script(
         sandbox,
         'ifupdown2-autoconf',

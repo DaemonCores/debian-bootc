@@ -77,6 +77,8 @@ extraPaths = ["src/buildisopreinstall/usr/libexec/debian-bootc"]
 typeCheckingMode = "strict"
 reportAny = "error"
 reportExplicitAny = "error"
+reportUnusedCallResult = "error"
+reportImplicitStringConcatenation = "error"
 exclude = [
     "**/node_modules",
     "**/__pycache__",

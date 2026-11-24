@@ -30,7 +30,7 @@ def run(
     for idx, vendor in enumerate(vendors):
         dev = drm / f'card{idx}' / 'device'
         dev.mkdir(parents=True, exist_ok=True)
-        (dev / 'vendor').write_text(vendor + '\n', encoding='utf-8')
+        _ = (dev / 'vendor').write_text(vendor + '\n', encoding='utf-8')
     drm.mkdir(exist_ok=True)
     env = dict(
         os.environ,
@@ -101,7 +101,7 @@ def test_ia_with_consent_loads_nvidia_modules(tmp_path: Path) -> None:
     """
     conf = tmp_path / 'root' / 'etc' / 'dc-gpu'
     conf.mkdir(parents=True)
-    (conf / 'nvidia-consent').write_text('accepted-at-install\n')
+    _ = (conf / 'nvidia-consent').write_text('accepted-at-install\n')
     assert run(tmp_path, 'set', 'ia', vendors=('0x10de', )).returncode == 0
     assert 'nvidia_uvm' in modload(tmp_path)
 
@@ -124,7 +124,7 @@ def test_gaming_never_loads_nvidia_compute(tmp_path: Path) -> None:
     """
     conf = tmp_path / 'root' / 'etc' / 'dc-gpu'
     conf.mkdir(parents=True)
-    (conf / 'nvidia-consent').write_text('accepted-at-install\n')
+    _ = (conf / 'nvidia-consent').write_text('accepted-at-install\n')
     assert run(tmp_path, 'set', 'gaming', vendors=('0x10de', )).returncode == 0
     assert 'nvidia_uvm' not in modload(tmp_path)
 
@@ -183,11 +183,11 @@ def payload(tmp_path: Path, profile: str, rusticl: bool = False) -> Path:
     (lib / 'dri').mkdir(parents=True)
     (share / 'vulkan' / 'icd.d').mkdir(parents=True)
     (share / 'glvnd' / 'egl_vendor.d').mkdir(parents=True)
-    (share / 'vulkan' / 'icd.d' / 'radeon.json').write_text('{}')
+    _ = (share / 'vulkan' / 'icd.d' / 'radeon.json').write_text('{}')
     if rusticl:
         vendors = share / 'etc' / 'OpenCL' / 'vendors'
         vendors.mkdir(parents=True)
-        (vendors / 'rusticl.icd').write_text('libRusticlOpenCL.so.1\n')
+        _ = (vendors / 'rusticl.icd').write_text('libRusticlOpenCL.so.1\n')
     return share
 
 
@@ -213,7 +213,7 @@ def test_set_activates_the_profile_prefix(tmp_path: Path, profile: str) -> None:
         profile: The profile under test.
     """
     for name in ('gaming', 'ia'):
-        payload(tmp_path, name)
+        _ = payload(tmp_path, name)
     assert run(tmp_path, 'set', profile).returncode == 0
     prefix = f'/usr/lib/dc-gpu/{profile}'
     assert read(tmp_path, 'etc/ld.so.conf.d/dc-gpu.conf') == f'{prefix}/lib\n'
@@ -223,10 +223,8 @@ def test_set_activates_the_profile_prefix(tmp_path: Path, profile: str) -> None:
         in env
     )
     assert f'LIBGL_DRIVERS_PATH={prefix}/lib/dri' in env
-    assert (
-        f'__EGL_VENDOR_LIBRARY_DIRS=/usr/share/dc-gpu/{profile}/'
-        'glvnd/egl_vendor.d' in env
-    )
+    egl_vendor_dir = f'/usr/share/dc-gpu/{profile}/glvnd/egl_vendor.d'
+    assert f'__EGL_VENDOR_LIBRARY_DIRS={egl_vendor_dir}' in env
     other = 'ia' if profile == 'gaming' else 'gaming'
     assert f'dc-gpu/{other}' not in env
     assert f'userspace: {profile}' in run(tmp_path, 'status').stdout
@@ -238,10 +236,10 @@ def test_ia_build_exposes_its_opencl_icd(tmp_path: Path) -> None:
     Args:
         tmp_path: Sandbox directory.
     """
-    payload(tmp_path, 'ia', rusticl=True)
+    _ = payload(tmp_path, 'ia', rusticl=True)
     host = tmp_path / 'root' / 'etc' / 'OpenCL' / 'vendors'
     host.mkdir(parents=True)
-    (host / 'amdocl64.icd').write_text('libamdocl64.so\n')
+    _ = (host / 'amdocl64.icd').write_text('libamdocl64.so\n')
     assert run(tmp_path, 'set', 'ia').returncode == 0
     env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
     assert 'OCL_ICD_VENDORS=/etc/dc-gpu/OpenCL/vendors' in env
@@ -258,7 +256,7 @@ def test_gaming_build_without_opencl_leaves_the_host_loader(
     Args:
         tmp_path: Sandbox directory.
     """
-    payload(tmp_path, 'gaming')
+    _ = payload(tmp_path, 'gaming')
     assert run(tmp_path, 'set', 'gaming').returncode == 0
     env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
     assert 'OCL_ICD_VENDORS' not in env
@@ -270,10 +268,10 @@ def test_host_vulkan_icds_stay_visible(tmp_path: Path) -> None:
     Args:
         tmp_path: Sandbox directory.
     """
-    payload(tmp_path, 'gaming')
+    _ = payload(tmp_path, 'gaming')
     host = tmp_path / 'root' / 'usr' / 'share' / 'vulkan' / 'icd.d'
     host.mkdir(parents=True)
-    (host / 'nvidia_icd.json').write_text('{}')
+    _ = (host / 'nvidia_icd.json').write_text('{}')
     assert run(tmp_path, 'set', 'gaming').returncode == 0
     env = read(tmp_path, 'etc/environment.d/50-dc-gpu.conf')
     assert '/usr/share/vulkan/icd.d/nvidia_icd.json' in env
@@ -286,12 +284,12 @@ def test_auto_follows_the_connected_display(tmp_path: Path) -> None:
         tmp_path: Sandbox directory.
     """
     for name in ('gaming', 'ia'):
-        payload(tmp_path, name)
+        _ = payload(tmp_path, name)
     assert run(tmp_path, 'set', 'auto').returncode == 0
     assert 'userspace: ia' in run(tmp_path, 'status').stdout
     out = tmp_path / 'drm' / 'card0-HDMI-A-1'
     out.mkdir(parents=True)
-    (out / 'status').write_text('connected\n')
+    _ = (out / 'status').write_text('connected\n')
     assert run(tmp_path, 'apply').returncode == 0
     assert 'userspace: gaming' in run(tmp_path, 'status').stdout
 
@@ -302,7 +300,7 @@ def test_missing_build_clears_the_activation(tmp_path: Path) -> None:
     Args:
         tmp_path: Sandbox directory.
     """
-    payload(tmp_path, 'gaming')
+    _ = payload(tmp_path, 'gaming')
     assert run(tmp_path, 'set', 'gaming').returncode == 0
     shutil.rmtree(tmp_path / 'root' / 'usr' / 'lib' / 'dc-gpu')
     result = run(tmp_path, 'apply')

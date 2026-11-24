@@ -153,7 +153,7 @@ def test_supported_locales_keeps_valid_utf8_entries(tmp_path: Path) -> None:
     """
     m = _load()
     listing = tmp_path / 'SUPPORTED'
-    listing.write_text(SUPPORTED)
+    _ = listing.write_text(SUPPORTED)
     assert m.supported_locales(str(listing)) == [
         'en_US.UTF-8', 'eo.UTF-8', 'fr_FR.UTF-8', 'sr_RS.UTF-8@latin'
     ]
@@ -178,7 +178,7 @@ def test_keyboard_layouts_join_variants_to_their_layout(tmp_path: Path) -> None:
     """
     m = _load()
     listing = tmp_path / 'base.lst'
-    listing.write_text(BASE_LST)
+    _ = listing.write_text(BASE_LST)
     assert m.keyboard_layouts(str(listing)) == [
         ('us', '', 'English (US)'),
         ('us', 'intl', 'English (US) - English (US, intl., with dead keys)'),

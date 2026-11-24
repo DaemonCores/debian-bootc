@@ -20,9 +20,10 @@ RUN if [ -n "${PRODUCT_NAME}" ]; then \
 LABEL org.opencontainers.image.title="Debian Trixie bootc"
 LABEL org.opencontainers.image.description="Debian 13 Trixie bootable bootc/ostree container image, signed with cosign."
 # Asks the CI for two arm64 kernels (docs/Handoff-Decisions.md, "Two arm64 kernels"): the
-# plain tag is built on the 16 KB kernel, and a second arm64-only image tagged
-# `<tag>-4k` carries the 4 KB kernel for Raspberry Pi 3 and 4.
-LABEL org.daemoncores.arm64-4k-image="true"
+# plain tag is built on the 4 KB kernel, which every arm64 board runs, and a
+# second opt-in arm64-only image tagged `<tag>-16k` carries the 16 KB kernel
+# for Raspberry Pi 5 and RK3588.
+LABEL org.daemoncores.arm64-16k-image="true"
 # Module-signature enforcement is NOT an image property: one kernel per
 # (arch, page size) is built with MODULE_SIG_FORCE off, and the bootc-installer
 # writes `module.sig_enforce=1` as an install karg (default on, switch in the
@@ -242,8 +243,8 @@ ARG KERNEL_PROFILE=ia
 # arm64 only. The arm64 distribution ships three flavours because the page
 # size is a compile-time choice (docs/Handoff-Decisions.md, "Two arm64
 # kernels" + the profile rename): the 4 KB kernel (KERNEL_SUFFIX empty,
-# flavour armv8.0) for Raspberry Pi 3 and 4, the 16 KB kernel (KERNEL_SUFFIX
-# `-16k`, flavour armv8.2-lse) for recent hardware. KERNEL_SUFFIX selects the
+# flavour armv8.0, the plain tag) for every arm64 board, the 16 KB kernel
+# (KERNEL_SUFFIX `-16k`, flavour armv8.2-lse, opt-in) for recent hardware. KERNEL_SUFFIX selects the
 # flavour (there is no unsigned twin) and ARM_DEVICES lists the device
 # module packages that kernel serves. The CI passes the suffix per image;
 # the defaults build the 4 KB one. amd64 always x64v1 (the compat floor of

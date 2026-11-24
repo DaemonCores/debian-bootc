@@ -162,7 +162,7 @@ def main() -> None:
     for out in (recipe_path, catalog_path):
         with open(out, "w", encoding="utf-8") as fh:
             json.dump(recipe, fh, indent=4)
-            fh.write("\n")
+            _ = fh.write("\n")
 
 
 if __name__ == "__main__":

@@ -38,8 +38,10 @@ def test_nvidia_policy_confs_disable_gsp() -> None:
             if line.startswith('options nvidia NVreg_EnableGpuFirmware=')
         ]
         expected = [
-            'options nvidia NVreg_EnableGpuFirmware=0 '
-            'NVreg_RegistryDwords=RMInstLoc2=0x00000001'
+            ''.join((
+                'options nvidia NVreg_EnableGpuFirmware=0 ',
+                'NVreg_RegistryDwords=RMInstLoc2=0x00000001',
+            ))
         ] if name == 'dc-gpu-ia-nvidia.conf' else [
             'options nvidia NVreg_EnableGpuFirmware=0'
         ]

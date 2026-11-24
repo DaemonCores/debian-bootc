@@ -7,6 +7,7 @@ the declarative patches.yml consumed through ``kernel_patch_list``.
 """
 
 import subprocess
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -49,10 +50,10 @@ def fixture_setup(tmp_path: Path) -> Path:
         The scratch directory holding ``tree/`` and the patch files.
     """
     (tmp_path / 'tree').mkdir()
-    (tmp_path / 'tree' / 'file').write_text('base\n')
+    _ = (tmp_path / 'tree' / 'file').write_text('base\n')
     for name, body in (('one', PATCH_ONE), ('two', PATCH_TWO),
                        ('bad', PATCH_BAD)):
-        (tmp_path / f'{name}.patch').write_text(body)
+        _ = (tmp_path / f'{name}.patch').write_text(body)
     return tmp_path
 
 
@@ -73,7 +74,7 @@ def _manifest(root: Path, entries: list[tuple[str, str, str, str]]) -> Path:
             f'    stage: {stage}', f'    class: {klass}'
         ]
     path = root / 'patches.yml'
-    path.write_text('\n'.join(lines) + '\n')
+    _ = path.write_text('\n'.join(lines) + '\n')
     return path
 
 
@@ -114,7 +115,7 @@ def test_common_then_architecture_in_order(setup: Path) -> None:
     # The second patch is independent (another file), so the whole-set
     # dry-run sees a pristine, coherent tree; the applied order is
     # stage-staged (common first), whatever the manifest order is.
-    (setup / 'tree' / 'file2').write_text('upstream other\n')
+    _ = (setup / 'tree' / 'file2').write_text('upstream other\n')
     patch_body = (
         '--- a/file2\n'
         '+++ b/file2\n'
@@ -122,7 +123,7 @@ def test_common_then_architecture_in_order(setup: Path) -> None:
         '-upstream other\n'
         '+patched other\n'
     )
-    (setup / 'indep.patch').write_text(patch_body)
+    _ = (setup / 'indep.patch').write_text(patch_body)
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
     out = result.stdout.splitlines()
@@ -177,10 +178,23 @@ def test_moved_context_is_refused_not_fuzzed(setup: Path) -> None:
     Args:
         setup: Source tree and patch files.
     """
-    (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
-    (setup / 'fuzzy.patch').write_text(
-        '--- a/file\n+++ b/file\n@@ -1,7 +1,7 @@\n'
-        ' c1\n X2\n c3\n-old\n+new\n d1\n d2\n d3\n'
+    _ = (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
+    _ = (setup / 'fuzzy.patch').write_text(
+        textwrap.dedent(
+            '''\
+            --- a/file
+            +++ b/file
+            @@ -1,7 +1,7 @@
+             c1
+             X2
+             c3
+            -old
+            +new
+             d1
+             d2
+             d3
+            '''
+        )
     )
     manifest = _manifest(setup, [('fuzzy', 'fuzzy.patch', 'common', 'kernel')])
     result = _apply(setup, manifest)
@@ -198,13 +212,26 @@ def test_entry_fuzz_allows_a_moved_context_for_that_patch_only(
     Args:
         setup: Source tree and patch files.
     """
-    (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
-    (setup / 'fuzzy.patch').write_text(
-        '--- a/file\n+++ b/file\n@@ -1,7 +1,7 @@\n'
-        ' c1\n X2\n c3\n-old\n+new\n d1\n d2\n d3\n'
+    _ = (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
+    _ = (setup / 'fuzzy.patch').write_text(
+        textwrap.dedent(
+            '''\
+            --- a/file
+            +++ b/file
+            @@ -1,7 +1,7 @@
+             c1
+             X2
+             c3
+            -old
+            +new
+             d1
+             d2
+             d3
+            '''
+        )
     )
     manifest = _manifest(setup, [('fuzzy', 'fuzzy.patch', 'common', 'kernel')])
-    manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
+    _ = manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
     assert (setup / 'tree' / 'file').read_text().splitlines()[3] == 'new'
@@ -216,13 +243,26 @@ def test_fuzz_override_reports_drift_as_a_warning(setup: Path) -> None:
     Args:
         setup: Source tree and patch files.
     """
-    (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
-    (setup / 'fuzzy.patch').write_text(
-        '--- a/file\n+++ b/file\n@@ -1,7 +1,7 @@\n'
-        ' c1\n X2\n c3\n-old\n+new\n d1\n d2\n d3\n'
+    _ = (setup / 'tree' / 'file').write_text('c1\nc2\nc3\nold\nd1\nd2\nd3\n')
+    _ = (setup / 'fuzzy.patch').write_text(
+        textwrap.dedent(
+            '''\
+            --- a/file
+            +++ b/file
+            @@ -1,7 +1,7 @@
+             c1
+             X2
+             c3
+            -old
+            +new
+             d1
+             d2
+             d3
+            '''
+        )
     )
     manifest = _manifest(setup, [('fuzzy', 'fuzzy.patch', 'common', 'kernel')])
-    manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
+    _ = manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
     assert '::warning::patch fuzzy applies' in result.stderr
@@ -235,12 +275,12 @@ def test_unneeded_fuzz_override_is_reported(setup: Path) -> None:
     Args:
         setup: Source tree and patch files.
     """
-    (setup / 'tree' / 'file').write_text('c1\nold\nd1\n')
-    (setup / 'clean.patch').write_text(
+    _ = (setup / 'tree' / 'file').write_text('c1\nold\nd1\n')
+    _ = (setup / 'clean.patch').write_text(
         '--- a/file\n+++ b/file\n@@ -1,3 +1,3 @@\n c1\n-old\n+new\n d1\n'
     )
     manifest = _manifest(setup, [('clean', 'clean.patch', 'common', 'kernel')])
-    manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
+    _ = manifest.write_text(manifest.read_text() + '    fuzz: 2\n')
     result = _apply(setup, manifest)
     assert result.returncode == 0, result.stderr
     assert 'fuzz 2 is no longer needed' in result.stderr

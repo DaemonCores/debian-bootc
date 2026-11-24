@@ -49,7 +49,7 @@ def test_enable_removes_the_mask(tmp_path: Path) -> None:
     Args:
         tmp_path: Scratch directory used as the install root.
     """
-    _run(tmp_path, 'disable')
+    _ = _run(tmp_path, 'disable')
     assert _run(tmp_path, 'disable').returncode == 0
     assert _run(tmp_path, 'enable').returncode == 0
     assert not (tmp_path / MASK).is_symlink()
@@ -65,7 +65,7 @@ def test_enable_keeps_a_real_unit_file(tmp_path: Path) -> None:
     """
     unit = tmp_path / MASK
     unit.parent.mkdir(parents=True)
-    unit.write_text('[Timer]\n')
+    _ = unit.write_text('[Timer]\n')
     result = _run(tmp_path, 'enable')
     assert result.returncode == 1
     assert unit.read_text() == '[Timer]\n'

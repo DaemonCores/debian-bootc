@@ -32,14 +32,18 @@ _FALSE_WORDS = frozenset(
 )
 _NULL_WORDS = frozenset(('', '~', 'null', 'Null', 'NULL'))
 _INT = re.compile(
-    r'[-+]?(?:0b[0-1_]+|0[0-7_]+|(?:0|[1-9][0-9_]*)|0x[0-9a-fA-F_]+'
-    r'|[1-9][0-9_]*(?::[0-5]?[0-9])+)'
+    ''.join((
+        r'[-+]?(?:0b[0-1_]+|0[0-7_]+|(?:0|[1-9][0-9_]*)|0x[0-9a-fA-F_]+',
+        r'|[1-9][0-9_]*(?::[0-5]?[0-9])+)',
+    ))
 )
 _FLOAT = re.compile(
-    r'[-+]?(?:[0-9][0-9_]*\.[0-9_]*(?:[eE][-+][0-9]+)?'
-    r'|\.[0-9_]+(?:[eE][-+][0-9]+)?'
-    r'|[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*'
-    r'|\.(?:inf|Inf|INF))|[-+]?\.(?:nan|NaN|NAN)'
+    ''.join((
+        r'[-+]?(?:[0-9][0-9_]*\.[0-9_]*(?:[eE][-+][0-9]+)?',
+        r'|\.[0-9_]+(?:[eE][-+][0-9]+)?',
+        r'|[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*',
+        r'|\.(?:inf|Inf|INF))|[-+]?\.(?:nan|NaN|NAN)',
+    ))
 )
 
 
@@ -302,11 +306,11 @@ class _Parser:
             raise TypeError('missing YAML stream start')
         event = self._peek()
         if isinstance(event, StreamEndEvent):
-            self._take()
+            _ = self._take()
             return None
         if not isinstance(event, DocumentStartEvent):
             raise TypeError('missing YAML document start')
-        self._take()
+        _ = self._take()
         value = self._node()
         if not isinstance(self._take(), DocumentEndEvent):
             raise TypeError('missing YAML document end')
@@ -365,7 +369,7 @@ class _Parser:
         items: list[YamlValue] = []
         while not isinstance(self._peek(), SequenceEndEvent):
             items.append(self._node())
-        self._take()
+        _ = self._take()
         return items
 
     def _mapping(self) -> dict[str, YamlValue]:
@@ -384,5 +388,5 @@ class _Parser:
             if not isinstance(key, str):
                 raise TypeError(f'unsupported mapping key {type(key).__name__}')
             pairs[key] = self._node()
-        self._take()
+        _ = self._take()
         return pairs
