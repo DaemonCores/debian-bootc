@@ -1,0 +1,22 @@
+name: Security channel
+
+# Thin caller: the rebuild lives in DaemonCores-CI. Once a day it checks whether
+# the Debian security archive has a newer version of a package of the stable
+# image; it exits early when not, otherwise it rebuilds FROM the stable digest,
+# boots the candidate and publishes the `security` tags. Best effort: the delay
+# is Debian's own security delay plus at most 24 h.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  security:
+    uses: DaemonCores/DaemonCores-CI/.github/workflows/security-channel.yml@main
+    secrets: inherit
