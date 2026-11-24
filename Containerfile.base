@@ -67,7 +67,7 @@ ARG ARCH=amd64
 # the repository URL. The CI derives both at build time from the repository's
 # APT_GPG_KEY secret; the defaults only serve local builds of the upstream
 # repository and must be overridden for any other APT repository.
-ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc
+ARG BOOTC_APT_URL=https://daemoncores.github.io/debian-bootc/stable
 ARG BOOTC_GPG_SHA256=557c791d14da63c4621725fb335c6bd336c57afc6f1ffe3afcf25fc489b65680
 RUN sed -i -e "s/{{ ARCH }}/${ARCH}/g" -e "s|{{ APT_URL }}|${BOOTC_APT_URL%/}|g" \
         /etc/apt/sources.list.d/debian-bootc.sources \
