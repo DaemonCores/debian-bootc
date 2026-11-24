@@ -25,6 +25,10 @@ Include the affected commit or image digest, architecture, installation path, im
 
 The project is under active development. Security fixes target the current default branch and the newest artifacts produced from it. There is no versioned long-term-support branch; older images and installer media should be treated as unsupported.
 
+## Security channel
+
+The `security` image tag (and `security-YYYYMMDD`) is the stable image with only the Debian security archive upgrades applied. A daily workflow checks whether `apt-get -s upgrade` offers a newer `-security` package; when nothing changed it stops. Otherwise it rebuilds FROM the digest of the `stable` image (never from the previous security image), upgrades only the listed packages with `--only-upgrade`, boots the amd64 candidate, then publishes and signs the manifest list. Each build has a `security-YYYYMMDD` release with its changelog and the amd64 package list. Delay: Debian's own security delay plus at most 24 h; best effort, no SLA. Not covered yet: the arm64 candidate is built but not booted, and there is no advisory gate or critical-CVE fast path for these packages.
+
 ## How the rolling kernel is elected — trust model
 
 The kernel and the third-party patches move by automatic election, without a human reviewing each diff. The doctrine is reactivity over review: the version is NEVER pinned by hand — each build the `upstream-track` election resolves the newest candidate whose full patch set applies, and the automatic security gates judge it:
