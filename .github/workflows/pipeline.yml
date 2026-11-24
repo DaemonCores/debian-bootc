@@ -5,7 +5,7 @@ name: Full Pipeline
 # reusable workflow DaemonCores-CI/.github/workflows/full-pipeline.yml.
 #
 # Triggers:
-#   push (main)        full pipeline, but untouched stages auto-skip (the plan
+#   push (main, develop) full pipeline, but untouched stages auto-skip (the plan
 #                      job diffs the push) on top of the per-deb content cache.
 #   workflow_dispatch  the checkboxes decide, verbatim.
 #   schedule (monthly) rebuild everything.
@@ -17,7 +17,7 @@ name: Full Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths-ignore:
       - 'docs'
       - '**.md'

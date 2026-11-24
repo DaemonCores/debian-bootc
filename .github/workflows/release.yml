@@ -1,17 +1,19 @@
 name: Release
 
 # Thin caller: versioning lives in DaemonCores-CI.  Versions come from
-# Conventional Commits.  An `edge` pre-release is cut ONLY for a commit whose
-# Full Pipeline run finished 100% green (push or scheduled run: a manual run
-# may be filtered to a few packages, so it never counts); a push whose pipeline
-# is red, cancelled or still running gets no tag.  A `stable` release is only
-# ever published by running this workflow by hand.
+# Conventional Commits.  Git flow: `develop` is the edge channel, `main` the
+# stable one.  A release is cut ONLY for a commit whose Full Pipeline run
+# finished 100% green (push or scheduled run: a manual run may be filtered to
+# a few packages, so it never counts); a push whose pipeline is red, cancelled
+# or still running gets no tag.  A `develop` run makes an `edge` pre-release, a
+# `main` run makes a `stable` release; running this workflow by hand also
+# publishes a `stable` release.
 
 on:
   workflow_run:
     workflows: [Full Pipeline]
     types: [completed]
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +23,7 @@ jobs:
   edge:
     if: >-
       github.event_name == 'workflow_run'
+      && github.event.workflow_run.head_branch == 'develop'
       && github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event != 'workflow_dispatch'
     uses: DaemonCores/DaemonCores-CI/.github/workflows/release.yml@main
@@ -28,7 +31,13 @@ jobs:
       channel: edge
       ref: ${{ github.event.workflow_run.head_sha }}
   stable:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'workflow_run'
+      && github.event.workflow_run.head_branch == 'main'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event != 'workflow_dispatch')
     uses: DaemonCores/DaemonCores-CI/.github/workflows/release.yml@main
     with:
       channel: stable
+      ref: ${{ github.event.workflow_run.head_sha }}
