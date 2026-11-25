@@ -158,3 +158,12 @@ def test_short_password_fails(sandbox: Path) -> None:
     result = run(sandbox, 'short\n')
     assert result.returncode == 1
     assert not imports(sandbox)
+
+
+def test_no_imports_are_recorded_before_the_run(sandbox: Path) -> None:
+    """The helper reports no import while the stub never ran.
+
+    Args:
+        sandbox: Sandbox root built by the sandbox fixture.
+    """
+    assert imports(sandbox) == []

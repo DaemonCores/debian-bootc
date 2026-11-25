@@ -9,6 +9,8 @@ helpers hold no GTK code so they can be tested alone.
 """
 
 import re
+from collections.abc import Mapping
+from typing import TypeGuard
 
 SUPPORTED_LOCALES = "/usr/share/i18n/SUPPORTED"
 XKB_RULES_LIST = "/usr/share/X11/xkb/rules/base.lst"
@@ -21,6 +23,18 @@ LOCALE_RE = re.compile(
     r"^[A-Za-z]{1,3}(_[A-Za-z0-9]+)?\.[A-Za-z0-9-]+(@[A-Za-z0-9]+)?$"
 )
 XKB_TOKEN_RE = re.compile(r"^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$")
+
+
+def _is_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    """Tell whether a value is a mapping (a recipe or step dictionary).
+
+    Args:
+        value: Candidate value.
+
+    Returns:
+        True when the value is a mapping.
+    """
+    return isinstance(value, Mapping)
 
 
 def valid_locale(locale: str) -> bool:
@@ -50,13 +64,12 @@ def valid_keyboard(
         empty or an XKB name.
     """
     return (
-        bool(XKB_TOKEN_RE.match(layout))
-        and bool(XKB_TOKEN_RE.match(model))
+        bool(XKB_TOKEN_RE.match(layout)) and bool(XKB_TOKEN_RE.match(model))
         and (variant == "" or bool(XKB_TOKEN_RE.match(variant)))
     )
 
 
-def supported_locales(path: str = SUPPORTED_LOCALES) -> list:
+def supported_locales(path: str = SUPPORTED_LOCALES) -> list[str]:
     """List the UTF-8 locales the live system can generate.
 
     Args:
@@ -71,7 +84,7 @@ def supported_locales(path: str = SUPPORTED_LOCALES) -> list:
             lines = handle.read().splitlines()
     except OSError:
         return []
-    names = set()
+    names: set[str] = set()
     for line in lines:
         fields = line.split()
         if (
@@ -82,7 +95,7 @@ def supported_locales(path: str = SUPPORTED_LOCALES) -> list:
     return sorted(names)
 
 
-def keyboard_layouts(path: str = XKB_RULES_LIST) -> list:
+def keyboard_layouts(path: str = XKB_RULES_LIST) -> list[tuple[str, str, str]]:
     """List the keyboard layouts and variants of the XKB rules file.
 
     Args:
@@ -99,9 +112,9 @@ def keyboard_layouts(path: str = XKB_RULES_LIST) -> list:
             lines = handle.read().splitlines()
     except OSError:
         return []
-    layouts = {}
-    variants = []
-    section = ""
+    layouts: dict[str, str] = {}
+    variants: list[tuple[str, str, str]] = []
+    section: str = ""
     for line in lines:
         if line.startswith("!"):
             section = line[1:].strip()
@@ -116,7 +129,8 @@ def keyboard_layouts(path: str = XKB_RULES_LIST) -> list:
             owner, _, description = text.partition(": ")
             if description:
                 variants.append((owner, name, description))
-    result = [(name, "", text) for name, text in layouts.items()]
+    result: list[tuple[str, str, str]] = [(name, "", text)
+                                          for name, text in layouts.items()]
     for owner, name, description in variants:
         if owner in layouts:
             result.append((owner, name, f"{layouts[owner]} - {description}"))
@@ -125,7 +139,10 @@ def keyboard_layouts(path: str = XKB_RULES_LIST) -> list:
     )
 
 
-def apply_locale(recipe: dict, system: dict | None) -> None:
+def apply_locale(
+    recipe: dict[str, object],
+    system: Mapping[str, object] | None,
+) -> None:
     """Merge the language and keyboard of the ``system`` step into a recipe.
 
     Args:
@@ -137,15 +154,24 @@ def apply_locale(recipe: dict, system: dict | None) -> None:
     if not system:
         return
     locale = system.get("locale")
-    if locale and valid_locale(locale):
+    if isinstance(locale, str) and valid_locale(locale):
         recipe["locale"] = locale
     keyboard = system.get("keyboard")
-    if keyboard and keyboard.get("layout"):
-        model = keyboard.get("model") or DEFAULT_MODEL
-        variant = keyboard.get("variant") or ""
-        if valid_keyboard(keyboard["layout"], variant, model):
-            recipe["keyboard"] = {
-                "model": model,
-                "layout": keyboard["layout"],
-                "variant": variant,
-            }
+    if not _is_mapping(keyboard):
+        return
+    layout = keyboard.get("layout")
+    if not isinstance(layout, str) or not layout:
+        return
+    model_value = keyboard.get("model")
+    model = (
+        model_value
+        if isinstance(model_value, str) and model_value else DEFAULT_MODEL
+    )
+    variant_value = keyboard.get("variant")
+    variant = variant_value if isinstance(variant_value, str) else ""
+    if valid_keyboard(layout, variant, model):
+        recipe["keyboard"] = {
+            "model": model,
+            "layout": layout,
+            "variant": variant,
+        }

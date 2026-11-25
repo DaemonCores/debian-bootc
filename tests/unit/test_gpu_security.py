@@ -1,21 +1,38 @@
 """GPU / module-signature step of the installer."""
 
 import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import NoReturn, Protocol, runtime_checkable
+
+import pytest
 
 from tests.support.documents import YamlValue, load_json, mapping
-from tests.support.modules import load_module
+from tests.support.modules import bare_loader, load_module
 
 BUILDER = Path(__file__
                ).resolve().parents[2] / 'workflows' / 'bootc-debs-builder'
-INSTALLER = BUILDER / 'bootc-installer-src'
+INSTALLER = BUILDER / 'bootc_installer'
 FISHERMAN = BUILDER / 'fisherman-src'
 RECIPE = (
     Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' / 'etc' /
     'bootc-installer' / 'recipe.json'
 )
+
+
+def _missing_runner(command: list[str], **kwargs: object) -> NoReturn:
+    """Simulate an absent helper binary.
+
+    Args:
+        command: Command line (unused).
+        **kwargs: subprocess.run keywords (unused).
+
+    Raises:
+        OSError: always.
+    """
+    _ = (command, kwargs)
+    raise OSError('helper missing')
 
 
 @runtime_checkable
@@ -68,6 +85,20 @@ class _Script(Protocol):
 
         Returns:
             True for the exact acceptance word.
+        """
+        ...
+
+    def eula_text(
+        self,
+        run: Callable[..., subprocess.CompletedProcess[str]] = ...
+    ) -> str:
+        """Read the shipped NVIDIA EULA text through the helper.
+
+        Args:
+            run: subprocess.run compatible callable.
+
+        Returns:
+            The EULA text, empty when the helper cannot provide it.
         """
         ...
 
@@ -367,3 +398,52 @@ def test_files_match_what_dc_gpu_reads() -> None:
     for name in ('usage', 'nvidia-consent'):
         assert f'"{name}"' in gpu_go
         assert f'${{conf}}/{name}' in dc_gpu
+
+
+def test_eula_required_ignores_a_malformed_catalog() -> None:
+    """A catalog whose images value is not a list requires no license."""
+    m = _load()
+    assert not m.eula_required({'images': 'nope'}, 'reg/x')
+
+
+def test_eula_text_reads_the_helper_output() -> None:
+    """The helper text is returned verbatim on a successful exit."""
+    m = _load()
+    assert m.eula_text(_Runner()) == 'out'
+
+
+def test_eula_text_is_empty_when_the_helper_refuses() -> None:
+    """A non-zero helper exit yields no text."""
+    m = _load()
+    assert m.eula_text(_Runner(fail_on='text')) == ''
+
+
+def test_eula_text_is_empty_when_the_helper_is_missing() -> None:
+    """An absent helper binary yields no text instead of crashing."""
+    m = _load()
+    assert m.eula_text(_missing_runner) == ''
+    assert not m.stage_choice('ia', False, run=_missing_runner)
+
+
+def test_stage_choice_nvidia_without_image_skips_the_base_ref() -> None:
+    """A derive without an image records no base reference."""
+    m = _load()
+    run = _Runner()
+    assert m.stage_choice('gaming', False, nvidia=True, run=run)
+    assert all('base' not in command for command in run.commands)
+    assert run.commands[-1] == [
+        'pkexec', m.GPU_SET_HELPER, 'derive', 'gpu-gaming-nvidia'
+    ]
+
+
+def test_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The loader refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _load()

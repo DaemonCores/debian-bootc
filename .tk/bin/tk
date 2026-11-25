@@ -1,0 +1,1886 @@
+#!/usr/bin/env python3
+"""tk: forge-agnostic ticket CLI and hook engine (stdlib only).
+
+Backends are detected from the git remote: forgejo (issues + status:* labels),
+github (private Projects v2 DRAFT items through a dedicated GitHub App: no
+issue, no notification, no gh CLI, no personal token), local (JSON under the
+git common dir). State never enters the working tree.
+Hook modes (tk hook <pretool|prompt|stop|session>) are fail-open on internal
+errors and never loop: a Stop block is capped, the remainder becomes a debt
+re-injected at the next prompt.
+"""
+import base64
+import calendar
+import contextlib
+import hashlib
+import hmac
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX platforms
+    fcntl = None
+
+COLS = ("todo", "in-progress", "review", "done")
+STOP_CAP = 2
+HOME = os.path.expanduser("~")
+
+
+class BackendError(Exception):
+    """A backend cannot be used; the message is meant for the owner."""
+
+
+class UserOwnerUnsupported(BackendError):
+    """The remote works, but its owner is a user account: a GitHub App installation
+    token cannot create or reach Projects v2 owned by a user (proven live: the owner
+    creates one, the App neither lists it nor adds a draft: 'Resource not accessible by
+    integration'). A permanent property of the account, not a fault to retry."""
+
+
+def cfg_path():
+    return os.environ.get("TK_CONFIG") or os.path.join(HOME, ".claude", "tk", "config.json")
+
+
+def load_cfg():
+    try:
+        with open(cfg_path(), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def run(cmd, cwd=None, stdin=None):
+    p = subprocess.run(cmd, cwd=cwd, input=stdin, capture_output=True, text=True, check=False)
+    return p.returncode, p.stdout.strip(), p.stderr.strip()
+
+
+def git(args, cwd=None):
+    code, out, _ = run(["git", *args], cwd=cwd)
+    return out if code == 0 else ""
+
+
+def die(msg, code=1):
+    sys.stderr.write("tk: " + msg + "\n")
+    sys.exit(code)
+
+
+def atomic_write_json(path, obj):
+    """Write a whole file atomically: unique temp in the same dir, then rename."""
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d or ".", prefix="." + os.path.basename(path) + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, indent=1)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+@contextlib.contextmanager
+def file_lock(path):
+    """Exclusive advisory lock; a no-op where fcntl is absent."""
+    if fcntl is None:  # pragma: no cover - non-POSIX platforms
+        yield
+        return
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    with open(path, "a+", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def parse_remote(url):
+    """(host, owner, repo, prefix) from an ssh/https/scp-like remote, or None."""
+    m = (re.match(r"^[a-z+]+://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+?)(?:\.git)?/?$", url)
+         or re.match(r"^(?:[^@/]+@)?([^/:]+):(.+?)(?:\.git)?/?$", url))
+    if not m:
+        return None
+    parts = m.group(2).split("/")
+    if len(parts) < 2:
+        return None
+    return resolve_ssh_alias(m.group(1)), parts[-2], parts[-1], "/".join(parts[:-2])
+
+
+def resolve_ssh_alias(host):
+    """Real hostname behind an ~/.ssh/config alias (`Host x` / `HostName y`); host itself if none."""
+    try:
+        out = subprocess.run(["ssh", "-G", host], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return host
+    for line in out.splitlines():
+        if line.startswith("hostname "):
+            return line.split(None, 1)[1].strip() or host
+    return host
+
+
+class Ctx:
+    """Repository context: where the repo is, who owns it, which backend."""
+
+    def __init__(self, cwd):
+        self.cfg = load_cfg()
+        self.top = git(["rev-parse", "--show-toplevel"], cwd)
+        common = git(["rev-parse", "--git-common-dir"], cwd)
+        self.common = os.path.abspath(os.path.join(cwd, common)) if common else ""
+        self.sdir = os.path.join(self.common, "tk") if self.common else ""
+        self.remote = parse_remote(git(["remote", "get-url", "origin"], cwd) or "") if self.top else None
+        host = self.remote[0] if self.remote else ""
+        self.host = host
+        self.owner = self.remote[1] if self.remote else ""
+        self.repo = self.remote[2] if self.remote else os.path.basename(self.top or "")
+        hostcfg = (self.cfg.get("hosts") or {}).get(host, {})
+        default = "github" if host == "github.com" else "forgejo"
+        if hostcfg:
+            self.kind = hostcfg.get("kind") or default
+        elif host == "github.com":
+            self.kind = "github"
+        else:
+            self.kind = "local"
+        self.hostcfg = hostcfg
+
+    @property
+    def in_repo(self):
+        return bool(self.top)
+
+    @property
+    def enabled(self):
+        if not self.in_repo:
+            return False
+        if git(["config", "--get", "tk.enabled"], self.top) == "true":
+            return True
+        if os.path.exists(os.path.join(self.top, ".claude", "tk.enabled")):
+            return True
+        owners = {o.lower() for o in self.cfg.get("owners", [])}
+        if self.remote:
+            return self.owner.lower() in owners
+        return bool(self.cfg.get("local_repos", False))
+
+    @property
+    def deferred(self):
+        """The repo ships its own ticket gate: repo policy wins over the global one."""
+        return os.path.exists(os.path.join(self.top, ".claude", "hooks", "guard-edit-ticket.py"))
+
+    def state(self):
+        try:
+            with open(os.path.join(self.sdir, "state.json"), encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            return {}
+
+    def save(self, st):
+        atomic_write_json(os.path.join(self.sdir, "state.json"), st)
+
+    def token(self):
+        env = self.hostcfg.get("token_env")
+        if env and os.environ.get(env):
+            return os.environ[env]
+        key = self.hostcfg.get("token_dotenv")
+        if key and self.top:
+            try:
+                with open(os.path.join(self.top, ".env"), encoding="utf-8") as fh:
+                    for line in fh:
+                        m = re.match(r"\s*" + re.escape(key) + r"\s*=\s*[\"']?([^\"'\s]+)", line)
+                        if m:
+                            return m.group(1)
+            except OSError:
+                pass
+        return ""
+
+
+# ---------------------------------------------------------------- backends
+
+class Local:
+    name = "local"
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.path = os.path.join(ctx.sdir, "tickets.json")
+        self.lock = os.path.join(ctx.sdir, "lock")
+
+    def _load(self):
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            return {"next": 1, "items": {}}
+
+    def _save(self, d):
+        atomic_write_json(self.path, d)
+
+    def ensure(self):
+        return "local store " + self.path
+
+    def new(self, title, body):
+        with file_lock(self.lock):
+            d = self._load()
+            tid = "L%d" % d["next"]
+            d["next"] += 1
+            d["items"][tid] = {"title": title, "body": body, "status": "todo", "notes": []}
+            self._save(d)
+        return tid
+
+    def get(self, tid):
+        it = self._load()["items"].get(tid)
+        if it is None:
+            die("unknown ticket " + tid)
+        return {"id": tid, "title": it["title"], "status": it["status"], "notes": len(it["notes"])}
+
+    def set_status(self, tid, status):
+        with file_lock(self.lock):
+            d = self._load()
+            d["items"][tid]["status"] = status
+            self._save(d)
+
+    def note(self, tid, text):
+        with file_lock(self.lock):
+            d = self._load()
+            d["items"][tid]["notes"].append(text)
+            self._save(d)
+
+    def list(self, show_done=False):
+        return [{"id": k, "title": v["title"], "status": v["status"], "notes": len(v["notes"])}
+                for k, v in self._load()["items"].items()
+                if show_done or v["status"] != "done"]
+
+    def read(self, tid):
+        it = self._load()["items"].get(tid)
+        if it is None:
+            die("unknown ticket " + tid)
+        return {"id": tid, "title": it["title"], "status": it["status"], "body": it["body"], "notes": list(it["notes"])}
+
+    def search(self, term):
+        t = term.lower()
+        return [{"id": k, "title": v["title"], "status": v["status"], "notes": len(v["notes"])}
+                for k, v in self._load()["items"].items()
+                if t in "\n".join([v["title"], v["body"]] + list(v["notes"])).lower()]
+
+
+class Forgejo:
+    name = "forgejo"
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        api = ctx.hostcfg.get("api")
+        if not api:
+            raise BackendError("no api configured for host " + ctx.host + " in " + cfg_path())
+        self.api = api.rstrip("/")
+        self.tok = ctx.token()
+        if not self.tok:
+            raise BackendError("no token for host " + ctx.host + " (hosts." + ctx.host + ".token_env / token_dotenv)")
+        self.base = "/repos/%s/%s" % (ctx.owner, ctx.repo)
+
+    def call(self, method, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(self.api + path, data=data, method=method, headers={
+            "Authorization": "token " + self.tok, "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                raw = r.read()
+        except urllib.error.HTTPError as e:
+            raise BackendError("forgejo %s %s -> HTTP %d" % (method, path, e.code))
+        except (urllib.error.URLError, OSError) as e:
+            raise BackendError("forgejo unreachable: %s" % e)
+        return json.loads(raw) if raw else None
+
+    def ensure(self):
+        have = {l["name"] for l in self.call("GET", self.base + "/labels?limit=100") or []}
+        made = []
+        for c in COLS:
+            if "status:" + c not in have:
+                self.call("POST", self.base + "/labels", {"name": "status:" + c, "color": "#0e8a16"})
+                made.append(c)
+        return "status labels ok" + (" (created: %s)" % ",".join(made) if made else "")
+
+    def _view(self, issue):
+        st = next((l["name"][7:] for l in issue.get("labels") or [] if l["name"].startswith("status:")), "todo")
+        if issue.get("state") == "closed":
+            st = "done"
+        return {"id": str(issue["number"]), "title": issue["title"], "status": st,
+                "notes": int(issue.get("comments") or 0)}
+
+    def new(self, title, body):
+        # Create takes label IDs on some servers (Gitea API, HTTP 422 on names); the labels endpoint takes names everywhere.
+        i = self.call("POST", self.base + "/issues", {"title": title, "body": body})
+        self.call("PUT", "%s/issues/%s/labels" % (self.base, i["number"]), {"labels": ["status:todo"]})
+        return str(i["number"])
+
+    def get(self, tid):
+        return self._view(self.call("GET", "%s/issues/%s" % (self.base, tid)))
+
+    def set_status(self, tid, status):
+        i = self.call("GET", "%s/issues/%s" % (self.base, tid))
+        keep = [l["name"] for l in i.get("labels") or [] if not l["name"].startswith("status:")]
+        self.call("PUT", "%s/issues/%s/labels" % (self.base, tid), {"labels": keep + ["status:" + status]})
+        want = "closed" if status == "done" else "open"
+        if i.get("state") != want:
+            self.call("PATCH", "%s/issues/%s" % (self.base, tid), {"state": want})
+
+    def note(self, tid, text):
+        self.call("POST", "%s/issues/%s/comments" % (self.base, tid), {"body": text})
+
+    def list(self, show_done=False):
+        state = "all" if show_done else "open"
+        return [self._view(i) for i in self.call(
+            "GET", self.base + "/issues?state=%s&type=issues&limit=50" % state) or []]
+
+    def read(self, tid):
+        i = self.call("GET", "%s/issues/%s" % (self.base, tid))
+        notes, page = [], 1
+        while True:
+            chunk = self.call("GET", "%s/issues/%s/comments?limit=50&page=%d" % (self.base, tid, page)) or []
+            notes += [c.get("body") or "" for c in chunk]
+            if len(chunk) < 50:
+                break
+            page += 1
+        v = self._view(i)
+        return {"id": v["id"], "title": v["title"], "status": v["status"], "body": i.get("body") or "", "notes": notes}
+
+    def search(self, term):
+        return [self._view(i) for i in self.call(
+            "GET", self.base + "/issues?state=all&type=issues&limit=50&q=" + urllib.parse.quote(term)) or []]
+
+
+def b64url(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+class GitHub:
+    """Private Projects v2 DRAFT items through a dedicated GitHub App.
+
+    Auth is a JWT RS256 signed by the openssl binary, exchanged for an
+    installation token cached under <git-common-dir>/tk. Never creates an
+    issue, never comments, never invokes gh, never uses a personal token.
+    """
+
+    name = "github"
+    PROJECT = "%s tasks"
+    RETRY_SECONDS = 300
+    TOKEN_MARGIN = 300
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        hc = ctx.hostcfg
+        if not hc:
+            raise BackendError("github backend needs hosts[%r] in %s" % (ctx.host, cfg_path()))
+        self.apps = [a for a in (hc.get("apps") or []) if isinstance(a, dict)] or [hc]
+        self.app_id = str(self.apps[0].get("app_id") or "")
+        self.installation = ""
+        self.key_path = self.apps[0].get("private_key_path") or ""
+        missing = [k for k, v in (("app_id", self.app_id), ("private_key_path", self.key_path)) if not v]
+        if missing:
+            raise BackendError("github backend config in %s lacks: %s" % (cfg_path(), ", ".join(missing)))
+        if not os.path.isfile(self.key_path):
+            raise BackendError("github app private key not found: " + self.key_path)
+        self.api = (os.environ.get("TK_GH_API") or hc.get("api") or "https://api.github.com").rstrip("/")
+        self.pid = ctx.state().get("gh_project")
+
+    # -- auth ---------------------------------------------------------
+    def _jwt(self):
+        now = int(time.time())
+        head = {"alg": "RS256", "typ": "JWT"}
+        body = {"iat": now - 60, "exp": now + 540, "iss": self.app_id}
+        raw = (b64url(json.dumps(head, separators=(",", ":")).encode()) + "."
+               + b64url(json.dumps(body, separators=(",", ":")).encode()))
+        try:
+            p = subprocess.run(["openssl", "dgst", "-sha256", "-sign", self.key_path],
+                               input=raw.encode(), capture_output=True, check=False)
+        except OSError as e:
+            raise BackendError("openssl is required to sign the GitHub App JWT: %s" % e)
+        if p.returncode != 0:
+            raise BackendError("github app key signing failed: " + p.stderr.decode(errors="replace")[:300])
+        return raw + "." + b64url(p.stdout)
+
+    def _installation_id(self):
+        """Installation of the App on THIS repository's owner, resolved through
+        the App JWT (never the config: one App is installed on several owners)."""
+        if self.installation:
+            return self.installation
+        err = None
+        for app in self.apps:
+            self.app_id = str(app.get("app_id") or "")
+            self.key_path = app.get("private_key_path") or ""
+            if not self.app_id or not os.path.isfile(self.key_path):
+                continue
+            try:
+                return self._installation_for_app()
+            except BackendError as e:
+                err = e
+        raise err or BackendError("no github app configured for %s" % self.ctx.owner)
+
+    def _installation_for_app(self):
+        st = self.ctx.state()
+        # cached per (owner, app): one owner can be installed under another App of the
+        # list, and an installation id signed with the wrong App's JWT answers 404
+        by_app = (st.get("gh_installation") or {}).get(self.ctx.owner)
+        known = by_app.get(self.app_id) if isinstance(by_app, dict) else None
+        if known:
+            self.installation = str(known)
+            return self.installation
+        page = 1
+        while True:
+            d = self._http("GET", "/app/installations?per_page=100&page=%d" % page, None, "Bearer " + self._jwt())
+            if not isinstance(d, list):
+                raise BackendError("github /app/installations returned no list")
+            for i in d:
+                if str((i.get("account") or {}).get("login") or "").lower() == str(self.ctx.owner).lower():
+                    if i.get("suspended_at"):
+                        raise BackendError("github app installation on %s is suspended" % self.ctx.owner)
+                    self.installation = str(i["id"])
+                    st = self.ctx.state()
+                    cached = st.setdefault("gh_installation", {}).get(self.ctx.owner)
+                    if not isinstance(cached, dict):
+                        cached = st["gh_installation"][self.ctx.owner] = {}
+                    cached[self.app_id] = self.installation
+                    self.ctx.save(st)
+                    return self.installation
+            if len(d) < 100:
+                raise BackendError("github app %s is not installed on %s" % (self.app_id, self.ctx.owner))
+            page += 1
+
+    def _token(self):
+        cache = os.path.join(self.ctx.sdir, "gh_token.json")
+        try:
+            with open(cache, encoding="utf-8") as fh:
+                c = json.load(fh)
+            if c.get("token") and float(c.get("expires_at") or 0) - time.time() > self.TOKEN_MARGIN:
+                return c["token"]
+        except (OSError, ValueError):
+            pass
+        try:
+            d = self._http("POST", "/app/installations/%s/access_tokens" % self._installation_id(),
+                           None, "Bearer " + self._jwt())
+        except BackendError as e:
+            if "HTTP 404" not in str(e) or not self.installation:
+                raise
+            # the cached installation vanished (App reinstalled): resolve it again, once
+            st = self.ctx.state()
+            (st.get("gh_installation") or {}).pop(self.ctx.owner, None)
+            self.ctx.save(st)
+            self.installation = ""
+            d = self._http("POST", "/app/installations/%s/access_tokens" % self._installation_id(),
+                           None, "Bearer " + self._jwt())
+        tok = d.get("token") or ""
+        if not tok:
+            raise BackendError("github app token response carried no token")
+        exp = time.time() + 3000
+        try:
+            exp = float(calendar.timegm(time.strptime(d.get("expires_at") or "", "%Y-%m-%dT%H:%M:%SZ")))
+        except ValueError:
+            pass
+        atomic_write_json(cache, {"token": tok, "expires_at": exp})
+        return tok
+
+    def _http(self, method, path, body, auth):
+        data = json.dumps(body).encode() if body is not None else None
+        hdrs = {"Accept": "application/vnd.github+json", "User-Agent": "tk",
+                "X-GitHub-Api-Version": "2022-11-28"}
+        if data is not None:
+            hdrs["Content-Type"] = "application/json"
+        if auth:
+            hdrs["Authorization"] = auth
+        req = urllib.request.Request(self.api + path, data=data, method=method, headers=hdrs)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                raw = r.read()
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                detail = (json.loads(e.read() or b"{}") or {}).get("message", "")
+            except (ValueError, OSError):
+                pass
+            raise BackendError("github %s %s -> HTTP %d%s"
+                               % (method, path, e.code, (": " + detail[:200]) if detail else ""))
+        except (urllib.error.URLError, OSError) as e:
+            raise BackendError("github unreachable: %s" % e)
+        return json.loads(raw) if raw else {}
+
+    def _drop_token(self):
+        try:
+            os.unlink(os.path.join(self.ctx.sdir, "gh_token.json"))
+        except OSError:
+            pass
+
+    def gql(self, query, **v):
+        body = {"query": query, "variables": v}
+        try:
+            d = self._http("POST", "/graphql", body, "bearer " + self._token())
+        except BackendError as e:
+            if "HTTP 401" not in str(e):
+                raise
+            # a cached installation token can be revoked before its stated expiry
+            self._drop_token()
+            d = self._http("POST", "/graphql", body, "bearer " + self._token())
+        if d.get("errors"):
+            raise BackendError("github graphql: " + str(d["errors"][0].get("message", ""))[:300])
+        return d.get("data") or {}
+
+    # -- project ------------------------------------------------------
+    def ensure(self):
+        st = self.ctx.state()
+        self.pid = st.get("gh_project") or self.pid
+        title = self.PROJECT % (self.ctx.repo or self.ctx.owner)
+        if not self.pid:
+            d = self.gql("query($l:String!){repositoryOwner(login:$l){__typename id ... on User{projectsV2(first:50){nodes{id title public}}} ... on Organization{projectsV2(first:50){nodes{id title public}}}}}",
+                         l=self.ctx.owner)
+            owner = d.get("repositoryOwner") or {}
+            found = next((n for n in (owner.get("projectsV2") or {}).get("nodes") or []
+                          if n.get("title") == title), None)
+            if found:
+                self.pid = found["id"]
+                public = found.get("public")
+            elif owner.get("__typename") == "User":
+                raise UserOwnerUnsupported(
+                    "github user account %s: App tokens cannot use user-owned Projects v2 (an organisation can)"
+                    % self.ctx.owner)
+            else:
+                c = self.gql("mutation($o:ID!,$t:String!){createProjectV2(input:{ownerId:$o,title:$t}){projectV2{id public}}}",
+                             o=owner.get("id"), t=title)
+                self.pid = c["createProjectV2"]["projectV2"]["id"]
+                public = c["createProjectV2"]["projectV2"].get("public")
+            if public is not False:
+                # GitHub creates private projects; only change visibility when it is not (the App may lack that right)
+                self.gql("mutation($p:ID!){updateProjectV2(input:{projectId:$p,public:false}){projectV2{id}}}",
+                         p=self.pid)
+            st = self.ctx.state()
+            st["gh_project"] = self.pid
+            self.ctx.save(st)
+        st = self.ctx.state()
+        if not (st.get("gh_field") and st.get("gh_options")):
+            f = self.gql('query($p:ID!){node(id:$p){... on ProjectV2{fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}',
+                         p=self.pid)
+            nodes = ((f.get("node") or {}).get("fields") or {}).get("nodes") or []
+            sf = next((n for n in nodes if n and n.get("name") == "Status"), None)
+            if not sf:
+                raise BackendError("github project %s has no Status field" % self.pid)
+            opts = {o["name"].lower(): o["id"] for o in sf.get("options") or []}
+            pick = {
+                "todo": opts.get("todo") or opts.get("backlog"),
+                "in-progress": opts.get("in progress"),
+                "review": opts.get("in review") or opts.get("review") or opts.get("in progress"),
+                "done": opts.get("done"),
+            }
+            if not all(pick.values()):
+                raise BackendError("github Status field lacks options for: %s"
+                                   % ", ".join(k for k, v in pick.items() if not v))
+            st.update({"gh_project": self.pid, "gh_field": sf["id"], "gh_options": pick})
+            self.ctx.save(st)
+        return "private project %s (%s)" % (title, self.pid)
+
+    def _meta(self):
+        st = self.ctx.state()
+        if not (st.get("gh_field") and st.get("gh_options")):
+            self.ensure()
+            st = self.ctx.state()
+        return st
+
+    RECENT_TTL = 900
+
+    def _items(self):
+        """Listing plus the items this clone created recently: GitHub's items
+        connection lags (measured >14 s) behind addProjectV2DraftIssue."""
+        out = self._listed()
+        st = self.ctx.state()
+        recent = st.get("gh_recent") or {}
+        seen = {n.get("id") for n in out}
+        keep = {k: v for k, v in recent.items()
+                if k not in seen and time.time() - float(v.get("at") or 0) < self.RECENT_TTL}
+        if keep != recent:
+            st["gh_recent"] = keep
+            self.ctx.save(st)
+        return out + [{kk: vv for kk, vv in v.items() if kk != "at"} for v in keep.values()]
+
+    def _patch_recent(self, item, fn):
+        st = self.ctx.state()
+        node = (st.get("gh_recent") or {}).get(item)
+        if node is not None:
+            fn(node)
+            self.ctx.save(st)
+
+    def _listed(self):
+        out, cur = [], ""
+        while True:
+            d = self.gql('query($p:ID!,$c:String){node(id:$p){... on ProjectV2{items(first:100,after:$c){pageInfo{hasNextPage endCursor} nodes{id content{... on DraftIssue{id title body}} fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}',
+                         p=self.pid, c=cur)
+            it = (d.get("node") or {}).get("items") or {}
+            out += [n for n in it.get("nodes") or [] if (n.get("content") or {}).get("title") is not None]
+            if not (it.get("pageInfo") or {}).get("hasNextPage"):
+                return out
+            cur = it["pageInfo"]["endCursor"]
+
+    @staticmethod
+    def _status(n):
+        name = ((n.get("fieldValueByName") or {}).get("name") or "todo").lower()
+        return {"todo": "todo", "backlog": "todo", "in progress": "in-progress",
+                "in review": "review", "review": "review", "done": "done"}.get(name, "todo")
+
+    def _find(self, tid):
+        for n in self._items():
+            if ((n.get("content") or {}).get("title") or "").startswith("[%s]" % tid):
+                return n
+        die("unknown ticket " + tid)
+
+    def new(self, title, body):
+        tid = "tk-" + hashlib.sha1(("%s%s" % (title, time.time())).encode()).hexdigest()[:6]
+        d = self.gql("mutation($p:ID!,$t:String!,$b:String!){addProjectV2DraftIssue(input:{projectId:$p,title:$t,body:$b}){projectItem{id content{... on DraftIssue{id}}}}}",
+                     p=self.pid, t="[%s] %s" % (tid, title), b=body)
+        item = d["addProjectV2DraftIssue"]["projectItem"]
+        st = self.ctx.state()
+        st.setdefault("gh_recent", {})[item["id"]] = {
+            "id": item["id"], "at": time.time(), "fieldValueByName": {"name": "todo"},
+            "content": {"id": (item.get("content") or {}).get("id"),
+                        "title": "[%s] %s" % (tid, title), "body": body}}
+        self.ctx.save(st)
+        self._set(item["id"], "todo")
+        return tid
+
+    def _set(self, item, status):
+        st = self._meta()
+        self.gql("mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){projectV2Item{id}}}",
+                 p=self.pid, i=item, f=st["gh_field"], o=st["gh_options"][status])
+        self._patch_recent(item, lambda n: n.__setitem__("fieldValueByName", {"name": status.replace("-", " ")}))
+
+    def _view(self, n):
+        content = n.get("content") or {}
+        title = content.get("title") or ""
+        m = re.match(r"\[(tk-[0-9a-f]+)\]", title)
+        body = content.get("body") or ""
+        return {"id": m.group(1) if m else (content.get("id") or ""),
+                "title": re.sub(r"^\[[^\]]+\]\s*", "", title),
+                "status": self._status(n),
+                "notes": body.count("\n---note---")}
+
+    def get(self, tid):
+        return self._view(self._find(tid))
+
+    def set_status(self, tid, status):
+        self._set(self._find(tid)["id"], status)
+
+    def note(self, tid, text):
+        n = self._find(tid)
+        content = n.get("content") or {}
+        self.gql("mutation($d:ID!,$b:String!){updateProjectV2DraftIssue(input:{draftIssueId:$d,body:$b}){draftIssue{id}}}",
+                 d=content["id"], b=(content.get("body") or "") + "\n---note---\n" + text)
+        self._patch_recent(n.get("id"), lambda x: x["content"].__setitem__(
+            "body", (content.get("body") or "") + "\n---note---\n" + text))
+
+    def list(self, show_done=False):
+        return [self._view(n) for n in self._items() if show_done or self._status(n) != "done"]
+
+    def read(self, tid):
+        n = self._find(tid)
+        v = self._view(n)
+        parts = ((n.get("content") or {}).get("body") or "").split("\n---note---\n")
+        return {"id": v["id"], "title": v["title"], "status": v["status"], "body": parts[0], "notes": parts[1:]}
+
+    def search(self, term):
+        t = term.lower()
+        return [self._view(n) for n in self._items()
+                if t in ((n.get("content") or {}).get("title", "") + "\n" + ((n.get("content") or {}).get("body") or "")).lower()]
+
+
+KINDS = {"local": Local, "forgejo": Forgejo, "github": GitHub}
+
+
+def backend_class(kind):
+    cls = KINDS.get(kind)
+    if cls is None:
+        raise BackendError("unknown backend kind %r (expected: %s)" % (kind, ", ".join(sorted(KINDS))))
+    return cls
+
+
+def backend(ctx):
+    return backend_class(ctx.state().get("backend") or ctx.kind)(ctx)
+
+
+# ---------------------------------------------------------------- commands
+
+def need_ctx():
+    ctx = Ctx(os.getcwd())
+    if not ctx.in_repo:
+        die("not in a git repository")
+    return ctx
+
+
+def init(ctx, force=False):
+    """Idempotent: pick the backend, prepare it; degrade to local with the real
+    reason and retry the configured backend on a later init. A degraded backend
+    is retried at most once per RETRY_SECONDS so a down API cannot stall every
+    prompt; force (tk init --force) retries now."""
+    st = ctx.state()
+    if st.get("ready") and not st.get("degraded") and not force and (
+            st.get("backend") == ctx.kind or st.get("local_by") == ctx.kind):
+        return "already initialised (%s)" % st["backend"]
+    if st.get("degraded") and not force:
+        wait = float(st.get("retry_at") or 0) - time.time()
+        if wait > 0:
+            return "local: %s [degraded to local: %s; retry in %ds]" % (
+                st["backend"], st["degraded"], int(wait) + 1)
+    kind = ctx.kind
+    try:
+        msg = backend_try(ctx, kind)
+    except UserOwnerUnsupported as e:
+        # permanent and deliberate: the tickets live in the local store, aligned, not degraded
+        msg = backend_try(ctx, "local")
+        st = ctx.state()
+        st.update({"backend": "local", "ready": True, "local_by": kind})
+        st.pop("degraded", None)
+        st.pop("retry_at", None)
+        ctx.save(st)
+        return "local: %s [by design: %s]" % (msg, e)
+    except BackendError as e:
+        reason = str(e)
+        msg = backend_try(ctx, "local")
+        degrade(ctx, reason)
+        return "local: %s [degraded to local: %s]" % (msg, reason)
+    st = ctx.state()
+    st.update({"backend": kind, "ready": True})
+    st.pop("degraded", None)
+    st.pop("retry_at", None)
+    ctx.save(st)
+    return "%s: %s" % (kind, msg)
+
+
+def degrade(ctx, reason):
+    st = ctx.state()
+    st.update({"backend": "local", "ready": False, "degraded": reason,
+               "retry_at": time.time() + GitHub.RETRY_SECONDS})
+    ctx.save(st)
+
+
+def with_fallback(ctx, fn):
+    """Run fn on the configured backend; if a remote backend fails at runtime
+    (init only proves it once), degrade to local with the real reason and run
+    fn once more, so a ticket can always become active."""
+    try:
+        return fn()
+    except BackendError as e:
+        if (ctx.state().get("backend") or ctx.kind) == "local":
+            raise
+        degrade(ctx, str(e))
+        backend_try(ctx, "local")
+        return fn()
+
+
+def backend_try(ctx, kind):
+    return backend_class(kind)(ctx).ensure()
+
+
+def cmd_new(ctx, a):
+    start = "--start" in a
+    a = [x for x in a if x != "--start"]
+    if not a:
+        die('usage: tk new "<title: the owner request, verbatim>" [--start]')
+    init(ctx)
+    b = backend(ctx)
+    tid = b.new(a[0], a[1] if len(a) > 1 else "")
+    print(tid)
+    if start:
+        cmd_status(ctx, tid, "in-progress", b)
+
+
+def cmd_status(ctx, tid, status, b=None):
+    b = b or backend(ctx)
+    b.set_status(tid, status)
+    st = ctx.state()
+    if status == "in-progress":
+        st["active"] = tid
+    elif st.get("active") == tid:
+        st.pop("active", None)
+    if status in ("in-progress", "done") and tid in (st.get("alerts") or {}):
+        st["alerts"].pop(tid)  # the LLM took the ping up
+    ctx.save(st)
+    print("%s -> %s" % (tid, status))
+
+
+def cmd_note(ctx, tid, text):
+    backend(ctx).note(tid, text)
+    st = ctx.state()
+    st.setdefault("noted", [])
+    if tid not in st["noted"]:
+        st["noted"].append(tid)
+    ctx.save(st)
+    print("noted " + tid)
+
+
+def digest(t):
+    raw = json.dumps([t.get("status"), t.get("title"), t.get("body"), t.get("notes")], sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def receipt_path(ctx, name):
+    return os.path.join(ctx.sdir, "receipts", name + ".json")
+
+
+def write_receipt(ctx, name, obj):
+    atomic_write_json(receipt_path(ctx, name), obj)
+
+
+def cmd_read(ctx, tid):
+    t = backend(ctx).read(tid)
+    write_receipt(ctx, "read-" + str(tid), {"digest": digest(t), "ts": time.time()})
+    print("#%s [%s] %s" % (t["id"], t["status"], t["title"]))
+    print(t["body"])
+    for n in t["notes"]:
+        print("--- note ---")
+        print(n)
+
+
+def cmd_search(ctx, term):
+    res = backend(ctx).search(term)
+    write_receipt(ctx, "search", {"term": term, "ts": time.time()})
+    for t in res:
+        print("%s\t%s\t%s" % (t["id"], t["status"], t["title"]))
+
+
+def cmd_detect(ctx):
+    st = ctx.state()
+    print(json.dumps({"root": ctx.top, "host": ctx.host, "owner": ctx.owner, "repo": ctx.repo, "kind": ctx.kind,
+                      "enabled": ctx.enabled, "deferred": ctx.deferred, "initialised": bool(st.get("ready")),
+                      "backend": st.get("backend"), "degraded": st.get("degraded"), "active": st.get("active")}))
+
+
+CI_MOVES = {"start": "in-progress", "success": "review",
+            "failure": "todo", "review": "review", "merged": "done"}
+
+
+def parse_jobs(spec):
+    """"a=success,b=failure" -> [(name, result)]; a bare name counts as skipped."""
+    out = []
+    for part in (spec or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, res = part.partition("=")
+        out.append((name.strip(), res.strip() or "skipped"))
+    return out
+
+
+def jobs_note(jobs, ref):
+    """Comment naming every job that did not succeed (failed, cancelled, skipped)."""
+    bad = [(n, r) for n, r in jobs if r != "success"]
+    run = ""
+    srv, repo, rid = (os.environ.get(k) for k in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_RUN_ID"))
+    if srv and repo and rid:
+        run = " Run: %s/%s/actions/runs/%s" % (srv.rstrip("/"), repo, rid)
+    return "CI on %s is not green; moved to review. Not successful: %s.%s" % (
+        ref, ", ".join("%s (%s)" % b for b in bad), run)
+
+
+def forge_target(ctx):
+    """(flavor, api, owner/repo, token) for PR calls: the CI environment first
+    (GITHUB_API_URL and GITHUB_REPOSITORY are set by both Actions engines),
+    then the host config."""
+    api = (os.environ.get("TK_GH_API") or os.environ.get("GITHUB_API_URL") or "").rstrip("/")
+    slug = os.environ.get("GITHUB_REPOSITORY") or ("%s/%s" % (ctx.owner, ctx.repo) if ctx.owner else "")
+    tok = os.environ.get("TK_FORGE_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+    if api and tok:
+        return ("forgejo" if api.endswith("/api/v1") else "github"), api, slug, tok
+    if ctx.kind == "forgejo":
+        b = Forgejo(ctx)
+        return "forgejo", b.api, slug, b.tok
+    if ctx.kind == "github":
+        b = GitHub(ctx)
+        return "github", b.api, slug, b._token()
+    raise BackendError("no forge to merge on: set TK_FORGE_TOKEN (and GITHUB_API_URL) or configure the host")
+
+
+def forge_call(flavor, api, tok, method, path, body=None):
+    hdrs = {"Authorization": "token " + tok, "Content-Type": "application/json",
+            "Accept": "application/json", "User-Agent": "tk"}
+    req = urllib.request.Request(api + path, data=json.dumps(body).encode() if body is not None else None,
+                                 method=method, headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            raw = r.read()
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = (json.loads(e.read() or b"{}") or {}).get("message", "")
+        except (ValueError, OSError):
+            pass
+        raise BackendError("%s %s %s -> HTTP %d%s" % (flavor, method, path, e.code,
+                                                      (": " + detail[:200]) if detail else ""))
+    except (urllib.error.URLError, OSError) as e:
+        raise BackendError("%s unreachable: %s" % (flavor, e))
+    return json.loads(raw) if raw else {}
+
+
+def pr_merge(ctx, branch, sha=""):
+    """Open a PR from branch into the default branch and merge it. Idempotent:
+    reuses an open PR; a default or vanished branch is a no-op. Never echoes
+    the token. Returns (merged, one-line verdict)."""
+    flavor, api, slug, tok = forge_target(ctx)
+    base = "/repos/" + slug
+    default = (forge_call(flavor, api, tok, "GET", base) or {}).get("default_branch")
+    if not default:
+        raise BackendError("default branch of %s unknown" % slug)
+    if branch == default:
+        return False, "%s is the default branch: nothing to merge" % branch
+    if sha:
+        try:
+            tip = forge_call(flavor, api, tok, "GET", "%s/branches/%s" % (base, urllib.parse.quote(branch, safe="")))
+        except BackendError as e:
+            if "HTTP 404" in str(e):
+                return False, "branch %s is gone: nothing to merge" % branch
+            raise
+        c = tip.get("commit") or {}
+        tipsha = c.get("id") or c.get("sha") or ""
+        if tipsha and tipsha != sha:
+            return False, "branch %s moved past %s: a newer run owns the merge" % (branch, sha[:8])
+    pulls = forge_call(flavor, api, tok, "GET", base + "/pulls?state=open&limit=50") or []
+    pr = next((p for p in pulls if (p.get("head") or {}).get("ref") == branch
+               and (p.get("base") or {}).get("ref") == default), None)
+    if pr is None:
+        pr = forge_call(flavor, api, tok, "POST", base + "/pulls",
+                        {"title": branch, "head": branch, "base": default})
+    num = pr.get("number")
+    if flavor == "github":
+        forge_call(flavor, api, tok, "PUT", "%s/pulls/%s/merge" % (base, num),
+                   dict({"merge_method": "merge"}, **({"sha": sha} if sha else {})))
+    else:
+        forge_call(flavor, api, tok, "POST", "%s/pulls/%s/merge" % (base, num),
+                   dict({"Do": "merge"}, **({"head_commit_id": sha} if sha else {})))
+    return True, "merged PR #%s (%s -> %s)" % (num, branch, default)
+
+
+CI_OK, CI_FAILED, CI_NOVERDICT, CI_NORUN, CI_UNREADABLE = 0, 1, 2, 3, 4
+
+
+def ci_state(ctx, sha, call=None):
+    """(flavor, state, [(name, state, url)]) of the CI proof on a commit.
+    state: success | failure | pending | none. Absence is 'none' (red).
+    call(path) -> json replaces the forge credentials (used by tk watch)."""
+    if call is None:
+        flavor, api, slug, tok = forge_target(ctx)
+
+        def call(path):
+            return forge_call(flavor, api, tok, "GET", path)
+    else:
+        flavor, slug = ("github" if ctx.kind == "github" else "forgejo"), "%s/%s" % (ctx.owner, ctx.repo)
+    items = []
+    if flavor == "github":
+        r = call("/repos/%s/commits/%s/check-runs?per_page=100" % (slug, sha))
+        for x in r.get("check_runs") or []:
+            c = x.get("conclusion")
+            st = "pending" if x.get("status") != "completed" else ("success" if c in ("success", "skipped", "neutral") else "failure")
+            items.append((x.get("name", "?"), st, x.get("html_url", "")))
+    else:
+        r = call("/repos/%s/commits/%s/status" % (slug, sha))
+        for x in r.get("statuses") or []:
+            s = x.get("status") or x.get("state")
+            st = "success" if s == "success" else ("pending" if s in ("pending", "warning", "") else "failure")
+            items.append((x.get("context", "?"), st, x.get("target_url", "")))
+    if not items:
+        return flavor, "none", items
+    states = {i[1] for i in items}
+    return flavor, ("failure" if "failure" in states else "pending" if "pending" in states else "success"), items
+
+
+LOCAL_GATE_FILE = "local_gate.json"
+GATE_KEY_FILE = "local_gate.key"
+GATE_PROOF_VERSION = 2
+DECIDER_MIN_CONFIDENCE = 0.5
+
+
+def tk_tool_version():
+    """sha256 of the running tk source: a proof made by another tk build is not accepted."""
+    try:
+        with open(os.path.realpath(__file__), "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return "unreadable"
+
+
+TOOL_VERSION = tk_tool_version()
+
+
+def state_home():
+    return os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state")
+
+
+def gate_key(create=False):
+    """HMAC key of the local gate proofs, under the user state dir (file mode 0600).
+
+    Honest limit: this stops a repository-local writer (a script in the repo, a CI
+    job, a ticket body) from turning local_gate.json green by writing the file. A
+    process running as the same user can still read the key; no user-space scheme
+    proves authorship against the account owner itself."""
+    path = os.path.join(state_home(), "tk", GATE_KEY_FILE)
+    try:
+        with open(path, "rb") as fh:
+            key = fh.read()
+        return key if len(key) >= 32 else b""
+    except OSError:
+        pass
+    if not create:
+        return b""
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    key = os.urandom(32)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return gate_key()
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(key)
+    return key
+
+
+def gate_mac(key, sha, exit_code, tool, run_id):
+    msg = json.dumps({"sha": sha, "exit": int(exit_code), "tool": tool, "run": run_id},
+                     sort_keys=True).encode("utf-8")
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+
+def record_local_gate(ctx, sha, run_id):
+    """Bind a green FULL gate run to (sha, exit, tool version, worktree run id) with an
+    HMAC. Only tk merge calls this, after the full gate passed in a clean worktree of
+    that exact sha; a hand-written file carries no valid mac and proves nothing."""
+    key = gate_key(create=True)
+    if not key:
+        sys.stderr.write("tk merge: no gate key under %s: proof not recorded\n" % state_home())
+        return False
+    path = os.path.join(ctx.sdir, LOCAL_GATE_FILE)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            proofs = json.load(fh)
+    except (OSError, ValueError):
+        proofs = {}
+    if not isinstance(proofs, dict) or not isinstance(proofs.get("entries"), dict):
+        proofs = {"entries": {}}
+    proofs["version"] = GATE_PROOF_VERSION
+    proofs["entries"][sha] = {
+        "exit": 0, "tool": TOOL_VERSION, "run": run_id, "ts": int(time.time()),
+        "mac": gate_mac(key, sha, 0, TOOL_VERSION, run_id)}
+    atomic_write_json(path, proofs)
+    return True
+
+
+def local_gate_green(ctx, sha):
+    key = gate_key()
+    if not key:
+        return False
+    try:
+        with open(os.path.join(ctx.sdir, LOCAL_GATE_FILE), encoding="utf-8") as fh:
+            entry = (json.load(fh).get("entries") or {}).get(str(sha))
+    except (OSError, ValueError, AttributeError):
+        return False
+    if not isinstance(entry, dict) or entry.get("exit") != 0:
+        return False
+    if entry.get("tool") != TOOL_VERSION:
+        return False
+    want = gate_mac(key, str(sha), 0, TOOL_VERSION, str(entry.get("run") or ""))
+    return hmac.compare_digest(str(entry.get("mac") or ""), want)
+
+
+def branch_tip(ctx, name):
+    """(branch, sha) of a local or origin branch; die on an unknown branch."""
+    for ref in (name, "refs/heads/" + name, "refs/remotes/origin/" + name):
+        code, out, _ = run(["git", "rev-parse", "--verify", "-q", ref + "^{commit}"], cwd=ctx.top)
+        if code == 0 and out.strip():
+            return name, out.strip()
+    die("unknown branch %r: no local or origin ref" % name)
+
+
+def cmd_merge(ctx, a):
+    """Prove a branch tip and record the local gate proof.
+
+    The FULL gate runs in a throwaway git worktree of the tip sha, so the proof
+    covers exactly that commit on a clean checkout (the working tree is never used).
+    Refuses a dirty tree or an unknown branch; there is no bypass flag. The worktree
+    is removed afterwards."""
+    if len(a) > 1 or any(x.startswith("-") for x in a):
+        die("usage: tk merge [<branch>] (full gate in a clean worktree; no flag)")
+    code, dirty, _ = run(["git", "status", "--porcelain"], cwd=ctx.top)
+    if code != 0:
+        die("cannot read the working tree status")
+    if dirty.strip():
+        die("working tree is dirty: commit or stash before tk merge (the proof runs on a clean worktree)")
+    if a:
+        branch, sha = branch_tip(ctx, a[0])
+    else:
+        code, name, _ = run(["git", "symbolic-ref", "--short", "-q", "HEAD"], cwd=ctx.top)
+        if code != 0 or not name.strip():
+            die("detached HEAD: name the branch (tk merge <branch>)")
+        branch = name.strip()
+        code, sha, _ = run(["git", "rev-parse", "HEAD"], cwd=ctx.top)
+        sha = sha.strip()
+        if code != 0 or not sha:
+            die("branch %s has no commit" % branch)
+    sys.path.insert(0, tk_home())
+    import gate
+    tmp = tempfile.mkdtemp(prefix="tk-merge-")
+    wt = os.path.join(tmp, "wt")
+    run_id = hashlib.sha256(os.urandom(32)).hexdigest()[:32]
+    try:
+        code, _, err = run(["git", "worktree", "add", "--detach", wt, sha], cwd=ctx.top)
+        if code != 0:
+            die("cannot create a worktree at %s: %s" % (sha[:8], err))
+        print("merge: gate on %s@%s in %s" % (branch, sha[:8], wt))
+        rc = gate.main(wt, [])
+    finally:
+        run(["git", "worktree", "remove", "--force", wt], cwd=ctx.top)
+        shutil.rmtree(tmp, ignore_errors=True)
+        run(["git", "worktree", "prune"], cwd=ctx.top)
+    if rc != 0:
+        die("gate FAILED on %s@%s: no proof recorded" % (branch, sha[:8]))
+    if not record_local_gate(ctx, sha, run_id):
+        die("gate green but the proof was not recorded")
+    print("merge: gate green on %s@%s, local proof recorded (run %s)" % (branch, sha[:8], run_id))
+
+
+CRITERION_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s*)?(.+?)\s*$")
+
+
+def extract_criteria(body):
+    """Criteria of a ticket body, verbatim: list items first (checkbox marks stripped),
+    else one criterion per non-empty paragraph. Nothing is invented or reworded."""
+    crit = []
+    for line in (body or "").splitlines():
+        m = CRITERION_RE.match(line)
+        if m:
+            crit.append(m.group(1).strip())
+    if crit:
+        return crit
+    return [" ".join(b.split()) for b in re.split(r"\n\s*\n", body or "") if b.strip()]
+
+
+def diff_stat(ctx):
+    """Change evidence for the closure questions: working diff against HEAD, else the
+    stat of the last commit."""
+    code, out, _ = run(["git", "diff", "--stat", "HEAD"], cwd=ctx.top)
+    if code == 0 and out.strip():
+        return out.strip()
+    code, out, _ = run(["git", "show", "--stat", "--format=", "HEAD"], cwd=ctx.top)
+    return out.strip() if code == 0 else ""
+
+
+def ask_decider(ticket, criterion, criteria, sha, evidence):
+    """(verdict, confidence) from TK_DECIDER_CMD; absent or unusable -> unknown, never yes.
+    The command reads one JSON object on stdin and prints 'yes|partial|no [confidence]'."""
+    cmd = (os.environ.get("TK_DECIDER_CMD") or "").strip()
+    if not cmd:
+        return "unknown", None
+    payload = {"ticket": ticket, "criterion": criterion, "criteria": criteria,
+               "sha": sha, "evidence": evidence}
+    try:
+        p = subprocess.run(cmd, shell=True, input=json.dumps(payload), capture_output=True,
+                           text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return "unknown", None
+    if p.returncode != 0:
+        return "unknown", None
+    parts = (p.stdout or "").strip().split()
+    verdict = parts[0].lower() if parts else ""
+    conf = None
+    if len(parts) > 1:
+        try:
+            conf = float(parts[1])
+        except ValueError:
+            conf = None
+    if verdict not in ("yes", "partial", "no"):
+        return "unknown", conf
+    if conf is not None and conf < DECIDER_MIN_CONFIDENCE:
+        return "unknown", conf
+    return verdict, conf
+
+
+def closure_green(ctx, sha):
+    """A yes closes only with proof of THIS tip sha: local gate proof or green CI."""
+    if local_gate_green(ctx, sha):
+        return True, "local gate proof"
+    if not ctx.remote:
+        return False, "no CI exists here and no local gate proof on %s" % sha[:8]
+    try:
+        _, state, _items = ci_state(ctx, sha)
+    except (BackendError, SystemExit) as e:
+        return False, "CI unreadable: %s" % e
+    return state == "success", "CI state is '%s'" % state
+
+
+def cmd_closure(ctx, a):
+    """Per-criterion closure check: criteria copied verbatim from the ticket body, one
+    decider question per criterion, and a yes closes only with a green proof of the tip
+    sha (never on the decider's word alone)."""
+    if len(a) != 1 or a[0].startswith("-"):
+        die("usage: tk closure <ticket>")
+    tid = a[0]
+    t = backend(ctx).read(tid)
+    crit = extract_criteria(t.get("body") or "")
+    code, sha, _ = run(["git", "rev-parse", "HEAD"], cwd=ctx.top)
+    sha = sha.strip() if code == 0 else ""
+    evidence = diff_stat(ctx)
+    print("closure: ticket %s [%s] %s" % (t["id"], t["status"], t["title"]))
+    print("closure: tip %s, %d criteria" % (sha[:8] if sha else "none", len(crit)))
+    if not crit:
+        print("closure: the ticket body carries no criterion: nothing to decide")
+        return 1
+    verdicts = []
+    for i, c in enumerate(crit, 1):
+        v, conf = ask_decider(tid, c, crit, sha, evidence)
+        verdicts.append(v)
+        print("criterion %d: %s" % (i, c))
+        print("  verdict: %s%s" % (v, "" if conf is None else " (confidence %.2f)" % conf))
+    if "no" in verdicts:
+        print("closure: no: at least one criterion is unmet, not closed")
+        return 1
+    if all(v == "yes" for v in verdicts):
+        if not sha:
+            print("closure: every criterion yes, but there is no commit to prove: not closed")
+            return 1
+        ok, why = closure_green(ctx, sha)
+        if not ok:
+            print("closure: every criterion yes, but %s: not closed" % why)
+            return 1
+        backend(ctx).set_status(tid, "done")
+        print("closure: yes + %s -> %s closed" % (why, tid))
+        return 0
+    overall = "partial" if "partial" in verdicts else "unknown"
+    print("closure: %s%s: forced full reread" % (
+        overall, " (decider absent: TK_DECIDER_CMD unset)" if overall == "unknown" else ""))
+    print("FORCED REREAD, every criterion (answer with file:line):")
+    for i, c in enumerate(crit, 1):
+        print("  %d. %s" % (i, c))
+    print("diff stat:")
+    print(evidence or "  (no change on HEAD)")
+    return 1
+
+
+def cmd_ci_status(ctx, a):
+    """tk ci-status <branch> [--commit SHA] [--failures]: exit 0 green, 1 failed,
+    2 no verdict, 3 no run (absence is red), 4 unreadable."""
+    why = "--failures" in a
+    rest = [x for x in a if x != "--failures"]
+    commit = ""
+    if "--commit" in rest:
+        i = rest.index("--commit")
+        if i + 1 >= len(rest) or not rest[i + 1]:
+            sys.stderr.write("usage: tk ci-status <branch> [--commit SHA] [--failures]\n")
+            return CI_UNREADABLE
+        commit = rest[i + 1]
+        del rest[i:i + 2]
+    if len(rest) != 1 or rest[0].startswith("-"):
+        sys.stderr.write("usage: tk ci-status <branch> [--commit SHA] [--failures]\n")
+        return CI_UNREADABLE
+    branch = rest[0]
+    try:
+        sha = commit
+        if not sha:
+            code, out, _ = run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/%s^{commit}" % branch], cwd=ctx.top)
+            sha = out.strip() if code == 0 else ""
+            if not sha:
+                flavor, api, slug, tok = forge_target(ctx)
+                b = forge_call(flavor, api, tok, "GET", "/repos/%s/branches/%s" % (slug, urllib.parse.quote(branch, safe="")))
+                c = b.get("commit") or {}
+                sha = c.get("id") or c.get("sha") or ""
+        if not sha:
+            sys.stderr.write("x cannot resolve the tip of '%s'\n" % branch)
+            return CI_UNREADABLE
+        flavor, state, items = ci_state(ctx, sha)
+    except BackendError as e:
+        sys.stderr.write("x CI unreadable: %s\n" % e)
+        return CI_UNREADABLE
+    print("ci: branch=%s commit=%s state=%s" % (branch, sha[:12], state))
+    if state == "success":
+        return CI_OK
+    if why:
+        for n, s, u in items:
+            if s != "success":
+                print("  %s: %s %s" % (n, s, u))
+    if state == "none":
+        sys.stderr.write("x no CI run exists for '%s' at that commit: the absence of a result is RED, never 'no news'\n" % branch)
+        return CI_NORUN
+    if state == "failure":
+        sys.stderr.write("x the CI gate FAILED on '%s': the code is red.\n" % branch)
+        return CI_FAILED
+    sys.stderr.write("x the CI of '%s' reached no verdict (still pending): nothing was proven.\n" % branch)
+    return CI_NOVERDICT
+
+
+def cmd_ci(ctx, ref, result, jobs=None, sha=""):
+    """CI step: move the ticket or warn, never fail the build.
+
+    ref = branch name or ticket id; result = start|success|failure|review|
+    merge|merged: start -> in-progress, success -> review, failure -> todo,
+    review (with --jobs "a=success,b=failure") -> review plus a note naming
+    each job that did not succeed, nothing when all succeeded; merge opens a
+    PR into the default branch, merges it and only then moves to done
+    (merged -> done directly, kept for older pipelines).
+    """
+    m = re.search(r"(tk-[0-9a-f]+|L\d+|\d+)", ref.rsplit("/", 1)[-1])
+    if result == "merge":
+        # the one non-bookkeeping action: failures propagate and fail the job
+        merged, verdict = pr_merge(ctx, ref, sha)
+        print(verdict)
+        if not merged:
+            return  # the ticket reaches done only through a real merge
+        result = "merged"
+    if not m:
+        print("::warning::no ticket id in %r: work is not tracked" % ref)
+        return
+    tid = m.group(1)
+    if result == "review" and jobs is not None and all(r == "success" for _, r in jobs):
+        print("%s: every job succeeded: nothing to move (auto-merge owns it)" % tid)
+        return
+    status = CI_MOVES.get(result)
+    if not status:
+        print("%s: unknown result %r (no move)" % (tid, result))
+        return
+    st = ctx.state()
+    if st.get("degraded"):
+        print("::warning::%s: ticket %s not moved" % (st["degraded"], tid))
+        return
+    if ctx.remote and ctx.kind == "local" and not ctx.hostcfg:
+        print("::warning::no backend for host %r in %s: ticket %s not moved"
+              % (ctx.host, cfg_path(), tid))
+        return
+    try:
+        b = backend(ctx)
+        b.set_status(tid, status)
+        if result == "review" and jobs is not None:
+            b.note(tid, jobs_note(jobs, ref))
+    except SystemExit:  # die() from a backend on an unknown ticket
+        print("::warning::ticket %s not found: not moved" % tid)
+        return
+    except BackendError as e:
+        print("::warning::%s: ticket %s not moved" % (e, tid))
+        return
+    except Exception as e:  # bookkeeping must never break a build
+        print("::warning::tk ci error for %s: %r" % (tid, e))
+        return
+    print("%s -> %s" % (tid, status))
+
+
+# ---------------------------------------------------------------- watch
+# A user service (tk-watch.timer) reads the CI and PR state of every repository tk was
+# used in and moves the tickets: CI red or merge failed -> review (the LLM's ping zone,
+# never a human review), PR merged -> done. It needs no CI job, no App permission and no
+# organisation: reads go through the host token (forgejo), the App when it can read, else
+# the user's own gh CLI session.
+
+WATCH_BRANCH = re.compile(r"^[a-z]+/(tk-[0-9a-f]+|L\d+|\d+)(?:-|$)")
+WATCH_REGISTER = ("new", "start", "review", "done", "note", "init")
+
+
+def watch_registry_path():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state")
+    return os.path.join(base, "tk", "watch.json")
+
+
+def watch_load():
+    try:
+        with open(watch_registry_path(), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def watch_register(ctx):
+    """Remember a repository where a ticket was handled (best effort, never blocks a command)."""
+    try:
+        if not ctx.enabled or not ctx.top:
+            return
+        path = watch_registry_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with file_lock(path + ".lock"):
+            repos = watch_load()
+            if ctx.top not in repos:
+                repos[ctx.top] = int(time.time())
+                atomic_write_json(path, repos)
+    except Exception as e:  # registry is bookkeeping: a failure must not break the command
+        sys.stderr.write("tk: watch registry not updated: %r\n" % e)
+
+
+def gh_cli_call(path):
+    code, out, err = run(["gh", "api", path])
+    if code != 0:
+        raise BackendError("gh api %s failed: %s" % (path, (err or out).strip()[:200]))
+    return json.loads(out) if out.strip() else {}
+
+
+def watch_reader(ctx):
+    """call(path) -> json for read-only forge GETs. forgejo: the configured token. github:
+    the App token when the repository is not tk-local-by-design and the App can read, then
+    the gh CLI of the user."""
+    def forge(path):
+        flavor, api, slug, tok = forge_target(ctx)
+        return forge_call(flavor, api, tok, "GET", path)
+
+    if ctx.kind != "github":
+        return forge
+
+    def github(path):
+        if not ctx.state().get("local_by"):
+            try:
+                return forge(path)
+            except (BackendError, SystemExit):
+                pass
+        return gh_cli_call(path)
+    return github
+
+
+def watch_branches(ctx):
+    """Ticket id -> branches (remote and local) named <kind>/<ticket>[-slug]."""
+    try:  # offline or slow remote: the local refs still answer
+        subprocess.run(["git", "fetch", "origin", "--prune", "--quiet"], cwd=ctx.top, timeout=60,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    code, out, _ = run(["git", "for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes/origin"], cwd=ctx.top)
+    found = {}
+    for ref in out.split():
+        name = ref[len("origin/"):] if ref.startswith("origin/") else ref
+        m = WATCH_BRANCH.match(name)
+        if m:
+            found.setdefault(m.group(1), set()).add(name)
+    return found
+
+
+def watch_default_ref(ctx):
+    """Remote default branch ref (origin/HEAD, else origin/main, origin/master), or ''."""
+    code, out, _ = run(["git", "symbolic-ref", "-q", "refs/remotes/origin/HEAD"], cwd=ctx.top)
+    cands = ([out.strip()] if code == 0 and out.strip() else []) + ["refs/remotes/origin/main", "refs/remotes/origin/master"]
+    for ref in cands:
+        if run(["git", "rev-parse", "--verify", "-q", ref], cwd=ctx.top)[0] == 0:
+            return ref
+    return ""
+
+
+def watch_merged(ctx, branch, default):
+    """True when the branch tip is the second parent of a merge commit on the remote default
+    branch: a real PR merge of that exact tip. Read from git, so no PR history is listed."""
+    code, tip, _ = run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/" + branch], cwd=ctx.top)
+    if code != 0:
+        code, tip, _ = run(["git", "rev-parse", "--verify", "-q", "refs/heads/" + branch], cwd=ctx.top)
+    tip = tip.strip()
+    if code != 0 or not tip or not default:
+        return False
+    code, out, _ = run(["git", "rev-list", "--merges", "--parents", "--max-count=500", default], cwd=ctx.top)
+    return code == 0 and any(len(p) > 2 and p[2] == tip for p in (l.split() for l in out.splitlines()))
+
+
+def watch_repo(path, out):
+    ctx = Ctx(path)
+    if not ctx.in_repo or not ctx.enabled or ctx.deferred or not ctx.remote:
+        return 0
+    st = ctx.state()
+    if st.get("degraded") or not st.get("ready"):
+        out("%s: tickets not ready (%s): skipped" % (path, st.get("degraded") or "not initialised"))
+        return 0
+    b = backend(ctx)
+    tickets = {t["id"]: t for t in b.list() if t["status"] in ("in-progress", "review")}
+    if not tickets:
+        return 0
+    call = watch_reader(ctx)
+    branches = watch_branches(ctx)
+    default = watch_default_ref(ctx)
+    seen = st.get("watch_flagged") or {}
+    alerts = {}
+    errors = 0
+    for tid, t in sorted(tickets.items()):
+        names = sorted(branches.get(tid, ()))
+        try:
+            if any(watch_merged(ctx, x, default) for x in names):
+                b.set_status(tid, "done")
+                seen.pop(tid, None)
+                alerts[tid] = None
+                out("%s %s -> done (branch merged into %s)" % (path, tid, default.rsplit("/", 1)[-1]))
+                continue
+            if t["status"] != "in-progress":
+                continue
+            for br in names:
+                sha = ""
+                for ref in ("origin/%s" % br, br):
+                    code, out_sha, _ = run(["git", "rev-parse", "--verify", "-q", ref], cwd=ctx.top)
+                    if code == 0 and out_sha.strip():
+                        sha = out_sha.strip()
+                        break
+                if not sha:
+                    continue
+                _, state, items = ci_state(ctx, sha, call)
+                if state != "failure" or seen.get(tid) == sha:
+                    continue
+                bad = [(n, "failure") for n, s, _u in items if s == "failure"]
+                b.set_status(tid, "review")
+                b.note(tid, "CI or merge failed on %s (%s): %s. Moved to review so the LLM picks it up; fix, push, tk start %s."
+                       % (br, sha[:8], ", ".join(n for n, _ in bad) or "unknown job", tid))
+                seen[tid] = sha
+                alerts[tid] = "CI or merge FAILED on %s (%s): %s" % (br, sha[:8], ", ".join(n for n, _ in bad) or "unknown job")
+                out("%s %s -> review (%s red on %s)" % (path, tid, ", ".join(n for n, _ in bad), br))
+                break
+        except (BackendError, SystemExit) as e:
+            errors += 1
+            out("%s %s: %s" % (path, tid, e))
+    st = ctx.state()
+    st["watch_flagged"] = seen
+    cur = st.get("alerts") or {}
+    for tid, text in alerts.items():
+        if text:
+            cur[tid] = text
+        else:
+            cur.pop(tid, None)
+    st["alerts"] = cur
+    ctx.save(st)
+    return errors
+
+
+def cmd_watch(a):
+    """tk watch: one pass over every registered repository (run by tk-watch.timer)."""
+    repos = watch_load()
+    errors = 0
+    for path in sorted(repos):
+        if not os.path.isdir(path):
+            continue
+        try:
+            errors += watch_repo(path, lambda s: print(s, flush=True))
+        except (BackendError, SystemExit) as e:
+            errors += 1
+            print("%s: %s" % (path, e), flush=True)
+    return 1 if errors else 0
+
+
+# ---------------------------------------------------------------- alignment
+
+VENDOR_DIR = ".tk"
+ALIGN_JOBS = ("rules", "lint", "test", "audit", "e2e", "start", "board", "auto-merge")
+CI_KINDS = {"forgejo": (".forgejo/workflows", "forgejo-ci.yml"), "github": (".github/workflows", "github-ci.yml")}
+CI_FILE = "tk.yml"
+GATE_TARGETS = ("gate", "check", "test")
+
+
+def tk_home():
+    """The tk data dir (templates, notices, session state) next to this script."""
+    return os.environ.get("TK_HOME") or os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "tk")
+
+
+def read_text(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def ci_workflows(ctx):
+    """(dir, [(file, text)]) of the workflow files for this repo's forge kind, or None."""
+    spec = CI_KINDS.get(ctx.kind)
+    if not spec:
+        return None
+    d = os.path.join(ctx.top, spec[0])
+    out = []
+    if os.path.isdir(d):
+        for n in sorted(os.listdir(d)):
+            if n.endswith((".yml", ".yaml")):
+                out.append((n, read_text(os.path.join(d, n))))
+    return d, out
+
+
+def ci_missing_jobs(text):
+    """Jobs of the tk pipeline absent from a workflow that carries the tk ci marker."""
+    if "tk ci" not in text:
+        return list(ALIGN_JOBS)
+    return [j for j in ALIGN_JOBS if not re.search(r"^  %s:\s*$" % re.escape(j), text, re.M)]
+
+
+def has_gate_target(ctx):
+    """Same probe as the CI gate step: make -n on gate, check, test."""
+    for t in GATE_TARGETS:
+        code, _, _ = run(["make", "-n", t], cwd=ctx.top)
+        if code == 0:
+            return True
+    return False
+
+
+def align_report(ctx):
+    """{aligned, missing:[{id, why, fix}]}: everything a repo needs so tickets,
+    rules and CI work. Dynamic: kind from the remote, targets probed with make."""
+    miss = []
+    if not os.path.exists(os.path.join(ctx.top, "RULES.md")):
+        miss.append({"id": "rules", "why": "no RULES.md at the repo root",
+                     "fix": "tk align --fix rules"})
+    wf = ci_workflows(ctx)
+    if wf is not None:
+        d, files = wf
+        best = min((ci_missing_jobs(t) for _, t in files), key=len, default=list(ALIGN_JOBS))
+        if best:
+            rel = os.path.relpath(d, ctx.top)
+            miss.append({"id": "ci", "why": "no workflow under %s with the tk jobs (%s missing)" % (rel, ", ".join(best)),
+                         "fix": "tk align --fix ci"})
+        stale = vendor_stale(ctx)
+        if stale:
+            miss.append({"id": "tkbin", "why": "the CI runner has no tk: %s absent or outdated" % ", ".join(stale),
+                         "fix": "tk align --fix tk"})
+        if not has_gate_target(ctx):
+            miss.append({"id": "gate", "why": "no Makefile target gate|check|test for developers (CI itself runs tk gate)",
+                         "fix": "tk align --fix makefile"})
+    if not ctx.deferred:
+        st = ctx.state()
+        if not st.get("ready") or st.get("degraded"):
+            why = "tk backend degraded: %s" % st["degraded"] if st.get("degraded") else "tk backend not initialised"
+            miss.append({"id": "tk", "why": why, "fix": "tk init --force"})
+    return {"aligned": not miss, "missing": miss}
+
+
+def align_fix_ci(ctx):
+    """Install the CI template for the detected forge kind. Never overwrites a
+    different file, never writes secrets (templates carry none). Idempotent."""
+    spec = CI_KINDS.get(ctx.kind)
+    if not spec:
+        return {"fixed": [], "conflicts": [], "note": "no forge detected from the remote: no CI to install"}
+    tpl = read_text(os.path.join(tk_home(), "templates", spec[1]))
+    if not tpl:
+        return {"fixed": [], "conflicts": ["template %s not readable" % spec[1]]}
+    d = os.path.join(ctx.top, spec[0])
+    target = os.path.join(d, CI_FILE)
+    rel = os.path.relpath(target, ctx.top)
+    cur = read_text(target)
+    if os.path.exists(target):
+        if cur == tpl:
+            return {"fixed": [], "conflicts": []}
+        return {"fixed": [], "conflicts": ["%s exists and differs from the template: merge the tk jobs by hand" % rel]}
+    os.makedirs(d, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write(tpl)
+    return {"fixed": [rel], "conflicts": []}
+
+
+def align_fix_file(ctx, rel, tpl_path):
+    """Copy a template to rel when absent. Never overwrites a differing file."""
+    tpl = read_text(tpl_path)
+    if not tpl:
+        return {"fixed": [], "conflicts": ["template %s not readable" % tpl_path]}
+    target = os.path.join(ctx.top, rel)
+    if os.path.exists(target):
+        if read_text(target) == tpl:
+            return {"fixed": [], "conflicts": []}
+        return {"fixed": [], "conflicts": ["%s exists and differs from the template: merge by hand" % rel]}
+    os.makedirs(os.path.dirname(target) or ctx.top, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write(tpl)
+    return {"fixed": [rel], "conflicts": []}
+
+
+def align_fix_makefile(ctx):
+    if has_gate_target(ctx):
+        return {"fixed": [], "conflicts": []}
+    return align_fix_file(ctx, "Makefile", os.path.join(tk_home(), "templates", "Makefile.tk"))
+
+
+def align_fix_rules(ctx):
+    return align_fix_file(ctx, "RULES.md", os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "skills", "code-law", "rules.md"))
+
+
+VENDORED = ((("bin", "tk"), True), (("tk", "gate.py"), False))
+
+
+def vendor_src(parts):
+    if parts[0] == "bin":
+        return os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), *parts)
+    return os.path.join(tk_home(), *parts[1:])
+
+
+def vendor_stale(ctx):
+    """Vendored files (path relative to the repo) that are absent or differ from the running tk."""
+    out = []
+    for parts, _ in VENDORED:
+        rel = os.path.join(VENDOR_DIR, *parts)
+        if read_text(os.path.join(ctx.top, rel)) != read_text(vendor_src(parts)):
+            out.append(rel)
+    return out
+
+
+def align_fix_tk(ctx):
+    """Vendor the tk CLI into the repo so a CI runner (which has no tk installed) runs exactly the
+    gate the developers run. tk-owned files: refreshed when they differ from the running tk."""
+    fixed = []
+    for parts, exe in VENDORED:
+        rel = os.path.join(VENDOR_DIR, *parts)
+        src = read_text(vendor_src(parts))
+        if not src:
+            return {"fixed": fixed, "conflicts": ["tk source %s not readable" % os.path.join(*parts)]}
+        target = os.path.join(ctx.top, rel)
+        if read_text(target) != src:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, "w", encoding="utf-8") as fh:
+                fh.write(src)
+            fixed.append(rel)
+        os.chmod(target, 0o755 if exe else 0o644)
+    return {"fixed": fixed, "conflicts": []}
+
+
+ALIGN_FIXERS = {"ci": align_fix_ci, "makefile": align_fix_makefile, "rules": align_fix_rules, "tk": align_fix_tk}
+
+
+def align_line(ctx):
+    """One short reminder line for a misaligned in-scope repo, else ''."""
+    rep = align_report(ctx)
+    if rep["aligned"]:
+        return ""
+    ids = ", ".join(m["id"] for m in rep["missing"])
+    fixes = "; ".join("%s: %s" % (m["id"], m["fix"]) for m in rep["missing"])
+    return "[tk-align] repo not aligned: %s. Before other work: %s (owner order)" % (ids, fixes)
+
+
+def cmd_align(ctx, a):
+    out = {}
+    if "--fix" in a:
+        what = a[a.index("--fix") + 1] if a.index("--fix") + 1 < len(a) else ""
+        names = list(ALIGN_FIXERS) if what == "all" else [what]
+        if any(n not in ALIGN_FIXERS for n in names):
+            die("usage: tk align [--fix ci|makefile|rules|tk|all]")
+        out = {"fixed": [], "conflicts": []}
+        for n in names:
+            r = ALIGN_FIXERS[n](ctx)
+            out["fixed"] += r.get("fixed", [])
+            out["conflicts"] += r.get("conflicts", [])
+            if r.get("note"):
+                out["note"] = r["note"]
+    rep = align_report(ctx)
+    rep["scope"] = ctx.enabled
+    rep.update(out)
+    print(json.dumps(rep))
+
+
+def safe_sid(sid):
+    sid = str(sid or "")
+    if re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", sid) and sid not in (".", ".."):
+        return sid
+    return hashlib.sha256(sid.encode()).hexdigest()[:32] if sid else ""
+
+
+SESSION_TTL = 30 * 86400
+
+
+def broadcast(sid):
+    """Notices in <tk>/notices/*.txt not yet shown to this session id: returns
+    their one-line texts and records them (atomic, locked, per session)."""
+    sid = safe_sid(sid)
+    nd = os.path.join(tk_home(), "notices")
+    if not sid or not os.path.isdir(nd):
+        return []
+    notices = [(n[:-4], " ".join(read_text(os.path.join(nd, n)).split()))
+               for n in sorted(os.listdir(nd)) if n.endswith(".txt")]
+    notices = [(i, t) for i, t in notices if t]
+    sd = os.path.join(tk_home(), "sessions")
+    path = os.path.join(sd, sid + ".json")
+    with file_lock(os.path.join(sd, ".lock")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                seen = json.load(fh).get("seen", [])
+        except (OSError, ValueError):
+            seen = []
+        new = [(i, t) for i, t in notices if i not in seen]
+        if new:
+            atomic_write_json(path, {"seen": seen + [i for i, _ in new]})
+            now = time.time()
+            for n in os.listdir(sd):
+                p = os.path.join(sd, n)
+                if n.endswith(".json") and now - os.path.getmtime(p) > SESSION_TTL:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
+    return ["[tk-notice %s] %s" % (i, t) for i, t in new]
+
+
+def main(argv):
+    if not argv:
+        die("usage: tk detect|init|align|new|start|review|done|note|read|search|show|list|active|gate|merge|closure|ci|hook")
+    c, a = argv[0], argv[1:]
+    if c == "hook":
+        try:
+            import tkhook
+        except Exception as e:  # fail-open: a hook that cannot load must never block
+            sys.stderr.write("tk hook unavailable (ignored): %r\n" % e)
+            return 0
+        return tkhook.main(a[0] if a else "")
+    if c == "watch":
+        sys.exit(cmd_watch(a))
+    ctx = need_ctx()
+    if c in WATCH_REGISTER:
+        watch_register(ctx)
+    if c == "detect":
+        return cmd_detect(ctx)
+    if c == "init":
+        print(init(ctx, "--force" in a))
+    elif c == "align":
+        cmd_align(ctx, a)
+    elif c == "gate":
+        sys.path.insert(0, tk_home())
+        import gate
+        sys.exit(gate.main(ctx.top, a))
+    elif c == "merge":
+        cmd_merge(ctx, a)
+    elif c == "closure":
+        sys.exit(cmd_closure(ctx, a))
+    elif c == "ci-status":
+        sys.exit(cmd_ci_status(ctx, a))
+    elif c == "new":
+        with_fallback(ctx, lambda: cmd_new(ctx, a))
+    elif c in ("start", "review", "done"):
+        if not a:
+            die("usage: tk %s <id>" % c)
+        init(ctx)
+        with_fallback(ctx, lambda: cmd_status(ctx, a[0], {"start": "in-progress"}.get(c, c)))
+    elif c == "note":
+        if len(a) < 2:
+            die('usage: tk note <id> "<plan or report>"')
+        cmd_note(ctx, a[0], " ".join(a[1:]))
+    elif c == "read":
+        if not a:
+            die("usage: tk read <id>")
+        cmd_read(ctx, a[0])
+    elif c == "search":
+        if not a:
+            die("usage: tk search <term>")
+        cmd_search(ctx, " ".join(a))
+    elif c == "show":
+        print(json.dumps(backend(ctx).get(a[0])))
+    elif c == "list":
+        for t in backend(ctx).list("--all" in a):
+            print("%s\t%s\t%s" % (t["id"], t["status"], t["title"]))
+    elif c == "active":
+        print(ctx.state().get("active", ""))
+    elif c == "ci":
+        pos, jobs, sha, i = [], None, "", 0
+        while i < len(a):
+            if a[i] == "--jobs" and i + 1 < len(a):
+                jobs, i = parse_jobs(a[i + 1]), i + 2
+            elif a[i] == "--sha" and i + 1 < len(a):
+                sha, i = a[i + 1], i + 2
+            else:
+                pos.append(a[i])
+                i += 1
+        if not pos:
+            die('usage: tk ci <branch|id> start|success|failure|review|merge|merged [--jobs "a=success,b=failure"] [--sha S]')
+        cmd_ci(ctx, pos[0], pos[1] if len(pos) > 1 else "", jobs, sha)
+    else:
+        die("unknown command " + c)
+
+
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+    try:
+        main(sys.argv[1:])
+    except BackendError as e:
+        die(str(e))

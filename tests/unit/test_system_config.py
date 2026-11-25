@@ -1,8 +1,11 @@
 """System step of the installer: hostname, root password, sudo, SSH root."""
 
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+import pytest
 
 from tests.support.documents import (
     YamlValue,
@@ -12,7 +15,7 @@ from tests.support.documents import (
     sequence,
     text,
 )
-from tests.support.modules import load_module
+from tests.support.modules import bare_loader, load_module
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER = ROOT / 'workflows' / 'bootc-debs-builder'
@@ -21,7 +24,7 @@ RECIPE = (
     ROOT / 'src' / 'buildisopreinstall' / 'etc' / 'bootc-installer' /
     'recipe.json'
 )
-INSTALLER = BUILDER / 'bootc-installer-src'
+INSTALLER = BUILDER / 'bootc_installer'
 FISHERMAN = BUILDER / 'fisherman-src'
 
 
@@ -229,13 +232,14 @@ def test_step_is_in_the_recipe_after_the_user_step() -> None:
 
 def test_overlays_are_built_in_and_hashed() -> None:
     """Both source overlays are in ``sources`` and applied by the build."""
-    for name in ('fisherman', 'bootc-installer'):
+    for name, source in (('fisherman', 'fisherman-src'),
+                         ('bootc-installer', 'bootc_installer')):
         entry = _entry(name)
         sources = [text(item) for item in sequence(entry['sources'])]
-        assert f'{name}-src' in sources
+        assert source in sources
         call = (
             'deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/'
-            f'{name}-src"'
+            f'{source}"'
         )
         assert call in text(entry['build'])
 
@@ -249,3 +253,31 @@ def test_installer_fields_match_the_fisherman_recipe() -> None:
     assert 'json:"rootPassword,omitempty"' in fisherman
     assert 'json:"sshRootLogin,omitempty"' in fisherman
     assert '01-permitrootlogin.conf' in fisherman
+
+
+def test_apply_system_skips_an_empty_password_and_a_missing_user() -> None:
+    """An empty password is not written; no user leaves group editing alone."""
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
+    m.apply_system(recipe, {'rootPassword': '', 'sshRootLogin': True})
+    assert 'rootPassword' not in recipe
+    assert recipe['sshRootLogin'] is True
+
+
+def test_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The loader refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _load()
+
+
+def test_entry_rejects_an_unknown_name() -> None:
+    """A missing package name is reported as a KeyError."""
+    with pytest.raises(KeyError):
+        _ = _entry('no-such-package')

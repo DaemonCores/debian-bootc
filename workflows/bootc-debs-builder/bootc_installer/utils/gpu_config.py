@@ -1,17 +1,18 @@
-"""GPU profile and module-signature settings of the installer ``gpu_security`` step.
+"""GPU profile and module-signature settings of the installer gpu step.
 
-The GPU usage profile (consumed by ``dc-gpu`` on the installed system) and the
-module signature enforcement (the ``module.sig_enforce=1`` kernel argument) are
+The GPU usage profile (consumed by dc-gpu on the installed system) and the
+module signature enforcement (the module.sig_enforce=1 kernel argument) are
 install-time choices. The NVIDIA license is tied to the image, not to the
 hardware: it is required exactly when the selected image is a recipe entry
-carrying an ``eula`` key. The gate itself is delegated to the live image helper
-``nvidia-eula-stage``; the helpers here hold no GTK code so they can be tested
+carrying an eula key. The gate itself is delegated to the live image helper
+nvidia-eula-stage; the helpers here hold no GTK code so they can be tested
 alone.
 """
 
 import logging
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from typing import TypeGuard
 
 logger = logging.getLogger(__name__)
 
@@ -21,51 +22,99 @@ GPU_SET_HELPER = "/usr/libexec/debian-bootc/gpu-set-stage.py"
 USAGES = ("auto", "gaming", "ia")
 # The GPU module sets of the installed kernel (GPU FINAL, owner
 # 2026-11-03): the usage profile resolves the open set, the nvidia toggle
-# selects the -nvidia variant. ``auto`` resolves to gaming before the set
+# selects the -nvidia variant. "auto" resolves to gaming before the set
 # selection: the set debs are install-time-only, auto cannot be revisited
 # by dc-gpu at boot.
 GPU_SETS = ("gpu-ia", "gpu-gaming", "gpu-ia-nvidia", "gpu-gaming-nvidia")
 ACCEPT_WORD = "ACCEPT"
 COMMAND_TIMEOUT = 60
 
-Runner = Callable[..., subprocess.CompletedProcess]
+Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
-def selected_imgref(finals: dict | None, recipe: dict | None) -> str:
+def _is_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    """Tell whether a value is a recipe-like mapping.
+
+    Args:
+        value: Candidate value.
+
+    Returns:
+        True when the value is a mapping.
+    """
+    return isinstance(value, Mapping)
+
+
+def _is_object_list(value: object) -> TypeGuard[list[object]]:
+    """Tell whether a value is a list of arbitrary entries.
+
+    Args:
+        value: Candidate value.
+
+    Returns:
+        True when the value is a list.
+    """
+    return isinstance(value, list)
+
+
+def _text(value: object) -> str:
+    """Return a value when it is a string, else the empty string.
+
+    Args:
+        value: Candidate value.
+
+    Returns:
+        The string itself, or the empty string.
+    """
+    return value if isinstance(value, str) else ""
+
+
+def selected_imgref(
+    finals: Mapping[str, object] | None,
+    recipe: Mapping[str, object] | None,
+) -> str:
     """Name the image the installation will deploy.
 
     Args:
         finals: Finals of the image selection step, or None when it was not
             shown.
-        recipe: Installer recipe, used for its default ``imgref``.
+        recipe: Installer recipe, used for its default imgref.
 
     Returns:
         The custom image if one was typed, else the selected catalog image,
         else the recipe default; empty when none is known.
     """
-    finals = finals or {}
-    recipe = recipe or {}
+    if finals is None:
+        finals = {}
+    if recipe is None:
+        recipe = {}
     return (
-        finals.get("custom_image") or finals.get("selected_image")
-        or recipe.get("imgref") or ""
+        _text(finals.get("custom_image"))
+        or _text(finals.get("selected_image")) or _text(recipe.get("imgref"))
+        or ""
     )
 
 
-def eula_required(recipe: dict | None, imgref: str) -> bool:
+def eula_required(
+    recipe: Mapping[str, object] | None,
+    imgref: str,
+) -> bool:
     """Tell whether the NVIDIA license must be accepted for this image.
 
     Args:
-        recipe: Installer recipe holding the ``images`` catalog.
+        recipe: Installer recipe holding the images catalog.
         imgref: Image the installation will deploy.
 
     Returns:
-        True when the catalog entry of ``imgref`` carries an ``eula`` key.
+        True when the catalog entry of imgref carries an eula key.
         Images absent from the catalog (custom ones) never require it.
     """
-    if not imgref:
+    if not imgref or recipe is None:
         return False
-    for entry in (recipe or {}).get("images", []):
-        if isinstance(entry, dict) and entry.get("imgref") == imgref:
+    images = recipe.get("images")
+    if not _is_object_list(images):
+        return False
+    for entry in images:
+        if _is_mapping(entry) and entry.get("imgref") == imgref:
             return bool(entry.get("eula"))
     return False
 
@@ -77,7 +126,7 @@ def eula_accepted(typed: str) -> bool:
         typed: Text entered by the user.
 
     Returns:
-        True only for ``ACCEPT`` itself, as the helper demands on a console.
+        True only for ACCEPT itself, as the helper demands on a console.
     """
     return typed == ACCEPT_WORD
 
@@ -86,7 +135,7 @@ def eula_text(run: Runner = subprocess.run) -> str:
     """Read the shipped NVIDIA EULA through the live image helper.
 
     Args:
-        run: ``subprocess.run`` compatible callable (replaced in tests).
+        run: subprocess.run compatible callable (replaced in tests).
 
     Returns:
         The EULA text, empty when the helper cannot provide it.
@@ -107,14 +156,14 @@ def selected_set(usage: str, nvidia: bool) -> str:
     """Resolve the GPU module set of an install-time choice.
 
     Args:
-        usage: Chosen GPU usage profile (``auto`` resolves to ``gaming``:
+        usage: Chosen GPU usage profile (auto resolves to gaming:
             the set debs are an install-time choice, the open set carries
-            the display build the live session and a later `dc-gpu set`
+            the display build the live session and a later dc-gpu set
             can both use; the compute build is opt-in).
         nvidia: Whether the NVIDIA modules/stack were selected.
 
     Returns:
-        One of ``GPU_SETS``.
+        One of GPU_SETS.
     """
     open_set = "gaming" if usage == "auto" else usage
     return f"gpu-{open_set}-nvidia" if nvidia else f"gpu-{open_set}"
@@ -135,18 +184,18 @@ def stage_choice(
     install step delivers exactly the set of the recorded profile.
 
     Args:
-        usage: Chosen GPU usage profile, one of ``USAGES``.
+        usage: Chosen GPU usage profile, one of USAGES.
         accepted: Whether the user accepted the NVIDIA EULA.
         imgref: Image the installation will deploy, checked by the helper.
         nvidia: Whether the NVIDIA modules/stack were selected.
-        run: ``subprocess.run`` compatible callable (replaced in tests).
+        run: subprocess.run compatible callable (replaced in tests).
 
     Returns:
         True when the helpers accepted the choice.
     """
     if usage not in USAGES:
         return False
-    commands = []
+    commands: list[list[str]] = []
     if accepted:
         commands.append(["pkexec", HELPER, "consent", "--accept"])
     commands.append(["pkexec", HELPER, "usage", usage])
@@ -185,18 +234,21 @@ def stage_choice(
     return True
 
 
-def apply_gpu(recipe: dict, gpu: dict | None) -> None:
-    """Merge the ``gpu`` step result into a fisherman recipe, in place.
+def apply_gpu(
+    recipe: dict[str, object],
+    gpu: Mapping[str, object] | None,
+) -> None:
+    """Merge the gpu step result into a fisherman recipe, in place.
 
     Args:
         recipe: Fisherman recipe being built.
-        gpu: The ``gpu`` entry of the merged finals, or None when the step
+        gpu: The gpu entry of the merged finals, or None when the step
             was not shown (the recipe is then left untouched).
     """
     if not gpu:
         return
     usage = gpu.get("usage")
-    if usage in USAGES:
+    if isinstance(usage, str) and usage in USAGES:
         nvidia = bool(gpu.get("nvidiaConsent", False)
                       ) or bool(gpu.get("nvidia", False))
         recipe["gpuUsage"] = usage
@@ -208,7 +260,7 @@ def apply_gpu(recipe: dict, gpu: dict | None) -> None:
             # The installer deploys the derived image (owner 03/11): by
             # convention the derive compose tags <base>-nvidia in the
             # machine's container storage (recorded by gpu-set-stage).
-            base = gpu.get("imgref") or gpu.get("selected_image") or ""
+            base = _text(gpu.get("imgref")) or _text(gpu.get("selected_image"))
             if base:
                 recipe["imgref"] = f"{base}-nvidia"
     if "sigEnforce" in gpu:

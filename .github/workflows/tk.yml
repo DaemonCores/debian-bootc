@@ -1,0 +1,215 @@
+# tk CI for GitHub Actions: the same guarantees as the reference pipeline,
+# for ANY project, forge-agnostic.
+#
+# Install: copy this file to .github/workflows/tk.yml. No host, repository, organisation, branch
+# or token is written here; tk and the runner environment supply them.
+#
+# Jobs (all run in parallel; a run is green only when EVERY gate job is):
+#   rules      RULES.md (the code-law rulebook) must exist.
+#   lint       tk gate --only lint: format, lint, types, docs, dead code.
+#   test       tk gate --only test: the test suite with 100% coverage.
+#   audit      tk gate --only audit: security scan and dependency audit.
+#   e2e        tk gate --only e2e: end-to-end, when the project defines one.
+#              Languages are detected from the tracked files; a required tool
+#              that is missing FAILS its stage (never a silent green). A project
+#              replaces any stage with its own Makefile target gate-<category>.
+#   start      ticket -> in-progress (bookkeeping, fail-open).
+#   board      needs every gate job, runs always: tk ci <ref> review --jobs
+#              "rules=<result>,gate=<result>". All green = no-op; otherwise
+#              the ticket goes to review and a note NAMES each failed or
+#              skipped job. The ticket stays open (bookkeeping, fail-open).
+#   auto-merge needs every gate job (so only when all are green): opens a pull
+#              request into the repository's default branch (read from the
+#              API) and merges it, idempotently; the ticket moves to done only
+#              on that merge. This is an action, not bookkeeping: it fails loud.
+#
+# Bookkeeping steps print ::warning:: and exit 0 when tk is missing or the
+# backend is unreachable. Gate jobs always fail loud.
+# GitHub: the job token (secrets.GITHUB_TOKEN, permissions above) opens and merges
+# the pull request; ticket moves go through the GitHub App described in
+# ~/.claude/tk/APP_SETUP.md (hosts[<host>] app_id / installation_id /
+# private_key_path in the tk config), never the owner's personal account.
+#
+# The runner gets the tk CLI from the repository itself (.tk/, TK_BIN below). Branches that
+# get ticket moves and auto-merge: feature/ fix/ chore/ refactor/ docs/ infra/
+# (the ticket id is parsed from the branch name by tk).
+name: tk
+
+"on":
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Runs of different branches never wait for each other; a newer push to
+# exactly the same ref supersedes the older run.
+# The tk CLI is vendored in the repository (tk align --fix tk): a runner starts without it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: "rules (RULES.md present)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: RULES.md present
+        run: |
+          set -eu
+          if [ ! -f RULES.md ]; then
+            echo "::error::RULES.md is missing: the code-law rulebook must be in the repository"
+            exit 1
+          fi
+
+  lint:
+    name: "lint (format, lint, types, docs, dead code)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain of the detected languages
+        run: |
+          set -eu
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          command -v "$TK" >/dev/null 2>&1 || { echo "::error::tk not on PATH (set TK_BIN): the gate cannot run"; exit 1; }
+          "$TK" gate --install
+      - name: tk gate --only lint
+        run: |
+          set -eu
+          "${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}" gate --only lint
+
+  test:
+    name: "test (tests at 100% coverage)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain of the detected languages
+        run: |
+          set -eu
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          command -v "$TK" >/dev/null 2>&1 || { echo "::error::tk not on PATH (set TK_BIN): the gate cannot run"; exit 1; }
+          "$TK" gate --install
+      - name: tk gate --only test
+        run: |
+          set -eu
+          "${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}" gate --only test
+
+  audit:
+    name: "audit (security scan and dependency audit)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain of the detected languages
+        run: |
+          set -eu
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          command -v "$TK" >/dev/null 2>&1 || { echo "::error::tk not on PATH (set TK_BIN): the gate cannot run"; exit 1; }
+          "$TK" gate --install
+      - name: tk gate --only audit
+        run: |
+          set -eu
+          "${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}" gate --only audit
+
+  e2e:
+    name: "e2e (end-to-end, when the project defines it)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain of the detected languages
+        run: |
+          set -eu
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          command -v "$TK" >/dev/null 2>&1 || { echo "::error::tk not on PATH (set TK_BIN): the gate cannot run"; exit 1; }
+          "$TK" gate --install
+      - name: tk gate --only e2e
+        run: |
+          set -eu
+          "${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}" gate --only e2e
+
+  start:
+    name: "start (ticket to in-progress)"
+    if: >-
+      github.event_name == 'push' && (
+      startsWith(github.ref_name, 'feature/') ||
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'chore/') ||
+      startsWith(github.ref_name, 'refactor/') ||
+      startsWith(github.ref_name, 'docs/') ||
+      startsWith(github.ref_name, 'infra/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ticket to in-progress
+        env:
+          TK_REF: ${{ github.ref_name }}
+        run: |
+          set -u
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          if ! command -v "$TK" >/dev/null 2>&1; then
+            echo "::warning::tk not on PATH (set TK_BIN): ticket not updated"
+            exit 0
+          fi
+          if ! "$TK" ci "$TK_REF" start; then
+            echo "::warning::tk ci failed for '$TK_REF': ticket not updated"
+          fi
+          exit 0
+
+  board:
+    name: "board (review when the run is not green)"
+    needs: [rules, lint, test, audit, e2e]
+    if: >-
+      always() && github.event_name == 'push' && (
+      startsWith(github.ref_name, 'feature/') ||
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'chore/') ||
+      startsWith(github.ref_name, 'refactor/') ||
+      startsWith(github.ref_name, 'docs/') ||
+      startsWith(github.ref_name, 'infra/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: review column naming the jobs that did not succeed
+        env:
+          TK_REF: ${{ github.ref_name }}
+          TK_JOBS: rules=${{ needs.rules.result }},lint=${{ needs.lint.result }},test=${{ needs.test.result }},audit=${{ needs.audit.result }},e2e=${{ needs.e2e.result }}
+        run: |
+          set -u
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          if ! command -v "$TK" >/dev/null 2>&1; then
+            echo "::warning::tk not on PATH (set TK_BIN): ticket not updated"
+            exit 0
+          fi
+          if ! "$TK" ci "$TK_REF" review --jobs "$TK_JOBS"; then
+            echo "::warning::tk ci failed for '$TK_REF': ticket not updated"
+          fi
+          exit 0
+
+  auto-merge:
+    name: "auto-merge (PR into the default branch when green)"
+    needs: [rules, lint, test, audit, e2e]
+    if: >-
+      github.event_name == 'push' && (
+      startsWith(github.ref_name, 'feature/') ||
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'chore/') ||
+      startsWith(github.ref_name, 'refactor/') ||
+      startsWith(github.ref_name, 'docs/') ||
+      startsWith(github.ref_name, 'infra/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open the pull request and merge it
+        env:
+          TK_REF: ${{ github.ref_name }}
+          TK_SHA: ${{ github.sha }}
+          TK_FORGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
+          if ! command -v "$TK" >/dev/null 2>&1; then
+            echo "::error::tk not on PATH (set TK_BIN): cannot open and merge the pull request"
+            exit 1
+          fi
+          "$TK" ci "$TK_REF" merge --sha "$TK_SHA"

@@ -2,13 +2,16 @@
 
 import json
 import os
+import runpy
 import subprocess
 import sys
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+import pytest
+
 from tests.support.documents import YamlValue, load_json, mapping, sequence
-from tests.support.modules import load_module
+from tests.support.modules import bare_loader, load_module
 
 SCRIPT = (
     Path(__file__).resolve().parents[2] / "src" / "buildisopreinstall" / "usr" /
@@ -357,3 +360,78 @@ def test_label_in_a_comment_is_ignored(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert _load().read_label(str(path), "org.daemoncores.requires-eula") == ""
+
+
+def _run_script_entry(monkeypatch: pytest.MonkeyPatch, argv: list[str]) -> None:
+    """Run gen-recipe.py as the __main__ module in this process.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        argv: Arguments after the script name.
+    """
+    monkeypatch.setattr(sys, 'argv', [str(SCRIPT), *argv])
+    namespace = runpy.run_path(str(SCRIPT), run_name='__main__')
+    assert isinstance(namespace, dict)
+
+
+def test_main_in_process_writes_both_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The entry point replaces the catalog and mirrors it next to the recipe.
+
+    Args:
+        tmp_path: Scratch directory holding the Containerfile and recipe.
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    _ = (tmp_path / 'Containerfile').write_text('FROM scratch\n')
+    recipe = tmp_path / 'recipe.json'
+    _ = recipe.write_text(json.dumps({'distro_name': 'Deb'}), encoding='utf-8')
+    monkeypatch.setenv('IMAGE_REGISTRY', 'reg/x')
+    _run_script_entry(monkeypatch, [str(tmp_path), str(recipe)])
+    data = mapping(load_json(recipe.read_text(encoding='utf-8')))
+    assert data['imgref'] == 'reg/x:latest_amd64'
+    assert (tmp_path / 'images.json').is_file()
+
+
+def test_main_in_process_with_no_images(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty build context leaves the default image reference empty.
+
+    Args:
+        tmp_path: Scratch directory holding the recipe.
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    recipe = tmp_path / 'recipe.json'
+    _ = recipe.write_text(json.dumps({'distro_name': 'Deb'}), encoding='utf-8')
+    monkeypatch.delenv('IMAGE_REGISTRY', raising=False)
+    _run_script_entry(monkeypatch, [str(tmp_path), str(recipe)])
+    data = mapping(load_json(recipe.read_text(encoding='utf-8')))
+    assert data['imgref'] == ''
+    assert data['images'] == []
+
+
+def test_main_in_process_rejects_a_wrong_argument_count(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The entry point exits with status 1 when argv is incomplete.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    with pytest.raises(SystemExit) as exit_info:
+        _run_script_entry(monkeypatch, [])
+    assert exit_info.value.code == 1
+
+
+def test_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The facade refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _load()

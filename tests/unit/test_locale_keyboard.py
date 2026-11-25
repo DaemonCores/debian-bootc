@@ -1,16 +1,19 @@
 """Language and keyboard choices of the installer ``system`` step."""
 
 import re
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+import pytest
+
 from tests.support.documents import YamlValue
-from tests.support.modules import load_module
+from tests.support.modules import bare_loader, load_module
 
 BUILDER = Path(__file__
                ).resolve().parents[2] / 'workflows' / 'bootc-debs-builder'
-INSTALLER = BUILDER / 'bootc-installer-src'
+INSTALLER = BUILDER / 'bootc_installer'
 FISHERMAN = BUILDER / 'fisherman-src' / 'fisherman'
 
 SUPPORTED = """\
@@ -36,6 +39,7 @@ BASE_LST = """\
   bepo            fr: French (Bepo)
   intl            us: English (US, intl., with dead keys)
   orphan          zz: Unknown layout
+  nodesc          fr
 
 ! option
   grp             Switching to another layout
@@ -225,6 +229,16 @@ def test_apply_locale_ignores_missing_or_invalid_choices() -> None:
             }
         }, {
             'keyboard': None
+        }, {
+            'keyboard': {}
+        }, {
+            'keyboard': {
+                'layout': ''
+            }
+        }, {
+            'keyboard': {
+                'layout': 3
+            }
         }
     ]
     for system in choices:
@@ -269,3 +283,16 @@ def test_step_widgets_exist_in_the_template() -> None:
     assert {'locale_group', 'locale_row', 'keyboard_row'} <= set(children)
     for name in children:
         assert re.search(rf'\b{name}\b', blp), name
+
+
+def test_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The loader refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _load()

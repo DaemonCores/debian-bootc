@@ -58,11 +58,11 @@ arg-type-hints-in-docstring = false
 check-return-types = false
 require-return-section-when-returning-nothing = false
 allow-init-docstring = true
-exclude = '\.git|\.tox'
+exclude = '(^|/)(\.git|\.tox|\.venv|\.tk|\.ci|\.kronn|node_modules|docs|__pycache__)(/|$)'
 
 [tool.mypy]
 # The generator directory is the import root for the one Python file in this repo.
-mypy_path = "src/buildisopreinstall/usr/libexec/debian-bootc"
+mypy_path = "typings:src/buildisopreinstall/usr/libexec/debian-bootc:workflows/bootc-debs-builder"
 explicit_package_bases = true
 namespace_packages = true
 exclude = ["^docs/", "^\\.kronn/"]
@@ -73,6 +73,7 @@ exclude = ["^docs/", "^\\.kronn/"]
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
+stubPath = "typings"
 extraPaths = ["src/buildisopreinstall/usr/libexec/debian-bootc"]
 typeCheckingMode = "strict"
 reportAny = "error"
@@ -87,3 +88,14 @@ exclude = [
     "docs",
     ".kronn",
 ]
+
+[tool.coverage.run]
+# Project code only: pytest's tmp files and the vendored .tk/.ci are not ours.
+source = ["src", "tests", "workflows"]
+omit = ["*/.venv/*", "*/.tk/*", "*/.ci/*"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true

@@ -23,8 +23,14 @@ installkernel() {
 }
 
 install() {
-    inst_simple "$moddir/inst-stage2-lib.sh" /lib/debian-bootc-live/inst-stage2-lib.sh
+    # $moddir and $systemdutildir are set by dracut-functions, which sources
+    # this file inside the initramfs build; they are not shellcheck-visible.
+    # shellcheck disable=SC2154
+    inst_simple "$moddir/inst-stage2-lib.sh" \
+        /lib/debian-bootc-live/inst-stage2-lib.sh
+    # shellcheck disable=SC2154
     inst_hook cmdline 29 "$moddir/parse-inst-stage2.sh"
+    # shellcheck disable=SC2154
     inst_script "$moddir/live-generator.sh" \
         "$systemdutildir"/system-generators/debian-bootc-live-generator
 }

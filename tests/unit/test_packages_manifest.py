@@ -5,7 +5,10 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from tests.support.documents import (
     YamlValue,
@@ -681,3 +684,63 @@ def test_bootupd_depends_on_efibootmgr() -> None:
     deps = [ln for ln in kept if ln.lstrip().startswith('DEPS=')]
     assert len(deps) == 1
     assert 'efibootmgr' in deps[0]
+
+
+def _engine_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point MANIFEST at a copy whose sibling engine root is under tmp_path.
+
+    Args:
+        tmp_path: Scratch directory.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        The DaemonCores-CI root the copied manifest resolves to.
+    """
+    base = tmp_path / 'tree'
+    manifest = (
+        base / 'repo' / 'workflows' / 'bootc-debs-builder' / 'packages.yml'
+    )
+    manifest.parent.mkdir(parents=True)
+    source = MANIFEST.read_text(encoding='utf-8')
+    _ = manifest.write_text(source, encoding='utf-8')
+    monkeypatch.setattr(sys.modules[__name__], 'MANIFEST', manifest)
+    return base / 'DaemonCores-CI'
+
+
+def test_arm64_page_fragments_are_checked_in_the_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The engine page fragments are checked when the sibling is present.
+
+    Args:
+        tmp_path: Scratch directory.
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    engine = _engine_root(tmp_path, monkeypatch)
+    pages = engine / 'build-deb' / 'kernel-shared' / 'pages'
+    pages.mkdir(parents=True)
+    _ = (pages / '4k').write_text('CONFIG_ARM64_4K_PAGES=y\n', encoding='utf-8')
+    _ = (pages / '16k').write_text(
+        'CONFIG_ARM64_16K_PAGES=y\nCONFIG_LOCALVERSION="-16k"\n',
+        encoding='utf-8',
+    )
+    test_arm64_has_a_4k_and_a_16k_kernel()
+
+
+def test_arm_device_fragments_are_checked_in_the_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each device overlay is checked when the sibling engine is present.
+
+    Args:
+        tmp_path: Scratch directory.
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    engine = _engine_root(tmp_path, monkeypatch)
+    overlays = engine / 'build-deb' / 'kernel-shared' / 'modules'
+    overlays.mkdir(parents=True)
+    for device in _variants('linux-modules-arm-device'):
+        _ = (overlays / device).write_text(
+            'CONFIG_ARCH_BCM2835=y\nCONFIG_SOC=y\n', encoding='utf-8'
+        )
+    test_every_arm_family_has_a_variant_and_a_fragment()

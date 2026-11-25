@@ -22,8 +22,8 @@ RULES = (
     '50-bootc-installer-live.rules'
 )
 GPU_CONFIG = (
-    ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc-installer-src' /
-    'utils' / 'gpu_config.py'
+    ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc_installer' / 'utils' /
+    'gpu_config.py'
 )
 HELPER_CONSTANT = re.compile(r'^[A-Z_]*HELPER\s*=\s*"([^"]+)"', re.MULTILINE)
 LIBEXEC_PREFIX = '/usr/libexec/debian-bootc/'

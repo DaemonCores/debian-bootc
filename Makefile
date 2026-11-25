@@ -88,7 +88,7 @@ admission: $(VBIN)/python
 		'basedpyright>=1.40.1' \
 		'pydoclint>=0.9.1' \
 		'bandit>=1.9.4' \
-		'pytest>=8' \
+		'pytest>=8' 'pytest-cov>=5' \
 		'pyyaml>=6' \
 		'types-PyYAML>=6'
 
@@ -279,3 +279,31 @@ help:
 	@echo "  make build                — podman build (amd64 host, full image)"
 	@echo "  make docs                 — doc generation (KT-2, not yet implemented)"
 	@echo "  make hooks                — enable the committed git hooks (.githooks)"
+
+# Gate "tests" stage (tk gate): the shared CI checkout the manifest tests read,
+# then every Python test at 100% coverage, then the Go modules that carry a
+# go.mod (the Go overlays without one are only built inside the upstream trees).
+.PHONY: gate-tests
+gate-tests: py-ready ci-repo siblings
+	$(VBIN)/pytest -q --cov --cov-report=term-missing tests
+	@for mod in $$(git ls-files '*go.mod'); do \
+	  (cd "$$(dirname "$$mod")" && go test -cover ./...) || exit 1; \
+	done
+
+# Gate "types" stage (tk gate): basedpyright resolves imports through the
+# project .venv (pyproject venvPath), which py-ready provisions on a bare runner.
+.PHONY: gate-types
+gate-types: py-ready
+	$(VBIN)/basedpyright
+	$(VBIN)/mypy --exclude '(^|/)[.]tk/' .
+
+# Sibling repositories the cross-repo parity tests read (a bare runner has none;
+# an existing local checkout is kept as is).
+SIBLINGS ?= DaemonCores-CI DaemonCores-VE DaemonCores-VE.wiki proxmox-ve-bootc
+SIBLINGS_URL ?= https://github.com/DaemonCores
+.PHONY: siblings
+siblings:
+	@for repo in $(SIBLINGS); do \
+	  [ -d "../$$repo" ] || git clone --depth 1 --quiet "$(SIBLINGS_URL)/$$repo.git" "../$$repo" \
+	    || { echo "cannot fetch $$repo" >&2; exit 1; }; \
+	done
