@@ -1,0 +1,8 @@
+# Python tooling the tk gate stages use (gate --install reads this file).
+# Same set as the Makefile admission target.
+yapf>=0.43.0
+docformatter>=1.7.8
+basedpyright>=1.40.1
+pydoclint>=0.9.1
+pyyaml>=6
+types-PyYAML>=6
