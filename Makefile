@@ -279,3 +279,13 @@ help:
 	@echo "  make build                — podman build (amd64 host, full image)"
 	@echo "  make docs                 — doc generation (KT-2, not yet implemented)"
 	@echo "  make hooks                — enable the committed git hooks (.githooks)"
+
+# Gate "tests" stage (tk gate): the shared CI checkout the manifest tests read,
+# then every Python test at 100% coverage, then the Go modules that carry a
+# go.mod (the Go overlays without one are only built inside the upstream trees).
+.PHONY: gate-tests
+gate-tests: py-ready ci-repo
+	$(VBIN)/pytest -q --cov --cov-report=term-missing tests
+	@for mod in $$(git ls-files '*go.mod'); do \
+	  (cd "$$(dirname "$$mod")" && go test -cover ./...) || exit 1; \
+	done

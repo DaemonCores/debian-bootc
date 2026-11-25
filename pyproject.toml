@@ -88,3 +88,14 @@ exclude = [
     "docs",
     ".kronn",
 ]
+
+[tool.coverage.run]
+# Project code only: pytest's tmp files and the vendored .tk/.ci are not ours.
+source = ["src", "tests", "workflows"]
+omit = ["*/.venv/*", "*/.tk/*", "*/.ci/*"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
