@@ -1,8 +1,12 @@
-# Blocked
+# BLOCKED (2026-11-25 18:11)
+Remaining after the stable cleanup (T2-T4 done, see NIGHT-TASKS.md). Both are one body of work: the strict tk gate of the code-law template fails on this repository's legacy code.
 
-## L4 installer walkthrough on a published ISO (P-936)
-- Needs: a published ISO containing the installer fixes (DEBUG.md 19-24, 26). The published amd64 ISO 25bac424 predates them.
-- State 2026-11-24: every publish is broken until DaemonCores-CI fix/L21-drop-channel (drop_channels input; `vars` is not available in composite actions, DEBUG.md 33) is on CI main. That commit is staged but refused by the global git hook (`git_hook.py:68`: docs pointer must be staged, while `docs` is gitignored in DaemonCores-CI since 40e29b7). Owner decision: fix the hook for an ignored docs, or allow `git add -f docs`.
-- Proof: `git rev-list --count origin/main..HEAD` in each repo gives 1 / 0.
-- Unblock: the run publishes the ISO, then the UEFI walkthrough with every option and a boot of the installed disk (needs a local VM on the published ISO).
-- Other forge tickets stay in review awaiting that same run.
+## T1
+kind: command
+claim: PR #152 cannot merge: the strict gate (coverage 100%, mypy, pydoclint, go stages) is red on the legacy code, so the PR stays unmerged until T5 is fixed.
+cmd: gh pr view 152 --json mergeStateStatus,statusCheckRollup --jq '[.statusCheckRollup[]|select(.conclusion=="FAILURE")]|length|if .>0 then error("red") else "green" end'
+
+## T5
+kind: command
+claim: the gate still fails: test coverage 86.63% below 100%, mypy 9 errors, pydoclint missing, no gate stage for go code, 2 jq tests fail on the runner (run 45653658220). Fixing is multi-day code-law adoption, not started tonight; nothing was weakened.
+cmd: gh run view 45653658220 --json conclusion --jq 'if .conclusion=="success" then "ok" else error("failure") end'

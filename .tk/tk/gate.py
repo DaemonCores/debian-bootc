@@ -189,7 +189,10 @@ def python_stages(top, files, only_files):
     cfg = text(top, "pyproject.toml") + text(top, "setup.cfg")
     s = []
     ruff = venv_bin(top, "ruff")
-    s.append(Stage("format", "python", [ruff or "ruff", "format", "--check"] + tgt, "ruff"))
+    if "[tool.yapf]" in cfg:  # the project's own formatter wins over ruff format (they disagree on layout)
+        s.append(Stage("format", "python", [venv_bin(top, "yapf") or "yapf", "--diff", "--recursive"] + tgt, "yapf"))
+    else:
+        s.append(Stage("format", "python", [ruff or "ruff", "format", "--check"] + tgt, "ruff"))
     s.append(Stage("lint", "python", [ruff or "ruff", "check"] + tgt, "ruff"))
     if only_files is None:
         types = next((t for t in ("basedpyright", "pyright", "mypy") if venv_bin(top, t)), "mypy")
