@@ -1,0 +1,161 @@
+# tk CI for GitHub Actions: the same guarantees as the reference pipeline,
+# for ANY project, forge-agnostic.
+#
+# Install: copy this file to .github/workflows/tk.yml. No host, repository, organisation, branch
+# or token is written here; tk and the runner environment supply them.
+#
+# Jobs (all run in parallel; a run is green only when EVERY gate job is):
+#   rules      RULES.md (the code-law rulebook) must exist.
+#   gate       the project's own full gate, detected dynamically:
+#              make gate, else make check, else make test. None of them
+#              defined -> the job FAILS with an explicit message (never a
+#              silent green).
+#   start      ticket -> in-progress (bookkeeping, fail-open).
+#   board      needs the gate jobs, runs always: tk ci <ref> review --jobs
+#              "rules=<result>,gate=<result>". All green = no-op; otherwise
+#              the ticket goes to review and a note NAMES each failed or
+#              skipped job. The ticket stays open (bookkeeping, fail-open).
+#   auto-merge needs the gate jobs (so only when all are green): opens a pull
+#              request into the repository's default branch (read from the
+#              API) and merges it, idempotently; the ticket moves to done only
+#              on that merge. This is an action, not bookkeeping: it fails loud.
+#
+# Bookkeeping steps print ::warning:: and exit 0 when tk is missing or the
+# backend is unreachable. Gate jobs always fail loud.
+# GitHub: the job token (secrets.GITHUB_TOKEN, permissions above) opens and merges
+# the pull request; ticket moves go through the GitHub App described in
+# ~/.claude/tk/APP_SETUP.md (hosts[<host>] app_id / installation_id /
+# private_key_path in the tk config), never the owner's personal account.
+#
+# The runner needs the tk CLI on PATH (or TK_BIN pointing at it). Branches that
+# get ticket moves and auto-merge: feature/ fix/ chore/ refactor/ docs/ infra/
+# (the ticket id is parsed from the branch name by tk).
+name: tk
+
+"on":
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Runs of different branches never wait for each other; a newer push to
+# exactly the same ref supersedes the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: "rules (RULES.md present)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: RULES.md present
+        run: |
+          set -eu
+          if [ ! -f RULES.md ]; then
+            echo "::error::RULES.md is missing: the code-law rulebook must be in the repository"
+            exit 1
+          fi
+
+  gate:
+    name: "gate (the project's full gate)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Project gate
+        run: |
+          set -eu
+          for target in gate check test; do
+            if make -n "$target" >/dev/null 2>&1; then
+              echo "running: make $target"
+              exec make "$target"
+            fi
+          done
+          echo "::error::no gate: define 'make gate' (or 'make check', or 'make test') in the project"
+          exit 1
+
+  start:
+    name: "start (ticket to in-progress)"
+    if: >-
+      github.event_name == 'push' && (
+      startsWith(github.ref_name, 'feature/') ||
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'chore/') ||
+      startsWith(github.ref_name, 'refactor/') ||
+      startsWith(github.ref_name, 'docs/') ||
+      startsWith(github.ref_name, 'infra/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: ticket to in-progress
+        env:
+          TK_REF: ${{ github.ref_name }}
+        run: |
+          set -u
+          TK="${TK_BIN:-tk}"
+          if ! command -v "$TK" >/dev/null 2>&1; then
+            echo "::warning::tk not on PATH (set TK_BIN): ticket not updated"
+            exit 0
+          fi
+          if ! "$TK" ci "$TK_REF" start; then
+            echo "::warning::tk ci failed for '$TK_REF': ticket not updated"
+          fi
+          exit 0
+
+  board:
+    name: "board (review when the run is not green)"
+    needs: [rules, gate]
+    if: >-
+      always() && github.event_name == 'push' && (
+      startsWith(github.ref_name, 'feature/') ||
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'chore/') ||
+      startsWith(github.ref_name, 'refactor/') ||
+      startsWith(github.ref_name, 'docs/') ||
+      startsWith(github.ref_name, 'infra/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: review column naming the jobs that did not succeed
+        env:
+          TK_REF: ${{ github.ref_name }}
+          TK_JOBS: rules=${{ needs.rules.result }},gate=${{ needs.gate.result }}
+        run: |
+          set -u
+          TK="${TK_BIN:-tk}"
+          if ! command -v "$TK" >/dev/null 2>&1; then
+            echo "::warning::tk not on PATH (set TK_BIN): ticket not updated"
+            exit 0
+          fi
+          if ! "$TK" ci "$TK_REF" review --jobs "$TK_JOBS"; then
+            echo "::warning::tk ci failed for '$TK_REF': ticket not updated"
+          fi
+          exit 0
+
+  auto-merge:
+    name: "auto-merge (PR into the default branch when green)"
+    needs: [rules, gate]
+    if: >-
+      github.event_name == 'push' && (
+      startsWith(github.ref_name, 'feature/') ||
+      startsWith(github.ref_name, 'fix/') ||
+      startsWith(github.ref_name, 'chore/') ||
+      startsWith(github.ref_name, 'refactor/') ||
+      startsWith(github.ref_name, 'docs/') ||
+      startsWith(github.ref_name, 'infra/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open the pull request and merge it
+        env:
+          TK_REF: ${{ github.ref_name }}
+          TK_SHA: ${{ github.sha }}
+          TK_FORGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TK="${TK_BIN:-tk}"
+          if ! command -v "$TK" >/dev/null 2>&1; then
+            echo "::error::tk not on PATH (set TK_BIN): cannot open and merge the pull request"
+            exit 1
+          fi
+          "$TK" ci "$TK_REF" merge --sha "$TK_SHA"
