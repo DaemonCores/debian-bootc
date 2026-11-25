@@ -7,8 +7,11 @@ helper that applies it on the installed system. One assertion per step; the
 wizard itself must be gone.
 """
 
+import sys
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+import pytest
 
 from tests.support.documents import (
     load_json,
@@ -17,7 +20,7 @@ from tests.support.documents import (
     sequence,
     text,
 )
-from tests.support.modules import load_module
+from tests.support.modules import bare_loader, load_module
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER = ROOT / "workflows" / "bootc-debs-builder"
@@ -239,3 +242,29 @@ def test_no_wizard_remnant_is_shipped() -> None:
     assert (ROOT / "Makefile").read_text().find("firstboot-user-setup") == -1
     assert (ROOT /
             "Containerfile").read_text().find("firstboot-user-setup") == -1
+
+
+def test_system_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The system loader refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _system_config()
+
+
+def test_locale_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The locale loader refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _locale_config()

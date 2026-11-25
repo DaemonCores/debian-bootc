@@ -56,7 +56,7 @@ def load_yaml(text: str) -> YamlValue:
     Returns:
         The document as mappings, sequences and scalars.
     """
-    return _Parser(yaml.parse(text)).document()
+    return Parser(yaml.parse(text)).document()
 
 
 def load_json(text: str) -> YamlValue:
@@ -280,7 +280,7 @@ def _to_float(value: str) -> float:
     return sign * float(digits)
 
 
-class _Parser:
+class Parser:
     """Event-stream parser producing plain typed values."""
 
     def __init__(self, events: Iterator[Event]) -> None:
@@ -291,6 +291,14 @@ class _Parser:
         """
         self._events = events
         self._held: Event | None = None
+
+    def seed(self, event: Event) -> None:
+        """Hold an event as the next input of the stream.
+
+        Args:
+            event: The event returned by the next peek or take.
+        """
+        self._held = event
 
     def document(self) -> YamlValue:
         """Parse the single document held by the stream.
@@ -304,7 +312,7 @@ class _Parser:
         """
         if not isinstance(self._take(), StreamStartEvent):
             raise TypeError('missing YAML stream start')
-        event = self._peek()
+        event = self.peek()
         if isinstance(event, StreamEndEvent):
             _ = self._take()
             return None
@@ -330,7 +338,7 @@ class _Parser:
             return event
         return next(self._events)
 
-    def _peek(self) -> Event:
+    def peek(self) -> Event:
         """Return the next event without consuming it.
 
         Returns:
@@ -367,7 +375,7 @@ class _Parser:
             The parsed items.
         """
         items: list[YamlValue] = []
-        while not isinstance(self._peek(), SequenceEndEvent):
+        while not isinstance(self.peek(), SequenceEndEvent):
             items.append(self._node())
         _ = self._take()
         return items
@@ -383,7 +391,7 @@ class _Parser:
                 parsed.
         """
         pairs: dict[str, YamlValue] = {}
-        while not isinstance(self._peek(), MappingEndEvent):
+        while not isinstance(self.peek(), MappingEndEvent):
             key = self._node()
             if not isinstance(key, str):
                 raise TypeError(f'unsupported mapping key {type(key).__name__}')

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from tests.support.documents import (
     YamlValue,
     load_json,
@@ -91,3 +93,9 @@ def test_installer_choice_reaches_the_recipe_field() -> None:
     assert 'json:"autoUpdate,omitempty"' in fisherman
     assert 'bootc-fetch-apply-updates.timer' in fisherman
     assert '"/dev/null"' in fisherman
+
+
+def test_entry_rejects_an_unknown_name() -> None:
+    """A missing package name is reported as a KeyError."""
+    with pytest.raises(KeyError):
+        _ = _entry('no-such-package')

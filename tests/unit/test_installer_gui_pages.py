@@ -6,7 +6,10 @@ the vendored GUI (no tty wizard, no dialog outside the flow), and no personal
 value may be tracked in the shipped installer recipe.
 """
 
+import sys
 from pathlib import Path
+
+import pytest
 
 from tests.support.documents import load_json, mapping
 
@@ -122,3 +125,23 @@ def test_no_personal_value_is_tracked() -> None:
         haystack = haystack.replace('daemoncores', '')
         for token in PERSONAL_TOKENS:
             assert token not in haystack, f'{text_path}: {token}'
+
+
+def test_pycache_sources_are_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cached copy is not scanned; the live source still is.
+
+    Args:
+        tmp_path: Scratch directory standing in for the installer tree.
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    cache = tmp_path / '__pycache__'
+    cache.mkdir()
+    _ = (cache / 'leak.py').write_text('gabriel\n', encoding='utf-8')
+    _ = (tmp_path / 'clean.py').write_text('daemoncores\n', encoding='utf-8')
+    recipe = tmp_path / 'recipe.json'
+    _ = recipe.write_text('{}\n', encoding='utf-8')
+    monkeypatch.setattr(sys.modules[__name__], 'INSTALLER', tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], 'RECIPE', recipe)
+    test_no_personal_value_is_tracked()

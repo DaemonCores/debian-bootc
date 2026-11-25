@@ -31,3 +31,17 @@ def load_module(name: str, path: Path) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
     return module
+
+
+def bare_loader(name: str, path: Path) -> object:
+    """Return a bare object for a loader that must expose no surface.
+
+    Args:
+        name: Module name (unused).
+        path: Source path (unused).
+
+    Returns:
+        A bare object.
+    """
+    _ = (name, path)
+    return object()

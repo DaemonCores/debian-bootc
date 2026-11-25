@@ -13,7 +13,10 @@ silently lose it, plus the consumer contract of THIS repository.
 """
 
 import re
+import sys
 from pathlib import Path
+
+import pytest
 
 from tests.support.documents import load_yaml, mapping, sequence, text
 
@@ -308,3 +311,44 @@ def test_ve_consumer_uses_the_engine_export() -> None:
     assert 'gpu/vm' not in '\n'.join(
         (str(profile_entry['sources']), profile_build)
     )
+
+
+def test_ve_consumer_skips_without_the_fork_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The cross-repo assertions are skipped when the fork is absent.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        tmp_path: Scratch directory.
+    """
+    monkeypatch.setattr(
+        sys.modules[__name__], 'VE_MANIFEST', tmp_path / 'absent.yml'
+    )
+    test_ve_consumer_uses_the_engine_export()
+
+
+def test_ve_consumer_skips_without_the_vanilla_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The vanilla assertions are skipped when its checkout is absent.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        tmp_path: Scratch directory.
+    """
+    parent = tmp_path / 'gits'
+    fork = parent / 'DaemonCores-VE'
+    fork.mkdir(parents=True)
+    _ = (fork / 'Containerfile.base').write_text(
+        'FROM ghcr.io/daemoncores/proxmox-ve-bootc:latest_amd64\n',
+        encoding='utf-8',
+    )
+    manifest = tmp_path / 've-packages.yml'
+    _ = manifest.write_text('', encoding='utf-8')
+    monkeypatch.setattr(sys.modules[__name__], 'REPO', parent / 'debian-bootc')
+    monkeypatch.setattr(sys.modules[__name__], 'VE_MANIFEST', manifest)
+    monkeypatch.setattr(
+        sys.modules[__name__], 'VANILLA_ROOT', tmp_path / 'absent-vanilla'
+    )
+    test_ve_consumer_uses_the_engine_export()

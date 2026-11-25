@@ -15,6 +15,7 @@ import glob
 import runpy
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Protocol, runtime_checkable
 
 import pytest
@@ -59,6 +60,41 @@ CI_ADD_MODULES = [
 ]
 
 
+def _stage_glob(
+    pattern: str, stage: Path, real_glob: Callable[[str], list[str]]
+) -> list[str]:
+    """Serve the stub stage for the dracut pattern, else the real glob.
+
+    Args:
+        pattern: the glob pattern requested.
+        stage: Path of the stub stage.
+        real_glob: The real glob callable.
+
+    Returns:
+        The matching paths.
+    """
+    if 'org.osbuild.dracut' in pattern:
+        return [str(stage)]
+    return real_glob(pattern)
+
+
+def _stage_main(module: ModuleType) -> Main:
+    """Return the main function of a patched stage module.
+
+    Args:
+        module: The module loaded from the patched stage.
+
+    Returns:
+        The stage entry point.
+
+    Raises:
+        TypeError: when the module exposes no main function.
+    """
+    if not isinstance(module, _Stage):
+        raise TypeError('patched stage has no main')
+    return module.main
+
+
 @pytest.fixture
 def patched_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Main:
     """Apply patch_dracut.py to a stub stage and return its ``main``.
@@ -69,9 +105,6 @@ def patched_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Main:
 
     Returns:
         The ``main`` function of the patched stub stage.
-
-    Raises:
-        TypeError: when the patched stage exposes no ``main``.
     """
     stage = tmp_path / 'org.osbuild.dracut'
     _ = stage.write_text(STUB_STAGE)
@@ -86,16 +119,11 @@ def patched_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Main:
         Returns:
             The matching paths.
         """
-        if 'org.osbuild.dracut' in pattern:
-            return [str(stage)]
-        return real_glob(pattern)
+        return _stage_glob(pattern, stage, real_glob)
 
     monkeypatch.setattr(glob, 'glob', fake_glob)
     _ = runpy.run_path(str(SCRIPT))
-    module = load_module('patched_stage', stage)
-    if not isinstance(module, _Stage):
-        raise TypeError('patched stage has no main')
-    return module.main
+    return _stage_main(load_module('patched_stage', stage))
 
 
 def _tree(root: Path, *modules: str) -> Path:
@@ -179,3 +207,20 @@ def test_live_module_ships_in_the_overlay() -> None:
         'live-generator.sh'
     ):
         assert (root / name).is_file(), name
+
+
+def test_stage_glob_delegates_other_patterns(tmp_path: Path) -> None:
+    """Patterns that are not the dracut stage fall through to the real glob.
+
+    Args:
+        tmp_path: Scratch directory.
+    """
+    stage = tmp_path / 'org.osbuild.dracut'
+    _ = stage.write_text(STUB_STAGE)
+    assert _stage_glob(str(tmp_path / '*.missing'), stage, glob.glob) == []
+
+
+def test_stage_without_main_is_refused() -> None:
+    """A patched module exposing no main function is refused."""
+    with pytest.raises(TypeError, match='patched stage has no main'):
+        _ = _stage_main(ModuleType('patched_stage'))

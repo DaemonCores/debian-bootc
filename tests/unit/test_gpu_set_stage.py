@@ -8,6 +8,9 @@ import os
 import subprocess
 import textwrap
 from pathlib import Path
+from typing import cast
+
+import pytest
 
 SCRIPT = (
     Path(__file__).resolve().parents[2] / 'src' / 'buildisopreinstall' / 'usr' /
@@ -425,6 +428,22 @@ def _build_stub_deb(root: Path, cache: Path, pkg: str) -> None:
         raise RuntimeError(built.stderr.decode(errors='replace'))
 
 
+def _failing_dpkg_run(*args: object,
+                      **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+    """Fail every dpkg-deb build with a fixed stderr.
+
+    Args:
+        *args: subprocess.run positional arguments.
+        **kwargs: subprocess.run keyword arguments.
+
+    Returns:
+        A failed completed process.
+    """
+    _ = kwargs
+    command = cast(list[str], args[0])
+    return subprocess.CompletedProcess(command, 1, b'', b'broken deb')
+
+
 def a2o_debs(tmp_path: Path) -> Path:
     """Build the NVIDIA user-space and set debs of the sandbox.
 
@@ -538,3 +557,32 @@ def test_derive_apt2ostree_composes_the_nvidia_deployment(
                         ) < combine.find('os/base')
     log = (tmp_path / 'state' / 'ostree.log').read_text(encoding='utf-8')
     assert 'pull-local' in log
+
+
+def test_install_without_the_conf_payload_fails(tmp_path: Path) -> None:
+    """Without the shipped payload even the conf-only delivery refuses.
+
+    Args:
+        tmp_path: Sandbox directory.
+    """
+    root = tmp_path / 'root'
+    root.mkdir()
+    result = run(tmp_path, 'install', 'gpu-ia', str(root), payload=False)
+    assert result.returncode == 1
+    assert 'payload' in result.stderr
+
+
+def test_stub_deb_build_failure_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dpkg-deb failure raises with the builder's stderr.
+
+    Args:
+        tmp_path: Sandbox directory.
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(subprocess, 'run', _failing_dpkg_run)
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    with pytest.raises(RuntimeError, match='broken deb'):
+        _build_stub_deb(tmp_path / 'root', cache, 'stub-pkg')

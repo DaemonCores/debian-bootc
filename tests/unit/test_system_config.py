@@ -1,8 +1,11 @@
 """System step of the installer: hostname, root password, sudo, SSH root."""
 
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+import pytest
 
 from tests.support.documents import (
     YamlValue,
@@ -12,7 +15,7 @@ from tests.support.documents import (
     sequence,
     text,
 )
-from tests.support.modules import load_module
+from tests.support.modules import bare_loader, load_module
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER = ROOT / 'workflows' / 'bootc-debs-builder'
@@ -250,3 +253,31 @@ def test_installer_fields_match_the_fisherman_recipe() -> None:
     assert 'json:"rootPassword,omitempty"' in fisherman
     assert 'json:"sshRootLogin,omitempty"' in fisherman
     assert '01-permitrootlogin.conf' in fisherman
+
+
+def test_apply_system_skips_an_empty_password_and_a_missing_user() -> None:
+    """An empty password is not written; no user leaves group editing alone."""
+    m = _load()
+    recipe: dict[str, YamlValue] = {}
+    m.apply_system(recipe, {'rootPassword': '', 'sshRootLogin': True})
+    assert 'rootPassword' not in recipe
+    assert recipe['sshRootLogin'] is True
+
+
+def test_loader_guard_rejects_a_module_without_the_surface(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The loader refuses a module that lacks the tested helpers.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    monkeypatch.setattr(sys.modules[__name__], 'load_module', bare_loader)
+    with pytest.raises(TypeError, match='lacks its test surface'):
+        _ = _load()
+
+
+def test_entry_rejects_an_unknown_name() -> None:
+    """A missing package name is reported as a KeyError."""
+    with pytest.raises(KeyError):
+        _ = _entry('no-such-package')
