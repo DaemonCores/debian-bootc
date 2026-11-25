@@ -289,3 +289,10 @@ gate-tests: py-ready ci-repo
 	@for mod in $$(git ls-files '*go.mod'); do \
 	  (cd "$$(dirname "$$mod")" && go test -cover ./...) || exit 1; \
 	done
+
+# Gate "types" stage (tk gate): basedpyright resolves imports through the
+# project .venv (pyproject venvPath), which py-ready provisions on a bare runner.
+.PHONY: gate-types
+gate-types: py-ready
+	$(VBIN)/basedpyright
+	$(VBIN)/mypy --exclude '(^|/)[.]tk/' .
