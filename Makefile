@@ -88,7 +88,7 @@ admission: $(VBIN)/python
 		'basedpyright>=1.40.1' \
 		'pydoclint>=0.9.1' \
 		'bandit>=1.9.4' \
-		'pytest>=8' \
+		'pytest>=8' 'pytest-cov>=5' \
 		'pyyaml>=6' \
 		'types-PyYAML>=6'
 
