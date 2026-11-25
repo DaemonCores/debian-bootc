@@ -10,3 +10,10 @@
 # already uses "${VAR}" everywhere; the rule fires on $? and $# in safe
 # contexts.  Suppressed globally; violations in new code are caught by review.
 disable=SC2250
+
+# Follow the source= directives to the real files in this tree. The gate
+# runs shellcheck without -x; these settings make it read the project files a
+# script sources instead of reporting SC1091 for them. SCRIPTDIR resolves a
+# relative source= path from the checked script's own directory.
+external-sources=true
+source-path=SCRIPTDIR
