@@ -11,7 +11,7 @@ from pathlib import Path
 from tests.support.documents import load_json, mapping
 
 ROOT = Path(__file__).resolve().parents[2]
-INSTALLER = (ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc-installer-src')
+INSTALLER = (ROOT / 'workflows' / 'bootc-debs-builder' / 'bootc_installer')
 RECIPE = (
     ROOT / 'src' / 'buildisopreinstall' / 'etc' / 'bootc-installer' /
     'recipe.json'

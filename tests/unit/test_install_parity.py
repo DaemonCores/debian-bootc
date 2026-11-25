@@ -26,7 +26,7 @@ RECIPE = (
     ROOT / "src" / "buildisopreinstall" / "etc" / "bootc-installer" /
     "recipe.json"
 )
-INSTALLER = BUILDER / "bootc-installer-src"
+INSTALLER = BUILDER / "bootc_installer"
 FISHERMAN = BUILDER / "fisherman-src"
 WIZARD_DIR = BUILDER / "firstbootpostinstall"
 WIZARD_SCRIPT = (

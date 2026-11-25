@@ -65,26 +65,26 @@ def _overlay_text(name: str) -> str:
 
 def test_overlays_are_built_in_and_hashed() -> None:
     """Both source overlays are in ``sources`` and applied by the build."""
-    for name in ('fisherman', 'bootc-installer'):
+    for name, source in (('fisherman', 'fisherman-src'),
+                         ('bootc-installer', 'bootc_installer')):
         entry = _entry(name)
         sources = [text(item) for item in sequence(entry['sources'])]
-        assert f'{name}-src' in sources
+        assert source in sources
         # The overlay carries ONLY source: the .patch files. No
         # patches.lock.json in git (owner 2026-11-03): the sha256 reference is
         # computed and retained by patch_guard at build, build-local.
-        assert list((BUILDER / f'{name}-src').rglob('*.patch')), name
-        assert not list((BUILDER / f'{name}-src').rglob('patches.lock.json')
-                        ), name
+        assert list((BUILDER / source).rglob('*.patch')), name
+        assert not list((BUILDER / source).rglob('patches.lock.json')), name
         call = (
             'deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/'
-            f'{name}-src"'
+            f'{source}"'
         )
         assert call in text(entry['build'])
 
 
 def test_installer_choice_reaches_the_recipe_field() -> None:
     """The installer writes ``autoUpdate`` and fisherman masks the timer."""
-    installer = _overlay_text('bootc-installer-src')
+    installer = _overlay_text('bootc_installer')
     assert 'recipe["autoUpdate"] = False' in installer
     assert '"autoupdate": BootcDefaultAutoupdate' in installer
     fisherman = _overlay_text('fisherman-src')

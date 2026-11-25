@@ -2492,7 +2492,7 @@ packages:
       - fisherman
     sources:
       - preinstall/output/bootc-installer
-      - bootc-installer-src
+      - bootc_installer
     env:
       BOOTC_INSTALLER_COMMIT: "0290d4fb469a3a6fd8114a28f1eb429db8b6e2e5"
       BOOTC_INSTALLER_VER: "3.0.0+git0290d4f+bootc8"
@@ -2525,7 +2525,7 @@ packages:
       # settings step (hostname, root password, sudo, SSH root login) that
       # replaces the first-boot setup service and needs the fisherman recipe
       # fields of fisherman-src.
-      deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/bootc-installer-src" /build/bootc-installer-src
+      deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/bootc_installer" /build/bootc-installer-src
 
       # 05/11 restructure: the repo tree flattened one level (the mirror of
       # the upstream ROOT is upstream's bootc_installer/ subtree, not the
@@ -2533,7 +2533,7 @@ packages:
       # src files of the overlay are re-landed at their upstream
       # bootc_installer/<sub> paths; the .patch files ride the overlay
       # apply directly (applied from the overlay dir, -p1) and need no copy.
-      _OVL="${SAVE_PWD}/workflows/bootc-debs-builder/bootc-installer-src"
+      _OVL="${SAVE_PWD}/workflows/bootc-debs-builder/bootc_installer"
       for f in \
           defaults/autoupdate.py defaults/gpu_security.py defaults/system.py \
           gtk/default-autoupdate.blp gtk/default-gpu-security.blp gtk/default-system.blp \

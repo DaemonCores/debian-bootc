@@ -21,7 +21,7 @@ RECIPE = (
     ROOT / 'src' / 'buildisopreinstall' / 'etc' / 'bootc-installer' /
     'recipe.json'
 )
-INSTALLER = BUILDER / 'bootc-installer-src'
+INSTALLER = BUILDER / 'bootc_installer'
 FISHERMAN = BUILDER / 'fisherman-src'
 
 
@@ -229,13 +229,14 @@ def test_step_is_in_the_recipe_after_the_user_step() -> None:
 
 def test_overlays_are_built_in_and_hashed() -> None:
     """Both source overlays are in ``sources`` and applied by the build."""
-    for name in ('fisherman', 'bootc-installer'):
+    for name, source in (('fisherman', 'fisherman-src'),
+                         ('bootc-installer', 'bootc_installer')):
         entry = _entry(name)
         sources = [text(item) for item in sequence(entry['sources'])]
-        assert f'{name}-src' in sources
+        assert source in sources
         call = (
             'deb_src_overlay "${SAVE_PWD}/workflows/bootc-debs-builder/'
-            f'{name}-src"'
+            f'{source}"'
         )
         assert call in text(entry['build'])
 

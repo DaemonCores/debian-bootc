@@ -6,15 +6,47 @@ root login policy. The helpers hold no GTK code so they can be tested alone.
 """
 
 import re
+from collections.abc import Mapping
+from typing import TypeGuard
 
 HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$")
 MIN_PASSWORD_LENGTH = 8
 
 # Groups every created user joins; fisherman drops those the image lacks.
 DEBIAN_USER_GROUPS = (
-    "adm", "systemd-journal", "cdrom", "audio", "video", "plugdev", "netdev",
+    "adm",
+    "systemd-journal",
+    "cdrom",
+    "audio",
+    "video",
+    "plugdev",
+    "netdev",
 )
 ADMIN_GROUP = "sudo"
+
+
+def _is_object_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Tell whether a value is a mutable string-keyed dictionary.
+
+    Args:
+        value: Candidate value.
+
+    Returns:
+        True when the value is a dict.
+    """
+    return isinstance(value, dict)
+
+
+def _is_object_list(value: object) -> TypeGuard[list[object]]:
+    """Tell whether a value is a list of arbitrary entries.
+
+    Args:
+        value: Candidate value.
+
+    Returns:
+        True when the value is a list.
+    """
+    return isinstance(value, list)
 
 
 def valid_hostname(hostname: str) -> bool:
@@ -42,7 +74,7 @@ def valid_root_password(password: str, confirmation: str) -> bool:
     return len(password) >= MIN_PASSWORD_LENGTH and password == confirmation
 
 
-def user_groups(base: list, sudo: bool) -> list:
+def user_groups(base: list[str], sudo: bool) -> list[str]:
     """Compute the supplementary groups of the created user.
 
     Args:
@@ -60,7 +92,10 @@ def user_groups(base: list, sudo: bool) -> list:
     return groups
 
 
-def apply_system(recipe: dict, system: dict | None) -> None:
+def apply_system(
+    recipe: dict[str, object],
+    system: Mapping[str, object] | None,
+) -> None:
     """Merge the ``system`` step result into a fisherman recipe, in place.
 
     Args:
@@ -70,11 +105,18 @@ def apply_system(recipe: dict, system: dict | None) -> None:
     """
     if not system:
         return
-    if system.get("rootPassword"):
-        recipe["rootPassword"] = system["rootPassword"]
+    password = system.get("rootPassword")
+    if isinstance(password, str) and password:
+        recipe["rootPassword"] = password
     if "sshRootLogin" in system:
         recipe["sshRootLogin"] = bool(system["sshRootLogin"])
     user = recipe.get("user")
-    if user and user.get("username"):
-        user["groups"] = user_groups(user.get("groups", []),
-                                     bool(system.get("sudo", True)))
+    if not _is_object_dict(user):
+        return
+    username = user.get("username")
+    if not isinstance(username, str) or not username:
+        return
+    groups_value = user.get("groups")
+    base: list[str] = ([g for g in groups_value if isinstance(g, str)]
+                       if _is_object_list(groups_value) else [])
+    user["groups"] = user_groups(base, bool(system.get("sudo", True)))

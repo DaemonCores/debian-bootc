@@ -10,7 +10,7 @@ from tests.support.modules import load_module
 
 BUILDER = Path(__file__
                ).resolve().parents[2] / 'workflows' / 'bootc-debs-builder'
-INSTALLER = BUILDER / 'bootc-installer-src'
+INSTALLER = BUILDER / 'bootc_installer'
 FISHERMAN = BUILDER / 'fisherman-src' / 'fisherman'
 
 SUPPORTED = """\
