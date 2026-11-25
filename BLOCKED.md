@@ -1,12 +1,7 @@
-# BLOCKED (2026-11-25 18:11)
-Remaining after the stable cleanup (T2-T4 done, see NIGHT-TASKS.md). Both are one body of work: the strict tk gate of the code-law template fails on this repository's legacy code.
+# BLOCKED (2026-11-25 18:58)
+T2-T5 are done (see NIGHT-TASKS.md). One item left, and it needs an owner decision on the global git hook.
 
 ## T1
 kind: command
-claim: PR #152 cannot merge: the strict gate (coverage 100%, mypy, pydoclint, go stages) is red on the legacy code, so the PR stays unmerged until T5 is fixed.
-cmd: gh pr view 152 --json mergeStateStatus,statusCheckRollup --jq '[.statusCheckRollup[]|select(.conclusion=="FAILURE")]|length|if .>0 then error("red") else "green" end'
-
-## T5
-kind: command
-claim: the gate still fails: test coverage 86.63% below 100%, mypy 9 errors, pydoclint missing, no gate stage for go code, 2 jq tests fail on the runner (run 45653658220). Fixing is multi-day code-law adoption, not started tonight; nothing was weakened.
-cmd: gh run view 45653658220 --json conclusion --jq 'if .conclusion=="success" then "ok" else error("failure") end'
+claim: PR #153 cannot merge green. Its "lint / check" job runs check_docs.py against the wiki master, which still cites the pre-rename overlay path workflows/bootc-debs-builder/bootc-installer-src (4 citations). The fix is committed on the wiki branch docs/tk-6ccc13 (e588019, fast-forward of master) but pushing the wiki master is refused by the global git hook (git_hook.py ci_green asks GitHub for check-runs of the wiki repo, which answers 404 because a wiki has none: "CI proof for master unreadable ... denied"). I do not bypass the hook. Decision for the owner: let the hook accept a wiki master push (the wiki has no CI), or publish e588019 to the wiki master.
+cmd: gh pr view 153 --json statusCheckRollup --jq '[.statusCheckRollup[]|select(.conclusion=="FAILURE")]|length|if .>0 then error("red") else "ok" end'
