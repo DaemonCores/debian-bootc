@@ -3,8 +3,8 @@ package main
 import (
 	"slices"
 
-	"github.com/osbuild/image-builder/pkg/olog"
 	"github.com/osbuild/image-builder/pkg/bootc"
+	"github.com/osbuild/image-builder/pkg/olog"
 )
 
 // isoTypeForBase maps the legacy rpm based "iso" and "anaconda-iso" image

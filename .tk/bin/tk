@@ -791,6 +791,8 @@ def cmd_new(ctx, a):
     a = [x for x in a if x != "--start"]
     if not a:
         die('usage: tk new "<title: the owner request, verbatim>" [--start]')
+    if len(a) > 2 or any(x.startswith("--") for x in a):
+        die('usage: tk new "<title>" ["<body>"] [--start] (unknown option or extra argument: no ticket created)')
     init(ctx)
     b = backend(ctx)
     tid = b.new(a[0], a[1] if len(a) > 1 else "")
@@ -926,6 +928,35 @@ def forge_call(flavor, api, tok, method, path, body=None):
     return json.loads(raw) if raw else {}
 
 
+SELF_JOB = "auto-merge (PR into the default branch when green)"  # job name in both CI templates
+
+
+def require_green(ctx, sha, call, target):
+    """Every check of the commit, from EVERY workflow, except the merge job itself: waited for while
+    pending (TK_MERGE_WAIT seconds), refused when failed, still pending or absent."""
+    deadline = time.time() + float(os.environ.get("TK_MERGE_WAIT", "3600"))
+    while True:
+        flavor, slug = target
+        _, _, items = ci_state(ctx, sha, call, target)
+        if flavor == "github":
+            runs = call("/repos/%s/commits/%s/check-runs?per_page=100" % (slug, sha))
+            if runs.get("total_count", 0) > len(runs.get("check_runs") or []):
+                raise BackendError("commit %s is not green, no merge: %d check runs, more than one page can prove"
+                                   % (sha[:8], runs["total_count"]))
+            r = call("/repos/%s/commits/%s/status?per_page=100" % (slug, sha))
+            items += [(x.get("context", "?"), x["state"] if x["state"] in ("success", "pending") else "failure", "")
+                      for x in r.get("statuses") or []]
+        others = [(n, s) for n, s, _ in items
+                  if not any(re.sub(r" \((push|pull_request)\)$", "", p.strip()) == SELF_JOB for p in n.split(" / "))]
+        bad = ["%s=%s" % i for i in others if i[1] != "success"]
+        if others and not bad:
+            return
+        failed = any(s == "failure" for _, s in others)
+        if failed or time.time() >= deadline:
+            raise BackendError("commit %s is not green, no merge: %s" % (sha[:8], ", ".join(bad[:12]) or "no other check"))
+        time.sleep(float(os.environ.get("TK_MERGE_POLL", "20")))
+
+
 def pr_merge(ctx, branch, sha=""):
     """Open a PR from branch into the default branch and merge it. Idempotent:
     reuses an open PR; a default or vanished branch is a no-op. Never echoes
@@ -948,12 +979,25 @@ def pr_merge(ctx, branch, sha=""):
         tipsha = c.get("id") or c.get("sha") or ""
         if tipsha and tipsha != sha:
             return False, "branch %s moved past %s: a newer run owns the merge" % (branch, sha[:8])
+    if not sha:
+        tip = forge_call(flavor, api, tok, "GET", "%s/branches/%s" % (base, urllib.parse.quote(branch, safe="")))
+        sha = (tip.get("commit") or {}).get("id") or (tip.get("commit") or {}).get("sha") or ""
+        if not sha:
+            raise BackendError("tip of %s unknown: nothing proves it is green" % branch)
+    require_green(ctx, sha, lambda path: forge_call(flavor, api, tok, "GET", path), (flavor, slug))
     pulls = forge_call(flavor, api, tok, "GET", base + "/pulls?state=open&limit=50") or []
     pr = next((p for p in pulls if (p.get("head") or {}).get("ref") == branch
                and (p.get("base") or {}).get("ref") == default), None)
     if pr is None:
-        pr = forge_call(flavor, api, tok, "POST", base + "/pulls",
-                        {"title": branch, "head": branch, "base": default})
+        try:
+            pr = forge_call(flavor, api, tok, "POST", base + "/pulls",
+                            {"title": branch, "head": branch, "base": default})
+        except BackendError as e:
+            if "not permitted to create or approve pull requests" in str(e):
+                raise BackendError("%s. The job token may not open pull requests on this repository: give the job a "
+                                   "GitHub App token in TK_FORGE_TOKEN (see APP_SETUP.md of tk), the owner's choice. "
+                                   "The branch stays unmerged; never merge by hand over a red check." % e)
+            raise
     num = pr.get("number")
     if flavor == "github":
         forge_call(flavor, api, tok, "PUT", "%s/pulls/%s/merge" % (base, num),
@@ -967,7 +1011,7 @@ def pr_merge(ctx, branch, sha=""):
 CI_OK, CI_FAILED, CI_NOVERDICT, CI_NORUN, CI_UNREADABLE = 0, 1, 2, 3, 4
 
 
-def ci_state(ctx, sha, call=None):
+def ci_state(ctx, sha, call=None, target=None):
     """(flavor, state, [(name, state, url)]) of the CI proof on a commit.
     state: success | failure | pending | none. Absence is 'none' (red).
     call(path) -> json replaces the forge credentials (used by tk watch)."""
@@ -977,7 +1021,7 @@ def ci_state(ctx, sha, call=None):
         def call(path):
             return forge_call(flavor, api, tok, "GET", path)
     else:
-        flavor, slug = ("github" if ctx.kind == "github" else "forgejo"), "%s/%s" % (ctx.owner, ctx.repo)
+        flavor, slug = target or (("github" if ctx.kind == "github" else "forgejo"), "%s/%s" % (ctx.owner, ctx.repo))
     items = []
     if flavor == "github":
         r = call("/repos/%s/commits/%s/check-runs?per_page=100" % (slug, sha))
@@ -1467,8 +1511,10 @@ def watch_default_ref(ctx):
 
 
 def watch_merged(ctx, branch, default):
-    """True when the branch tip is the second parent of a merge commit on the remote default
-    branch: a real PR merge of that exact tip. Read from git, so no PR history is listed."""
+    """True when the branch tip is the second parent of a merge commit on the remote default branch
+    AND the tip is the branch's own work: not on the first-parent line of another integration branch.
+    Without that, a fresh branch sitting on develop after develop -> main closes its ticket with no
+    work done. Read from git, so no PR history is listed."""
     code, tip, _ = run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/" + branch], cwd=ctx.top)
     if code != 0:
         code, tip, _ = run(["git", "rev-parse", "--verify", "-q", "refs/heads/" + branch], cwd=ctx.top)
@@ -1476,7 +1522,16 @@ def watch_merged(ctx, branch, default):
     if code != 0 or not tip or not default:
         return False
     code, out, _ = run(["git", "rev-list", "--merges", "--parents", "--max-count=500", default], cwd=ctx.top)
-    return code == 0 and any(len(p) > 2 and p[2] == tip for p in (l.split() for l in out.splitlines()))
+    if code != 0 or not any(len(p) > 2 and p[2] == tip for p in (l.split() for l in out.splitlines())):
+        return False
+    for name in ("develop", "main", "master", "stable", "trunk", "production"):
+        for ref in ("refs/remotes/origin/" + name, "refs/heads/" + name):
+            if default in (ref, "refs/heads/" + name, "refs/remotes/origin/" + name):
+                continue
+            code, line, _ = run(["git", "rev-list", "--first-parent", "--max-count=2000", ref], cwd=ctx.top)
+            if code == 0 and tip in line.split():
+                return False
+    return True
 
 
 def watch_repo(path, out):
@@ -1611,14 +1666,20 @@ def has_gate_target(ctx):
     return False
 
 
+def is_wiki(ctx):
+    """A forge wiki (<repo>.wiki) holds pages only: it owes no CI, runner, gate or rules file."""
+    return ctx.repo.endswith(".wiki")
+
+
 def align_report(ctx):
     """{aligned, missing:[{id, why, fix}]}: everything a repo needs so tickets,
     rules and CI work. Dynamic: kind from the remote, targets probed with make."""
     miss = []
-    if not os.path.exists(os.path.join(ctx.top, "RULES.md")):
+    files_owed = not is_wiki(ctx)
+    if files_owed and not os.path.exists(os.path.join(ctx.top, "RULES.md")):
         miss.append({"id": "rules", "why": "no RULES.md at the repo root",
                      "fix": "tk align --fix rules"})
-    wf = ci_workflows(ctx)
+    wf = ci_workflows(ctx) if files_owed else None
     if wf is not None:
         d, files = wf
         best = min((ci_missing_jobs(t) for _, t in files), key=len, default=list(ALIGN_JOBS))
@@ -1749,6 +1810,8 @@ def cmd_align(ctx, a):
         if any(n not in ALIGN_FIXERS for n in names):
             die("usage: tk align [--fix ci|makefile|rules|tk|all]")
         out = {"fixed": [], "conflicts": []}
+        if is_wiki(ctx):
+            names, out["note"] = [], "wiki repository: pages only, no file to install"
         for n in names:
             r = ALIGN_FIXERS[n](ctx)
             out["fixed"] += r.get("fixed", [])
@@ -1836,6 +1899,8 @@ def main(argv):
     elif c == "ci-status":
         sys.exit(cmd_ci_status(ctx, a))
     elif c == "new":
+        if any(x in ("-h", "--help") for x in a) or (a and a[0].startswith("-")):
+            die('usage: tk new "<title>" [options] (no ticket created)')
         with_fallback(ctx, lambda: cmd_new(ctx, a))
     elif c in ("start", "review", "done"):
         if not a:

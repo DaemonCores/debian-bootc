@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"regexp"
 	"path/filepath"
+	"regexp"
 
 	"github.com/tuna-os/fisherman/internal/runner"
 )
