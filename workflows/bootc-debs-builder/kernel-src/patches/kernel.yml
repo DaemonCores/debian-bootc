@@ -200,15 +200,20 @@ patches:
         # (iw reg set as well as hostapd's country_code) and nl80211 answers
         # NO-IR / "Could not select hw_mode and channel" (measured on the AX200
         # of iartistique, kernel 7.2.15-ia, channels 36 AND 149, interface
-        # free). The escape hatch upstream removed in f06021a18fcf ("iwlwifi:
-        # remove lar_disable module parameter") is restored here: with
-        # iwlwifi.lar_disable=1 iwl_mvm_is_lar_supported() returns false, the
-        # driver takes the pre-LAR path (no self-managed flag, no MCC init)
-        # and the in-kernel regdb applies. HOME PATCH (lives in this repo,
-        # next to the manifest): the URL follows main, so the sha256 pin is
-        # what freezes the content. Dry-run fuzz 0 verified on vanilla 7.2 and
-        # 7.3 (iwl-modparams.h, iwl-drv.c, mvm/mvm.h).
-        url: https://raw.githubusercontent.com/DaemonCores/debian-bootc/main/workflows/bootc-debs-builder/kernel-src/patches/iwlwifi/0001-iwlwifi-restore-lar-disable.patch
+        # free). Upstream removed the escape hatch in f06021a18fcf ("iwlwifi:
+        # remove lar_disable module parameter") and never restored it: no
+        # kernel.org, linux-wireless, CachyOS or XanMod tree publishes such a
+        # patch, so the entry points at the third-party restoration that does.
+        # TenkyuChimata/linux-wireless-reg-unlocked (GPL-2.0), pinned twice:
+        # the URL carries the commit, sha256 freezes the bytes. It restores
+        # the parameter AND clears the NVM LAR sband flag (mvm/nvm.c), i.e. the
+        # whole pre-LAR path, not only iwl_mvm_is_lar_supported().
+        # Proof, 2026-11-26: patch -p1 --fuzz=0 on vanilla 7.3.5 and 7.2.15
+        # (gregkh/linux) applies clean; make M=drivers/net/wireless on a
+        # configured 7.3.5 tree builds intel/iwlwifi/iwlwifi.ko, 0 error. It
+        # does NOT apply to 6.12 (hunk context drift), which no lane of this
+        # builder builds (linux-image elects kernel.org stable, 7.x).
+        url: https://raw.githubusercontent.com/TenkyuChimata/linux-wireless-reg-unlocked/758495be1ce8a6006b4bad9424a4ea02936bcf4e/0001-iwlwifi-add-lar_disable.patch
         stage: common
-        sha256: c89eb52ebb9d766b082e6fbc0e45b70f248175ca8ef8f5b55d953cd656550507
+        sha256: da2ab52ccdef2b93088c9e0c56bc1c166bf748d021b529cb2af2ff6c5d9e85cc
         license: GPL-2.0-only
