@@ -283,12 +283,51 @@ help:
 # Gate "tests" stage (tk gate): the shared CI checkout the manifest tests read,
 # then every Python test at 100% coverage, then the Go modules that carry a
 # go.mod (the Go overlays without one are only built inside the upstream trees).
-.PHONY: gate-tests
-gate-tests: py-ready ci-repo siblings
-	$(VBIN)/pytest -q --cov --cov-report=term-missing tests
-	@for mod in $$(git ls-files '*go.mod'); do \
+# Go file sets. A Go module carries a go.mod; a Go file with no module in
+# this repository is an overlay copied over its upstream tree at build time
+# (workflows/bootc-debs-builder/packages.yml, deb_src_overlay).
+GO_MODULES := $(shell git ls-files '*go.mod')
+GO_SRCS := $(shell git ls-files '*.go')
+
+# Gate "lint/go" stage: gofmt must be clean on every tracked Go file (modules
+# and overlays alike, gofmt needs no module) and every Go module must pass
+# go vet. A missing toolchain fails the stage, it never skips it.
+.PHONY: gate-lint-go
+gate-lint-go:
+	@command -v go >/dev/null 2>&1 || { echo "go toolchain not found — install golang" >&2; exit 1; }
+	@if [ -n "$(GO_SRCS)" ]; then \
+	  out=$$(gofmt -l $(GO_SRCS)); \
+	  if [ -n "$$out" ]; then echo "gofmt diff (run gofmt -w):" >&2; echo "$$out" >&2; exit 1; fi; \
+	  echo "OK  gofmt over $(words $(GO_SRCS)) Go file(s)"; \
+	fi
+	@for mod in $(GO_MODULES); do \
+	  d="$$(dirname "$$mod")"; echo "go vet $$d"; (cd "$$d" && go vet ./...) || exit 1; \
+	done
+	@if [ -z "$(GO_MODULES)" ]; then \
+	  echo "INFO: no go.mod in this repository: the Go files above are overlays" \
+	       "compiled only inside their upstream tree (packages.yml); gofmt checked" \
+	       "them, go vet cannot run without a module"; \
+	fi
+
+# Gate "tests/go" stage: the tests of every Go module. With no module the
+# overlays are compiled, never tested, inside their upstream tree: the stage
+# says so by name instead of pretending a suite ran.
+.PHONY: gate-tests-go
+ifeq ($(strip $(GO_MODULES)),)
+gate-tests-go:
+	@echo "OK  no Go module in this repository: $(words $(GO_SRCS)) overlay file(s) are"
+	@echo "    compiled inside their upstream tree (packages.yml); nothing to test here"
+else
+gate-tests-go:
+	@command -v go >/dev/null 2>&1 || { echo "go toolchain not found — install golang" >&2; exit 1; }
+	@for mod in $(GO_MODULES); do \
 	  (cd "$$(dirname "$$mod")" && go test -cover ./...) || exit 1; \
 	done
+endif
+
+.PHONY: gate-tests
+gate-tests: py-ready ci-repo siblings gate-tests-go
+	$(VBIN)/pytest -q --cov --cov-report=term-missing tests
 
 # Gate "types" stage (tk gate): basedpyright resolves imports through the
 # project .venv (pyproject venvPath), which py-ready provisions on a bare runner.
